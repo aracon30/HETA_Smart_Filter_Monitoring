@@ -102,16 +102,38 @@ class OLEDDisplay:
         ]
         self._render_lines(lines)
 
-    def show_filter_change(self, dp_bar: float, dp_limit: float):
-        """Zeigt den Filterwechsel-Bildschirm."""
+    def show_filter_change(self, dp_bar: float, dp_limit: float,
+                           armed: bool = False, awaiting: bool = False):
+        """Zeigt den Filterwechsel-Bildschirm.
+
+        armed=True  → erster OK-Druck empfangen, wartet auf Bestätigung
+        awaiting    → System wartet auf Filterwechsel-Bestätigung
+        """
         self._current_screen = SCREEN_FILTER_CHANGE
-        lines = [
-            "!! FILTERWECHSEL !!",
-            f"dp: {dp_bar:.3f} bar",
-            f"Limit: {dp_limit:.2f} bar",
-            "",
-            "OK = Bestaetigen",
-        ]
+        if armed:
+            lines = [
+                "!! FILTERWECHSEL !!",
+                f"dp: {dp_bar:.3f} bar",
+                "Sicher? Nochmal OK",
+                "zum Bestaetigen",
+                "LINKS = Abbrechen",
+            ]
+        elif awaiting:
+            lines = [
+                "!! FILTERWECHSEL !!",
+                f"dp: {dp_bar:.3f} bar",
+                f"Limit: {dp_limit:.2f} bar",
+                "",
+                "OK = Bestaetigen",
+            ]
+        else:
+            lines = [
+                "Filterwechsel",
+                f"dp: {dp_bar:.3f} bar",
+                f"Limit: {dp_limit:.2f} bar",
+                "",
+                "OK = Bestaetigen",
+            ]
         self._render_lines(lines)
 
     def show_service(self, message: str, priority: str):

@@ -9,6 +9,7 @@ import os
 import sys
 import time
 import json
+import socket
 import secrets
 import logging
 import threading
@@ -112,6 +113,16 @@ def _require_auth():
     return False, (jsonify({"success": False, "message": "Nicht authentifiziert. Bitte anmelden."}), 401)
 
 
+def _get_local_ip() -> str:
+    """Ermittelt die lokale IP-Adresse des Geräts."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("8.8.8.8", 80))
+            return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+
+
 # ---------------------------------------------------------------------------
 # Systemzustand
 # ---------------------------------------------------------------------------
@@ -205,6 +216,167 @@ try:
     _navigation.start()
 except Exception as e:
     logger.warning("Navigation-Init übersprungen: %s", e)
+
+
+# ---------------------------------------------------------------------------
+# Display-Controller (verbindet Encoder mit Display)
+# ---------------------------------------------------------------------------
+
+class _DisplayController:
+    """
+    Verbindet den ANO Rotary Encoder mit dem OLED-Display.
+
+    Bildschirme (per Encoder-Drehung navigierbar):
+      0 Status · 1 HETA-Code · 2 Filterwechsel · 3 Service · 4 Historie · 5 Netzwerk
+
+    Filterwechsel-Bestätigung am Gerät:
+      1. Encoder auf Bildschirm 2 drehen (oder automatisch, wenn dp >= limit)
+      2. OK-Taste (PRESS) → Bestätigung vormerken (armed)
+      3. Nochmals OK-Taste → Filterwechsel bestätigen
+      LINKS-Taste während armed → Abbruch
+    """
+
+    def __init__(self, disp, nav):
+        from display import SCREENS
+        self._display = disp
+        self._nav = nav
+        self._screens = SCREENS          # list of screen name constants
+        self._screen_idx = 0             # 0 = Status
+        self._confirm_armed = False
+        self._last_status_data: dict = {}
+        self._lock = threading.Lock()
+        nav.register_handler(self._on_event)
+
+    # ------------------------------------------------------------------
+    # Öffentliche Schnittstelle
+    # ------------------------------------------------------------------
+
+    def update_status(self, data: dict):
+        """Vom Messzyklus aufgerufen – aktualisiert nur wenn Status-Bildschirm aktiv."""
+        with self._lock:
+            self._last_status_data = data
+            if self._screen_idx == 0:
+                self._display.show_status(data)
+
+    def navigate_to_filter_change(self):
+        """Wechselt automatisch zum Filterwechsel-Bildschirm (bei dp >= limit)."""
+        from display import SCREEN_FILTER_CHANGE
+        with self._lock:
+            self._screen_idx = self._screens.index(SCREEN_FILTER_CHANGE)
+            self._confirm_armed = False
+
+    # ------------------------------------------------------------------
+    # Ereignis-Handler
+    # ------------------------------------------------------------------
+
+    def _on_event(self, event: str):
+        with self._lock:
+            self._handle(event)
+
+    def _handle(self, event: str):
+        from navigation import NavigationEvent
+        from display import SCREEN_FILTER_CHANGE
+
+        if event in (NavigationEvent.ROTATE_RIGHT, NavigationEvent.RIGHT):
+            self._screen_idx = (self._screen_idx + 1) % len(self._screens)
+            self._confirm_armed = False
+            self._refresh_display()
+
+        elif event in (NavigationEvent.ROTATE_LEFT, NavigationEvent.LEFT):
+            if self._confirm_armed:
+                # Abbruch der Bestätigung
+                self._confirm_armed = False
+                self._refresh_display()
+            else:
+                self._screen_idx = (self._screen_idx - 1) % len(self._screens)
+                self._refresh_display()
+
+        elif event == NavigationEvent.PRESS:
+            self._handle_press()
+
+    def _handle_press(self):
+        from display import SCREEN_FILTER_CHANGE
+        screen = self._screens[self._screen_idx]
+
+        if screen != SCREEN_FILTER_CHANGE:
+            return
+
+        with _state_lock:
+            awaiting = _state["awaiting_confirmation"]
+            dp = _state["dp_bar"]
+
+        if not awaiting:
+            return
+
+        if not self._confirm_armed:
+            self._confirm_armed = True
+            self._display.show_filter_change(
+                dp, settings.get("dp_limit_bar", 2.5),
+                armed=True, awaiting=True,
+            )
+        else:
+            self._confirm_armed = False
+            _do_confirm_filter_change()
+            # Zurück zum Status-Bildschirm
+            self._screen_idx = 0
+            self._display.show_status(self._last_status_data)
+
+    # ------------------------------------------------------------------
+    # Display-Refresh
+    # ------------------------------------------------------------------
+
+    def _refresh_display(self):
+        from display import (SCREEN_STATUS, SCREEN_HETA, SCREEN_FILTER_CHANGE,
+                              SCREEN_SERVICE, SCREEN_HISTORY, SCREEN_NETWORK)
+
+        screen = self._screens[self._screen_idx]
+
+        if screen == SCREEN_STATUS:
+            self._display.show_status(self._last_status_data)
+
+        elif screen == SCREEN_HETA:
+            with _state_lock:
+                code = _state["heta_code"]
+                activated = _state["heta_activated"]
+            self._display.show_heta_code(code, activated)
+
+        elif screen == SCREEN_FILTER_CHANGE:
+            with _state_lock:
+                dp = _state["dp_bar"]
+                awaiting = _state["awaiting_confirmation"]
+            self._display.show_filter_change(
+                dp, settings.get("dp_limit_bar", 2.5),
+                armed=self._confirm_armed, awaiting=awaiting,
+            )
+
+        elif screen == SCREEN_SERVICE:
+            with _state_lock:
+                msg = _state["service_message"]
+                prio = _state["service_priority"]
+            self._display.show_service(msg or "Kein Hinweis", prio or "NIEDRIG")
+
+        elif screen == SCREEN_HISTORY:
+            cycles = db.get_recent_cycles(4)
+            self._display.show_history(cycles)
+
+        elif screen == SCREEN_NETWORK:
+            ip = _get_local_ip()
+            self._display.show_network(
+                ip,
+                settings.get("webserver_port", 8080),
+                "SIM" if settings.get("simulation_mode", True) else "HW",
+            )
+
+
+# Display-Controller instanziieren wenn beide Module verfügbar
+_display_ctrl: _DisplayController = None
+if _display and _navigation:
+    try:
+        _display_ctrl = _DisplayController(_display, _navigation)
+        logger.info("Display-Controller initialisiert.")
+    except Exception as e:
+        logger.warning("Display-Controller-Init fehlgeschlagen: %s", e)
+
 
 # ---------------------------------------------------------------------------
 # Messzyklus-Thread
@@ -303,8 +475,11 @@ def _measurement_loop():
                            fs.dp_bar, dp_limit)
             with _state_lock:
                 _state["awaiting_confirmation"] = True
-            if _display:
-                _display.show_filter_change(fs.dp_bar, dp_limit)
+            if _display_ctrl:
+                _display_ctrl.navigate_to_filter_change()
+                _display.show_filter_change(fs.dp_bar, dp_limit, armed=False, awaiting=True)
+            elif _display:
+                _display.show_filter_change(fs.dp_bar, dp_limit, armed=False, awaiting=True)
             if _mqtt:
                 _mqtt.publish_alarm("WECHSEL", "Filterwechsel erforderlich!", heta_code)
 
@@ -331,17 +506,20 @@ def _measurement_loop():
             _mqtt.publish_measurements(fs, heta_code)
 
         # Display aktualisieren
-        if _display:
-            _display.show_status({
-                "heta_code": heta_code or "---",
-                "mode": "SIM" if sim_mode else "HW",
-                "p1": fs.p1_bar,
-                "p2": fs.p2_bar,
-                "dp": fs.dp_bar,
-                "flow": fs.flow_l_min,
-                "remaining": pred_status["remaining_display"],
-                "status": fs.status,
-            })
+        _status_display_data = {
+            "heta_code": heta_code or "---",
+            "mode": "SIM" if sim_mode else "HW",
+            "p1": fs.p1_bar,
+            "p2": fs.p2_bar,
+            "dp": fs.dp_bar,
+            "flow": fs.flow_l_min,
+            "remaining": pred_status["remaining_display"],
+            "status": fs.status,
+        }
+        if _display_ctrl:
+            _display_ctrl.update_status(_status_display_data)
+        elif _display:
+            _display.show_status(_status_display_data)
 
         # Systemzustand aktualisieren
         with _state_lock:
@@ -444,14 +622,12 @@ def api_heta_demo():
     return jsonify(get_demo_info(heta_code))
 
 
-@app.route("/api/filter/confirm-change", methods=["POST"])
-def api_confirm_filter_change():
-    """Bestätigt den Filterwechsel und startet einen neuen Zyklus."""
+def _do_confirm_filter_change():
+    """Führt die Filterwechsel-Bestätigung durch (REST-API und Display-Controller)."""
     with _state_lock:
         heta_code = _state["heta_code"]
         cycle_was_active = _state["cycle_active"]
 
-    # Zyklus abschließen
     if cycle_was_active and learning.active_cycle:
         with _state_lock:
             current_r = _state["r_eff"]
@@ -460,7 +636,6 @@ def api_confirm_filter_change():
                            end_r_eff=current_r,
                            end_dp=current_dp)
 
-    # Prognose und Simulation zurücksetzen
     predictor.reset()
     reset_simulation()
 
@@ -474,6 +649,12 @@ def api_confirm_filter_change():
     db.insert_service_event("FILTERWECHSEL_BESTAETIGT", heta_code,
                             json.dumps({"timestamp": time.time()}))
     logger.info("Filterwechsel bestätigt. Neuer Zyklus beginnt.")
+
+
+@app.route("/api/filter/confirm-change", methods=["POST"])
+def api_confirm_filter_change():
+    """Bestätigt den Filterwechsel und startet einen neuen Zyklus."""
+    _do_confirm_filter_change()
     return jsonify({"success": True, "message": "Filterwechsel bestätigt. Neuer Zyklus startet."})
 
 
@@ -805,6 +986,32 @@ def api_profile():
     if not heta_code:
         return jsonify(None)
     return jsonify(db.get_profile(heta_code))
+
+
+@app.route("/api/navigation/event", methods=["POST"])
+def api_navigation_event():
+    """Simuliert ein Navigationsereignis (für Tests ohne Hardware)."""
+    data = request.get_json(force=True, silent=True) or {}
+    event = data.get("event", "")
+    if not event:
+        return jsonify({"success": False, "message": "Kein Ereignis angegeben."}), 400
+    if _navigation:
+        _navigation.simulate_event(event)
+        return jsonify({"success": True, "event": event})
+    return jsonify({"success": False, "message": "Navigation nicht verfügbar."}), 503
+
+
+@app.route("/api/display/screen", methods=["GET"])
+def api_display_screen():
+    """Gibt den aktuell angezeigten Bildschirm zurück."""
+    if _display_ctrl:
+        screen = _display_ctrl._screens[_display_ctrl._screen_idx]
+        return jsonify({"screen": screen, "screen_index": _display_ctrl._screen_idx,
+                        "confirm_armed": _display_ctrl._confirm_armed})
+    if _display:
+        return jsonify({"screen": _display.current_screen, "screen_index": None,
+                        "confirm_armed": False})
+    return jsonify({"screen": None, "screen_index": None, "confirm_armed": False})
 
 
 # ---------------------------------------------------------------------------

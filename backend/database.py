@@ -168,6 +168,15 @@ class Database:
             ).fetchone()
         return result[0] if result else 0
 
+    def get_recent_cycles(self, limit: int = 4) -> list:
+        """Gibt die letzten N Filterzyklen zurück (alle HETA-Codes)."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM filter_cycles ORDER BY end_time DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     # ------------------------------------------------------------------
     # HETA-Profile
     # ------------------------------------------------------------------
