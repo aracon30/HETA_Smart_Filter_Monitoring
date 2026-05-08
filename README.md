@@ -61,11 +61,25 @@ dtparam=i2c_arm=on
 
 ---
 
+## Ersteinrichtung (Onboarding)
+
+Beim ersten Start öffnet sich automatisch ein **6-stufiger Einrichtungsassistent**:
+
+1. Betriebsart wählen (Simulation oder Hardware)
+2. Filterparameter eingeben (dp-Grenzwert, Sauberwiderstand, Durchfluss)
+3. Temperatursensor-Bereich konfigurieren
+4. Zugriffspasswort für den Einstellungsbereich festlegen
+5. Zusammenfassung bestätigen
+
+Der Messzyklus startet erst nach Abschluss des Onboardings.
+
+---
+
 ## Start im Simulationsmodus
 
 ```bash
-# simulation_mode ist in config/settings.json standardmäßig true
 ./scripts/start.sh
+# → Onboarding-Assistent öffnet sich beim ersten Start automatisch
 ```
 
 Weboberfläche: `http://localhost:8080`
@@ -74,61 +88,79 @@ Weboberfläche: `http://localhost:8080`
 
 ## Start im Hardwaremodus
 
+Betriebsart im Onboarding oder im Einstellungsbereich (⚙) auf **Hardware** setzen.
+
 ```bash
-# In config/settings.json setzen: "simulation_mode": false
 ./scripts/start.sh
 ```
 
 ---
 
-## HETA-Code Demo
+## HETA-Code aktivieren
 
 1. Weboberfläche öffnen: `http://<IP>:8080`
 2. HETA-Code eingeben: `HETA-12345`
-3. "Demo-PIN anzeigen" klicken → PIN wird berechnet und eingetragen
-4. "Aktivieren" klicken
+3. „Demo-PIN anzeigen" klicken → PIN wird berechnet und eingetragen
+4. „Aktivieren" klicken
 
 **Beispiel:** Code `HETA-12345` → PIN `486082`
 
+Mit aktivem HETA-Code werden **Beladungsgrad** angezeigt und nach 3 Filterzyklen
+eine **minutengenaue Reststandzeit** ausgegeben.
+
 ---
 
-## Konfiguration
+## Reststandzeit – Anzeigemodi
 
-Alle Parameter in `config/settings.json`:
+| Modus | Bedingung | Beispiel |
+|-------|-----------|---------|
+| **BASIS** | Kein HETA-Code | `2–4 Std.`, `1–2 Tage` |
+| **HETA-Lernend** | HETA aktiv, < 3 Zyklen | `4–6 Std.` (1/3 Zyklen) |
+| **HETA-Validiert** | 3 Zyklen abgeschlossen | `1 Std. 52 min`, `47 min` |
 
-```json
-{
-  "dp_limit_bar": 2.5,
-  "dp_clean_bar": 0.2,
-  "flow_max_l_min": 150,
-  "sampling_interval_seconds": 1,
-  "simulation_mode": true,
-  "webserver_port": 8080
-}
-```
+Filterlaufzeiten variieren je nach Anwendung von Minuten bis Tagen –
+daher im Basis-Modus bewusst nur Bereiche ohne Minutenangabe.
+
+---
+
+## Einstellungen im laufenden Betrieb
+
+Das Zahnrad-Symbol (⚙) im Header öffnet den passwortgeschützten Einstellungsbereich.
+
+**Wichtig:** Bei Änderung folgender Parameter werden alle Lerndaten gelöscht
+und die 3 Lernzyklen müssen neu durchlaufen werden:
+
+- Differenzdruck-Grenzwert (`dp_limit_bar`)
+- Sauberwiderstand (`dp_clean_bar`)
+- Maximaler Durchfluss (`flow_max_l_min`)
+- Druckbereich Sensoren (`pressure_range_bar`)
+
+Ein Warnhinweis im Dialog macht darauf aufmerksam, bevor gespeichert wird.
 
 ---
 
 ## API-Endpunkte
 
-| Endpunkt                          | Beschreibung                  |
-|-----------------------------------|-------------------------------|
-| `GET  /api/status`                | Vollständiger Systemstatus    |
-| `GET  /api/measurements/latest`   | Letzte Messwerte              |
-| `POST /api/heta/activate`         | HETA-Code + PIN aktivieren    |
-| `POST /api/filter/confirm-change` | Filterwechsel bestätigen      |
-| `POST /api/service/request`       | Servicebericht erzeugen       |
-| `GET  /api/export/csv/download`   | Messdaten als CSV herunterladen |
-| `GET  /api/settings`              | Konfiguration lesen           |
-| `POST /api/settings`              | Konfiguration schreiben       |
+| Endpunkt | Beschreibung |
+|----------|-------------|
+| `GET  /api/status` | Vollständiger Systemstatus |
+| `GET  /api/measurements/latest` | Letzte Messwerte |
+| `POST /api/heta/activate` | HETA-Code + PIN aktivieren |
+| `POST /api/filter/confirm-change` | Filterwechsel bestätigen |
+| `POST /api/service/request` | Servicebericht erzeugen |
+| `GET  /api/export/csv/download` | Messdaten als CSV herunterladen |
+| `GET  /api/onboarding/status` | Onboarding-Status prüfen |
+| `POST /api/onboarding/complete` | Onboarding abschließen |
+| `POST /api/settings/login` | Am Einstellungsbereich anmelden |
+| `POST /api/settings` | Konfiguration speichern (Token erforderlich) |
 
-Vollständige Dokumentation: [`docs/software_architecture.md`](docs/software_architecture.md)
+Vollständige API-Referenz: [`docs/software_architecture.md`](docs/software_architecture.md)
 
 ---
 
 ## CSV-Export
 
-Über Weboberfläche → "CSV exportieren" oder direkt:
+Über Weboberfläche → „CSV exportieren" oder direkt:
 `http://<IP>:8080/api/export/csv/download`
 
 ---
@@ -141,11 +173,19 @@ python3 backend/app.py
 # oder: journalctl -u heta-monitor -n 50
 ```
 
+**Onboarding erscheint erneut:** `onboarding_complete` in `config/settings.json` prüfen.
+
+**Passwort vergessen:** `settings_password_hash` in `config/settings.json` leeren,
+dann startet das Onboarding neu.
+
 **OLED zeigt nichts:** SPI/I2C aktiviert? Verkabelung prüfen → [`docs/hardware_mapping.md`](docs/hardware_mapping.md)
 
-**Sensorwerte 0:** `simulation_mode: true` in settings.json? AnoPi-Verkabelung prüfen.
+**Sensorwerte bleiben 0:** Betriebsart auf Simulation prüfen. AnoPi-Verkabelung kontrollieren.
 
-**HETA-Code ungültig:** Format `HETA-XXXXX`, nur Ziffern, PIN 6-stellig.
+**HETA-Code ungültig:** Format `HETA-XXXXX` (nur Ziffern), PIN 6-stellig mit führenden Nullen.
+
+**Einstellungen gespeichert, Lernphasen neu:** Erwartetes Verhalten – bei Änderung
+lernrelevanter Parameter werden alle Zyklen und Profile zurückgesetzt.
 
 ---
 
@@ -162,9 +202,9 @@ journalctl -u heta-monitor -f
 ## Projektstruktur
 
 ```
-├── backend/     Python-Module (Flask, Sensoren, Berechnungen)
+├── backend/     Python-Module (Flask, Sensoren, Berechnungen, Auth)
 ├── frontend/    Web-Dashboard (HTML, CSS, JavaScript)
-├── config/      Konfigurationsdateien
+├── config/      Konfigurationsdateien (settings.json)
 ├── data/        SQLite-Datenbank (auto-erstellt)
 ├── logs/        Log-Dateien (auto-erstellt)
 ├── exports/     CSV-Exporte (auto-erstellt)
