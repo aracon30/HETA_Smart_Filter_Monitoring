@@ -1,4 +1,7 @@
 {
+  "onboarding_complete": false,
+  "settings_password_hash": "",
+  "session_timeout_minutes": 30,
   "dp_limit_bar": 2.5,
   "dp_clean_bar": 0.2,
   "pressure_range_bar": 10,

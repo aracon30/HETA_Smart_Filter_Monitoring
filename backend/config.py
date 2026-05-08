@@ -4,6 +4,7 @@ Konfigurationsmodul – lädt settings.json und stellt alle Parameter bereit.
 
 import json
 import os
+import hashlib
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,9 @@ _CONFIG_PATH = os.path.join(_BASE_DIR, "config", "settings.json")
 
 # Standardwerte falls settings.json nicht vorhanden
 _DEFAULTS = {
+    "onboarding_complete": False,
+    "settings_password_hash": "",
+    "session_timeout_minutes": 30,
     "dp_limit_bar": 2.5,
     "dp_clean_bar": 0.2,
     "pressure_range_bar": 10,
@@ -69,6 +73,18 @@ def save_settings(settings: dict) -> bool:
 def get_abs_path(relative_path: str) -> str:
     """Gibt den absoluten Pfad relativ zum Projektverzeichnis zurück."""
     return os.path.join(_BASE_DIR, relative_path)
+
+
+def hash_password(password: str) -> str:
+    """Gibt den SHA-256-Hash eines Passworts als Hex-String zurück."""
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """Prüft ob ein Passwort mit dem gespeicherten Hash übereinstimmt."""
+    if not stored_hash:
+        return False
+    return hashlib.sha256(password.encode("utf-8")).hexdigest() == stored_hash
 
 
 # Modul-globale Instanz – einmalig beim Import laden

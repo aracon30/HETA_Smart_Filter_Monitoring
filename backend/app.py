@@ -9,6 +9,7 @@ import os
 import sys
 import time
 import json
+import secrets
 import logging
 import threading
 from datetime import datetime
@@ -20,7 +21,7 @@ sys.path.insert(0, os.path.join(_BASE_DIR, "backend"))
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
-from config import settings, save_settings, get_abs_path
+from config import settings, save_settings, get_abs_path, hash_password, verify_password
 from sensors import read_sensors, reset_simulation, update_simulation_params
 from calculations import calculate_filter_state, FilterState
 from heta_code import verify_activation, validate_heta_format, get_demo_info
@@ -54,6 +55,62 @@ app = Flask(
     static_url_path="",
 )
 CORS(app)
+
+# ---------------------------------------------------------------------------
+# Session-Token-Verwaltung (passwortgeschützter Einstellungsbereich)
+# ---------------------------------------------------------------------------
+# { token: last_access_timestamp }
+_sessions: dict[str, float] = {}
+_sessions_lock = threading.Lock()
+
+# Kritische Parameter – bei Änderung muss der Lernprozess neu starten
+_LEARNING_SENSITIVE_KEYS = {
+    "dp_limit_bar", "dp_clean_bar", "flow_max_l_min",
+    "pressure_range_bar", "temperature_min_c", "temperature_max_c",
+}
+
+
+def _create_session() -> str:
+    """Erstellt einen neuen Session-Token und gibt ihn zurück."""
+    token = secrets.token_hex(32)
+    with _sessions_lock:
+        _sessions[token] = time.time()
+    return token
+
+
+def _validate_session(token: str) -> bool:
+    """Prüft ob ein Session-Token gültig und nicht abgelaufen ist."""
+    if not token:
+        return False
+    timeout = settings.get("session_timeout_minutes", 30) * 60
+    with _sessions_lock:
+        last = _sessions.get(token)
+        if last is None:
+            return False
+        if time.time() - last > timeout:
+            del _sessions[token]
+            return False
+        # Zugriff erneuert die Sitzung
+        _sessions[token] = time.time()
+    return True
+
+
+def _invalidate_session(token: str):
+    """Löscht einen Session-Token."""
+    with _sessions_lock:
+        _sessions.pop(token, None)
+
+
+def _require_auth():
+    """
+    Hilfsfunktion für geschützte Endpunkte.
+    Gibt (True, None) zurück wenn authentifiziert, sonst (False, Response).
+    """
+    token = request.headers.get("X-Auth-Token", "") or request.args.get("token", "")
+    if _validate_session(token):
+        return True, None
+    return False, (jsonify({"success": False, "message": "Nicht authentifiziert. Bitte anmelden."}), 401)
+
 
 # ---------------------------------------------------------------------------
 # Systemzustand
@@ -409,20 +466,174 @@ def api_confirm_filter_change():
     return jsonify({"success": True, "message": "Filterwechsel bestätigt. Neuer Zyklus startet."})
 
 
-@app.route("/api/settings", methods=["GET", "POST"])
-def api_settings():
-    """Liest oder aktualisiert die Konfiguration."""
-    if request.method == "GET":
-        return jsonify(settings)
+@app.route("/api/settings", methods=["GET"])
+def api_settings_get():
+    """Liest die Konfiguration (öffentlich, ohne sensible Felder)."""
+    safe = {k: v for k, v in settings.items()
+            if k not in ("settings_password_hash",)}
+    return jsonify(safe)
+
+
+@app.route("/api/settings", methods=["POST"])
+def api_settings_post():
+    """
+    Aktualisiert die Konfiguration – nur mit gültigem Session-Token.
+    Wenn lernrelevante Parameter geändert werden, werden alle Lerndaten
+    gelöscht und der Lernprozess startet neu.
+    """
+    ok, err = _require_auth()
+    if not ok:
+        return err
 
     data = request.get_json(force=True, silent=True) or {}
-    # Nur bekannte Felder übernehmen
-    allowed_keys = set(settings.keys())
+
+    # Prüfen welche lernrelevanten Parameter sich ändern
+    learning_reset_needed = any(
+        k in _LEARNING_SENSITIVE_KEYS and data.get(k) != settings.get(k)
+        for k in data
+    )
+
+    # Passwortänderung separat behandeln
+    new_password = data.pop("new_password", None)
+    old_password = data.pop("old_password", None)
+    if new_password:
+        if not verify_password(old_password or "", settings.get("settings_password_hash", "")):
+            return jsonify({"success": False, "message": "Altes Passwort falsch."}), 403
+        settings["settings_password_hash"] = hash_password(new_password)
+
+    # Nur bekannte Felder übernehmen, interne Felder schützen
+    protected = {"settings_password_hash", "db_path", "log_path", "export_path",
+                 "webserver_host", "webserver_port", "onboarding_complete"}
     for k, v in data.items():
-        if k in allowed_keys:
+        if k in settings and k not in protected:
             settings[k] = v
 
-    # Simulation-Parameter aktualisieren
+    # Simulation-Parameter und Prognose aktualisieren
+    update_simulation_params(
+        dp_clean=settings["dp_clean_bar"],
+        dp_limit=settings["dp_limit_bar"],
+        flow_max=settings["flow_max_l_min"],
+    )
+    predictor.update_limits(settings["dp_limit_bar"], settings["dp_clean_bar"])
+    save_settings(settings)
+
+    with _state_lock:
+        _state["simulation_mode"] = settings["simulation_mode"]
+
+    # Lerndaten zurücksetzen wenn nötig
+    if learning_reset_needed:
+        db.reset_all_learning_data()
+        predictor.reset()
+        reset_simulation()
+        with _state_lock:
+            _state["cycle_active"] = False
+            _state["cycle_start_time"] = None
+            _state["anomaly_active"] = False
+            _state["anomaly_percent"] = 0.0
+        db.insert_service_event(
+            "LERNDATEN_RESET",
+            _state.get("heta_code", ""),
+            json.dumps({"grund": "Konfigurationsänderung", "geaenderte_parameter":
+                        [k for k in data if k in _LEARNING_SENSITIVE_KEYS]}),
+        )
+        logger.info("Lerndaten zurückgesetzt aufgrund Konfigurationsänderung: %s",
+                    [k for k in data if k in _LEARNING_SENSITIVE_KEYS])
+
+    safe = {k: v for k, v in settings.items() if k not in ("settings_password_hash",)}
+    return jsonify({
+        "success": True,
+        "settings": safe,
+        "learning_reset": learning_reset_needed,
+        "message": ("Einstellungen gespeichert. Lernprozess wurde zurückgesetzt und muss neu durchlaufen werden."
+                    if learning_reset_needed else "Einstellungen gespeichert."),
+    })
+
+
+# ---------------------------------------------------------------------------
+# Authentifizierung (Einstellungsbereich)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/settings/login", methods=["POST"])
+def api_settings_login():
+    """Meldet den Benutzer am Einstellungsbereich an."""
+    data = request.get_json(force=True, silent=True) or {}
+    password = data.get("password", "")
+    stored_hash = settings.get("settings_password_hash", "")
+
+    if not stored_hash:
+        return jsonify({"success": False, "message": "Kein Passwort gesetzt. Onboarding abschließen."}), 403
+
+    if verify_password(password, stored_hash):
+        token = _create_session()
+        logger.info("Einstellungsbereich: Anmeldung erfolgreich.")
+        return jsonify({"success": True, "token": token,
+                        "timeout_minutes": settings.get("session_timeout_minutes", 30)})
+    else:
+        logger.warning("Einstellungsbereich: Falsches Passwort.")
+        return jsonify({"success": False, "message": "Falsches Passwort."}), 401
+
+
+@app.route("/api/settings/logout", methods=["POST"])
+def api_settings_logout():
+    """Beendet die Sitzung."""
+    token = request.headers.get("X-Auth-Token", "") or request.get_json(force=True, silent=True or {}).get("token", "")
+    _invalidate_session(token)
+    return jsonify({"success": True, "message": "Abgemeldet."})
+
+
+@app.route("/api/settings/auth-check", methods=["GET"])
+def api_settings_auth_check():
+    """Prüft ob der aktuelle Token noch gültig ist."""
+    token = request.headers.get("X-Auth-Token", "") or request.args.get("token", "")
+    return jsonify({"authenticated": _validate_session(token)})
+
+
+# ---------------------------------------------------------------------------
+# Onboarding
+# ---------------------------------------------------------------------------
+
+@app.route("/api/onboarding/status", methods=["GET"])
+def api_onboarding_status():
+    """Gibt zurück ob das Onboarding bereits abgeschlossen wurde."""
+    return jsonify({
+        "onboarding_complete": settings.get("onboarding_complete", False),
+        "has_password": bool(settings.get("settings_password_hash", "")),
+    })
+
+
+@app.route("/api/onboarding/complete", methods=["POST"])
+def api_onboarding_complete():
+    """
+    Schließt das Onboarding ab und speichert alle Einstellungen.
+    Kann nur aufgerufen werden wenn onboarding_complete=false.
+    """
+    if settings.get("onboarding_complete", False):
+        return jsonify({"success": False, "message": "Onboarding bereits abgeschlossen."}), 400
+
+    data = request.get_json(force=True, silent=True) or {}
+
+    # Passwort ist Pflichtfeld beim Onboarding
+    password = data.get("password", "")
+    if len(password) < 4:
+        return jsonify({"success": False,
+                        "message": "Passwort muss mindestens 4 Zeichen haben."}), 400
+
+    # Konfigurierbare Felder aus dem Onboarding
+    onboarding_fields = {
+        "simulation_mode", "dp_limit_bar", "dp_clean_bar",
+        "flow_max_l_min", "pressure_range_bar",
+        "temperature_min_c", "temperature_max_c",
+        "sampling_interval_seconds",
+    }
+    for k, v in data.items():
+        if k in onboarding_fields:
+            settings[k] = v
+
+    settings["settings_password_hash"] = hash_password(password)
+    settings["onboarding_complete"] = True
+    save_settings(settings)
+
+    # Simulation neu initialisieren mit den Onboarding-Werten
     update_simulation_params(
         dp_clean=settings["dp_clean_bar"],
         dp_limit=settings["dp_limit_bar"],
@@ -430,11 +641,18 @@ def api_settings():
     )
     predictor.update_limits(settings["dp_limit_bar"], settings["dp_clean_bar"])
 
-    save_settings(settings)
     with _state_lock:
         _state["simulation_mode"] = settings["simulation_mode"]
 
-    return jsonify({"success": True, "settings": settings})
+    db.insert_service_event("ONBOARDING_ABGESCHLOSSEN", "",
+                            json.dumps({"timestamp": time.time()}))
+    logger.info("Onboarding abgeschlossen.")
+
+    # Messzyklus starten
+    if not _state["running"]:
+        _start_measurement_thread()
+
+    return jsonify({"success": True, "message": "Einrichtung abgeschlossen. System startet."})
 
 
 @app.route("/api/simulation/start", methods=["POST"])
@@ -587,8 +805,12 @@ if __name__ == "__main__":
 
     logger.info("HETA Smart Filter Monitoring startet auf %s:%d", host, port)
     logger.info("Simulationsmodus: %s", settings.get("simulation_mode", True))
+    logger.info("Onboarding abgeschlossen: %s", settings.get("onboarding_complete", False))
 
-    # Messzyklus automatisch starten
-    _start_measurement_thread()
+    # Messzyklus nur starten wenn Onboarding abgeschlossen
+    if settings.get("onboarding_complete", False):
+        _start_measurement_thread()
+    else:
+        logger.info("Onboarding ausstehend – Messzyklus wartet.")
 
     app.run(host=host, port=port, debug=False, threaded=True)

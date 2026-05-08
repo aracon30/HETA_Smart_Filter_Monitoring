@@ -7,6 +7,269 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
+  <!-- ================================================================
+       ONBOARDING-ASSISTENT (wird beim ersten Start angezeigt)
+       ================================================================ -->
+  <div id="onboarding-overlay" class="overlay hidden">
+    <div class="wizard">
+      <div class="wizard-header">
+        <span class="logo-heta">HETA</span>
+        <span class="wizard-title">Ersteinrichtung</span>
+        <div class="wizard-steps" id="wizard-steps"></div>
+      </div>
+
+      <!-- Schritt 1: Willkommen -->
+      <div class="wizard-step" data-step="1">
+        <h2>Willkommen</h2>
+        <p>Dieser Assistent richtet das HETA Smart Filter Monitoring für Ihren Einsatz ein. Bitte folgen Sie den Schritten.</p>
+        <ul class="wizard-checklist">
+          <li>Filterparameter konfigurieren</li>
+          <li>Betriebsart wählen</li>
+          <li>Zugriffspasswort festlegen</li>
+        </ul>
+        <p class="wizard-note">Die Konfiguration kann später im passwortgeschützten Einstellungsbereich angepasst werden. Bei Änderung relevanter Parameter wird der Lernprozess automatisch neu gestartet.</p>
+      </div>
+
+      <!-- Schritt 2: Betriebsart -->
+      <div class="wizard-step hidden" data-step="2">
+        <h2>Betriebsart</h2>
+        <p>Wie soll das System betrieben werden?</p>
+        <div class="mode-cards">
+          <label class="mode-card" id="mode-sim">
+            <input type="radio" name="op-mode" value="simulation" checked />
+            <strong>Simulationsmodus</strong>
+            <span>Für Entwicklung, Messe und Test ohne echte Sensoren.</span>
+          </label>
+          <label class="mode-card" id="mode-hw">
+            <input type="radio" name="op-mode" value="hardware" />
+            <strong>Hardwaremodus</strong>
+            <span>Echte 4–20 mA Signale vom AnoPi Shield (Raspberry Pi 5).</span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Schritt 3: Filterparameter -->
+      <div class="wizard-step hidden" data-step="3">
+        <h2>Filterparameter</h2>
+        <div class="form-grid">
+          <label>
+            Differenzdruck-Grenzwert (dp_limit)
+            <div class="input-unit-row">
+              <input type="number" id="ob-dp-limit" value="2.5" min="0.1" max="20" step="0.1" />
+              <span class="unit-label">bar</span>
+            </div>
+            <small>Beim Überschreiten wird Filterwechsel ausgelöst.</small>
+          </label>
+          <label>
+            Sauberwiderstand (dp_clean)
+            <div class="input-unit-row">
+              <input type="number" id="ob-dp-clean" value="0.2" min="0.01" max="5" step="0.05" />
+              <span class="unit-label">bar</span>
+            </div>
+            <small>Differenzdruck eines neuen, sauberen Filters.</small>
+          </label>
+          <label>
+            Max. Durchfluss (flow_max)
+            <div class="input-unit-row">
+              <input type="number" id="ob-flow-max" value="150" min="1" max="5000" step="1" />
+              <span class="unit-label">l/min</span>
+            </div>
+            <small>Entspricht dem 20 mA-Endwert des Durchflusssensors.</small>
+          </label>
+          <label>
+            Druckbereich Sensoren
+            <div class="input-unit-row">
+              <input type="number" id="ob-pressure-range" value="10" min="1" max="100" step="1" />
+              <span class="unit-label">bar</span>
+            </div>
+            <small>Messbereich der Drucksensoren (ifm PL5423).</small>
+          </label>
+        </div>
+      </div>
+
+      <!-- Schritt 4: Temperaturbereiche -->
+      <div class="wizard-step hidden" data-step="4">
+        <h2>Temperatursensor</h2>
+        <p>Messbereich des Temperatursensors (ifm TA2405). Standardwerte können übernommen werden.</p>
+        <div class="form-grid">
+          <label>
+            Temperatur Minimum
+            <div class="input-unit-row">
+              <input type="number" id="ob-temp-min" value="-50" min="-200" max="0" step="1" />
+              <span class="unit-label">°C</span>
+            </div>
+          </label>
+          <label>
+            Temperatur Maximum
+            <div class="input-unit-row">
+              <input type="number" id="ob-temp-max" value="150" min="50" max="500" step="1" />
+              <span class="unit-label">°C</span>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Schritt 5: Passwort -->
+      <div class="wizard-step hidden" data-step="5">
+        <h2>Zugriffspasswort</h2>
+        <p>Legen Sie ein Passwort für den Einstellungsbereich fest. Es schützt die Konfiguration vor unbeabsichtigten Änderungen.</p>
+        <div class="form-grid">
+          <label>
+            Passwort (mind. 4 Zeichen)
+            <input type="password" id="ob-password" placeholder="Passwort eingeben" autocomplete="new-password" />
+          </label>
+          <label>
+            Passwort bestätigen
+            <input type="password" id="ob-password-confirm" placeholder="Passwort wiederholen" autocomplete="new-password" />
+          </label>
+        </div>
+        <div id="ob-pw-msg" class="msg"></div>
+      </div>
+
+      <!-- Schritt 6: Zusammenfassung -->
+      <div class="wizard-step hidden" data-step="6">
+        <h2>Zusammenfassung</h2>
+        <p>Bitte prüfen Sie die Einstellungen und klicken Sie auf <strong>Einrichtung abschließen</strong>.</p>
+        <div id="ob-summary" class="summary-box"></div>
+        <div id="ob-final-msg" class="msg"></div>
+      </div>
+
+      <div class="wizard-footer">
+        <button class="btn btn-ghost" id="wizard-back" onclick="wizardBack()" style="display:none">Zurück</button>
+        <div class="wizard-step-indicator" id="wizard-step-label">Schritt 1 von 6</div>
+        <button class="btn btn-primary" id="wizard-next" onclick="wizardNext()">Weiter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       EINSTELLUNGEN-MODAL (passwortgeschützt)
+       ================================================================ -->
+  <div id="settings-overlay" class="overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Einstellungen</h2>
+        <button class="btn-close" onclick="closeSettings()">&#10005;</button>
+      </div>
+
+      <!-- Login-Bereich -->
+      <div id="settings-login-area">
+        <p>Bitte Passwort eingeben um die Einstellungen zu ändern.</p>
+        <div class="form-grid">
+          <label>
+            Passwort
+            <input type="password" id="settings-pw-input" placeholder="Passwort" autocomplete="current-password"
+                   onkeydown="if(event.key==='Enter') settingsLogin()" />
+          </label>
+        </div>
+        <button class="btn btn-primary" onclick="settingsLogin()">Anmelden</button>
+        <div id="settings-login-msg" class="msg"></div>
+      </div>
+
+      <!-- Einstellungsformular (nach Login) -->
+      <div id="settings-form-area" class="hidden">
+        <div class="settings-section">
+          <h3>Filterparameter</h3>
+          <div class="form-grid">
+            <label>
+              dp_limit [bar]
+              <div class="input-unit-row">
+                <input type="number" id="s-dp-limit" min="0.1" max="20" step="0.1" />
+                <span class="unit-label">bar</span>
+              </div>
+            </label>
+            <label>
+              dp_clean [bar]
+              <div class="input-unit-row">
+                <input type="number" id="s-dp-clean" min="0.01" max="5" step="0.05" />
+                <span class="unit-label">bar</span>
+              </div>
+            </label>
+            <label>
+              Durchfluss Maximum
+              <div class="input-unit-row">
+                <input type="number" id="s-flow-max" min="1" max="5000" step="1" />
+                <span class="unit-label">l/min</span>
+              </div>
+            </label>
+            <label>
+              Druckbereich Sensoren
+              <div class="input-unit-row">
+                <input type="number" id="s-pressure-range" min="1" max="100" step="1" />
+                <span class="unit-label">bar</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Temperatursensor</h3>
+          <div class="form-grid">
+            <label>
+              Temp. Minimum
+              <div class="input-unit-row">
+                <input type="number" id="s-temp-min" min="-200" max="0" step="1" />
+                <span class="unit-label">°C</span>
+              </div>
+            </label>
+            <label>
+              Temp. Maximum
+              <div class="input-unit-row">
+                <input type="number" id="s-temp-max" min="50" max="500" step="1" />
+                <span class="unit-label">°C</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Betrieb</h3>
+          <div class="form-grid">
+            <label>
+              Abtastintervall
+              <div class="input-unit-row">
+                <input type="number" id="s-interval" min="1" max="60" step="1" />
+                <span class="unit-label">s</span>
+              </div>
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="s-simulation-mode" />
+              Simulationsmodus
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Passwort ändern</h3>
+          <div class="form-grid">
+            <label>
+              Aktuelles Passwort
+              <input type="password" id="s-old-pw" placeholder="Aktuelles Passwort" autocomplete="current-password" />
+            </label>
+            <label>
+              Neues Passwort
+              <input type="password" id="s-new-pw" placeholder="Neues Passwort (leer = nicht ändern)" autocomplete="new-password" />
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-warning hidden" id="settings-reset-warning">
+          <strong>&#9888; Achtung:</strong> Sie haben lernrelevante Parameter (dp_limit, dp_clean, Durchfluss oder Druckbereich) geändert. Das System wird die <strong>3 Lernphasen neu durchlaufen</strong>, um eine saubere Datenlage zu gewährleisten. Alle bisherigen Lernzyklen und Profile werden gelöscht.
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="settingsLogout()">Abmelden</button>
+          <button class="btn btn-primary" onclick="saveSettings()">Einstellungen speichern</button>
+        </div>
+        <div id="settings-save-msg" class="msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
+       HAUPTLAYOUT
+       ================================================================ -->
   <header>
     <div class="header-inner">
       <div class="logo">
@@ -17,6 +280,7 @@
         <span id="sensor-mode-badge" class="badge badge-sim">SIM</span>
         <span id="status-badge" class="badge badge-ok">OK</span>
         <span id="last-update" class="timestamp">–</span>
+        <button class="btn-icon" onclick="openSettings()" title="Einstellungen">&#9881;</button>
       </div>
     </div>
   </header>
@@ -173,7 +437,6 @@
     <span>HETA Smart Filter Monitoring &copy; 2025 – Raspberry Pi 5 Prototyp</span>
   </footer>
 
-  <!-- Chart.js CDN (lokaler Betrieb: kann durch lokale Kopie ersetzt werden) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="app.js"></script>
 </body>

@@ -200,6 +200,17 @@ class Database:
             ).fetchone()
         return dict(row) if row else None
 
+    def reset_all_learning_data(self):
+        """
+        Löscht alle Lernzyklen und Profile.
+        Wird aufgerufen wenn kritische Konfigurationsparameter geändert werden,
+        damit die 3 Lernphasen sauber neu durchlaufen werden.
+        """
+        with self._conn() as conn:
+            conn.execute("DELETE FROM filter_cycles")
+            conn.execute("DELETE FROM heta_profiles")
+        logger.info("Alle Lerndaten und Profile gelöscht (Neukonfiguration).")
+
     # ------------------------------------------------------------------
     # Serviceereignisse
     # ------------------------------------------------------------------
