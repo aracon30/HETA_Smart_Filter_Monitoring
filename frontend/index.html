@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HETA Smart Filter Monitoring</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-heta">HETA</span>
+        <span class="logo-sub">Smart Filter Monitoring</span>
+      </div>
+      <div class="header-status">
+        <span id="sensor-mode-badge" class="badge badge-sim">SIM</span>
+        <span id="status-badge" class="badge badge-ok">OK</span>
+        <span id="last-update" class="timestamp">–</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- ===== Dashboard-Karten ===== -->
+    <section class="cards-grid">
+
+      <div class="card" id="card-p1">
+        <div class="card-label">Eintrittsdruck p1</div>
+        <div class="card-value" id="val-p1">–</div>
+        <div class="card-unit">bar</div>
+      </div>
+
+      <div class="card" id="card-p2">
+        <div class="card-label">Austrittsdruck p2</div>
+        <div class="card-value" id="val-p2">–</div>
+        <div class="card-unit">bar</div>
+      </div>
+
+      <div class="card card-highlight" id="card-dp">
+        <div class="card-label">Differenzdruck Δp</div>
+        <div class="card-value" id="val-dp">–</div>
+        <div class="card-unit">bar</div>
+        <div class="card-sub" id="dp-limit-hint"></div>
+      </div>
+
+      <div class="card" id="card-flow">
+        <div class="card-label">Durchfluss Q</div>
+        <div class="card-value" id="val-flow">–</div>
+        <div class="card-unit">l/min</div>
+      </div>
+
+      <div class="card" id="card-temp">
+        <div class="card-label">Temperatur T</div>
+        <div class="card-value" id="val-temp">–</div>
+        <div class="card-unit">°C</div>
+      </div>
+
+      <div class="card" id="card-reff">
+        <div class="card-label">Filterwiderstand R<sub>eff</sub></div>
+        <div class="card-value" id="val-reff">–</div>
+        <div class="card-unit">bar·min/l</div>
+      </div>
+
+      <div class="card card-health" id="card-health">
+        <div class="card-label">Filterzustand</div>
+        <div class="progress-bar-outer">
+          <div class="progress-bar-inner" id="health-bar"></div>
+        </div>
+        <div class="card-value" id="val-health">–</div>
+        <div class="card-unit">%</div>
+      </div>
+
+      <div class="card" id="card-remaining">
+        <div class="card-label">Reststandzeit</div>
+        <div class="card-value" id="val-remaining">–</div>
+        <div class="card-unit" id="remaining-mode">BASIS</div>
+      </div>
+
+      <div class="card" id="card-heta">
+        <div class="card-label">HETA-Modus</div>
+        <div class="card-value small" id="val-heta-code">–</div>
+        <div class="card-unit" id="val-heta-status">nicht aktiviert</div>
+      </div>
+
+      <div class="card card-service" id="card-service">
+        <div class="card-label">Servicehinweis</div>
+        <div class="card-value small" id="val-service-msg">–</div>
+        <div class="card-unit" id="val-service-prio">–</div>
+      </div>
+
+    </section>
+
+    <!-- ===== Filterwechsel-Banner ===== -->
+    <div id="filter-change-banner" class="banner-alert hidden">
+      <strong>&#9888; FILTERWECHSEL ERFORDERLICH</strong> –
+      Bitte Filter tauschen und anschließend bestätigen.
+      <button class="btn btn-danger" onclick="confirmFilterChange()">
+        Filterwechsel bestätigen
+      </button>
+    </div>
+
+    <!-- ===== Steuerung ===== -->
+    <section class="controls">
+      <div class="controls-group">
+        <h3>Betrieb</h3>
+        <button class="btn btn-primary" onclick="startSimulation()">Simulation starten</button>
+        <button class="btn btn-secondary" onclick="stopSimulation()">Simulation stoppen</button>
+        <button class="btn btn-warning" onclick="resetSystem()">Reset</button>
+      </div>
+
+      <div class="controls-group">
+        <h3>HETA-Code aktivieren</h3>
+        <input type="text" id="input-heta-code" placeholder="HETA-12345" maxlength="20" />
+        <input type="text" id="input-pin" placeholder="PIN (6-stellig)" maxlength="6" />
+        <button class="btn btn-primary" onclick="activateHetaCode()">Aktivieren</button>
+        <button class="btn btn-ghost" onclick="showDemo()">Demo-PIN anzeigen</button>
+        <div id="heta-msg" class="msg"></div>
+      </div>
+
+      <div class="controls-group">
+        <h3>Export &amp; Service</h3>
+        <button class="btn btn-secondary" onclick="exportCSV()">CSV exportieren</button>
+        <button class="btn btn-secondary" onclick="generateServiceReport()">Servicebericht erzeugen</button>
+      </div>
+    </section>
+
+    <!-- ===== Service-Payload ===== -->
+    <section id="service-section" class="hidden">
+      <h2>Servicebericht</h2>
+      <pre id="service-report-text"></pre>
+      <button class="btn btn-ghost" onclick="hideService()">Schließen</button>
+    </section>
+
+    <!-- ===== Charts ===== -->
+    <section class="charts">
+      <h2>Verlaufsdiagramme</h2>
+      <div class="chart-grid">
+        <div class="chart-card">
+          <h3>Differenzdruck Δp [bar]</h3>
+          <canvas id="chart-dp"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Durchfluss Q [l/min]</h3>
+          <canvas id="chart-flow"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Filterwiderstand R<sub>eff</sub></h3>
+          <canvas id="chart-reff"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Reststandzeit [min]</h3>
+          <canvas id="chart-remaining"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== Systeminfo ===== -->
+    <section class="sysinfo">
+      <h2>Systemstatus</h2>
+      <div class="info-grid">
+        <div><span class="info-label">Sensorquelle:</span><span id="info-sensor-mode">–</span></div>
+        <div><span class="info-label">Zyklen gelernt:</span><span id="info-cycles">–</span></div>
+        <div><span class="info-label">Profil:</span><span id="info-profile">–</span></div>
+        <div><span class="info-label">Anomalie:</span><span id="info-anomaly">–</span></div>
+        <div><span class="info-label">Prognose-Modus:</span><span id="info-pred-mode">–</span></div>
+        <div><span class="info-label">Sensor-Fehler:</span><span id="info-sensor-err">–</span></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>HETA Smart Filter Monitoring &copy; 2025 – Raspberry Pi 5 Prototyp</span>
+  </footer>
+
+  <!-- Chart.js CDN (lokaler Betrieb: kann durch lokale Kopie ersetzt werden) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
