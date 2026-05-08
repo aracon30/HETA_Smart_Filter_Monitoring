@@ -119,6 +119,12 @@ main {
 .card-highlight { border-left: 4px solid var(--heta-accent); }
 .card-health    { grid-column: span 1; }
 .card-service   { grid-column: span 2; }
+.card-note      { font-size: .72rem; color: var(--text-muted); font-style: italic; margin-top: .2rem; }
+
+/* Beladungsgrad ausgegraut wenn kein HETA-Code aktiv */
+.card-health-hidden .card-value,
+.card-health-hidden .progress-bar-outer { opacity: .35; }
+.card-health-hidden .card-note          { color: var(--warn-yellow); font-style: normal; }
 
 /* Status-Farben für Karten */
 .card.status-ok       { border-color: var(--ok-green); }

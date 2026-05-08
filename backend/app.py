@@ -154,6 +154,8 @@ _state = {
     "profile_status": "LERNEND",
     "anomaly_active": False,
     "anomaly_percent": 0.0,
+    # Beladungsgrad nur anzeigen wenn HETA-Code aktiv
+    "show_filter_health": False,
 
     # Servicehinweis
     "service_message": "",
@@ -284,8 +286,16 @@ def _measurement_loop():
 
         # Prognose
         remaining_s = predictor.update(fs.dp_bar)
-        validated = learning.is_profile_valid(heta_code) and heta_activated
-        pred_status = predictor.get_status(remaining_s, validated)
+        profile_valid = learning.is_profile_valid(heta_code) and heta_activated
+        cycles_count  = learning.get_cycles_count(heta_code) if heta_code else 0
+        req_cycles    = settings.get("required_cycles_for_profile", 3)
+        pred_status = predictor.get_status(
+            remaining_seconds=remaining_s,
+            heta_activated=heta_activated,
+            profile_valid=profile_valid,
+            learned_cycles=cycles_count,
+            required_cycles=req_cycles,
+        )
 
         # Filterwechsel erkennen
         if fs.dp_bar >= dp_limit and not awaiting and cycle_active:
@@ -349,8 +359,9 @@ def _measurement_loop():
                 "remaining_display": pred_status["remaining_display"],
                 "remaining_seconds": pred_status["remaining_seconds"],
                 "prediction_mode": pred_status["prediction_mode"],
-                "learned_cycles": learning.get_cycles_count(heta_code) if heta_code else 0,
-                "profile_status": "VALIDIERT" if (learning.is_profile_valid(heta_code) and heta_code) else "LERNEND",
+                "learned_cycles": cycles_count,
+                "profile_status": "VALIDIERT" if profile_valid else "LERNEND",
+                "show_filter_health": heta_activated,
                 "service_message": rec["message"],
                 "service_priority": rec["priority"],
                 "last_update": time.strftime("%Y-%m-%dT%H:%M:%S"),
@@ -713,9 +724,10 @@ def api_service_request():
     )
 
     pred_status = {
-        "prediction_mode": current["prediction_mode"],
+        "prediction_mode":  current["prediction_mode"],
         "remaining_display": current["remaining_display"],
         "remaining_seconds": current["remaining_seconds"],
+        "learned_cycles":    current["learned_cycles"],
     }
 
     payload = build_service_payload(

@@ -1,9 +1,14 @@
 """
 Prognose-Modul – berechnet die Reststandzeit des Filters.
 
-Zwei Modi:
-  Basis-Modus       – Ausgabe als Bereich in 10-Minuten-Schritten (z.B. "80–90 min")
-  Validierter Modus – konkreter geglätteter Wert (z.B. "112 min")
+Drei Anzeigemodi:
+  BASIS          – Kein HETA-Code aktiv. Adaptive Bereiche in Tagen/Stunden,
+                   keine Minutenangaben. Jede Filteranwendung hat eine andere
+                   Standzeit – von Minuten bis Tage ist alles normal.
+  HETA_LERNEND  – HETA-Code aktiv, aber Lernprofil noch nicht valide (< 3 Zyklen).
+                   Breite Bereiche, Lernfortschritt wird angezeigt.
+  HETA_VALIDIERT – HETA-Code aktiv, 3 vollständige Zyklen gelernt.
+                   Minutengenaue, geglättete Reststandzeit.
 """
 
 import math
@@ -12,10 +17,64 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Anzeigemodi
+MODE_BASIS      = "BASIS"
+MODE_LERNEND    = "HETA_LERNEND"
+MODE_VALIDIERT  = "HETA_VALIDIERT"
+
+
+def _format_basis_range(seconds: float) -> str:
+    """
+    Wandelt Sekunden in einen adaptiven Bereich um.
+    Keine Minutenangaben – nur Stunden und Tage.
+    Die Bereiche sind bewusst breit, da Filterlaufzeiten je nach Anwendung
+    von Minuten bis zu mehreren Tagen variieren können.
+    """
+    if seconds <= 0:
+        return "< 1 Std."
+
+    hours = seconds / 3600.0
+    days  = hours / 24.0
+
+    if days >= 5:
+        return "> 5 Tage"
+    if days >= 3:
+        return "3–5 Tage"
+    if days >= 2:
+        return "2–3 Tage"
+    if days >= 1:
+        return "1–2 Tage"
+    if hours >= 12:
+        return "12–24 Std."
+    if hours >= 6:
+        return "6–12 Std."
+    if hours >= 4:
+        return "4–6 Std."
+    if hours >= 2:
+        return "2–4 Std."
+    if hours >= 1:
+        return "1–2 Std."
+    return "< 1 Std."
+
+
+def _format_validated(seconds: float) -> str:
+    """
+    Minutengenaue Ausgabe für den validierten HETA-Modus.
+    Bei > 1 Stunde wird in Stunden und Minuten ausgegeben.
+    """
+    total_min = int(seconds / 60)
+    if total_min <= 0:
+        return "< 1 min"
+    if total_min >= 60:
+        h = total_min // 60
+        m = total_min % 60
+        return f"{h} Std. {m} min" if m > 0 else f"{h} Std."
+    return f"{total_min} min"
+
 
 class PredictionEngine:
     """
-    Glättet die Reststandzeit und begrenzt unplausible Sprünge.
+    Berechnet und glättet die Reststandzeit des Filters.
 
     Große Sprünge nach oben werden stark gedämpft (max. +2 %/Update),
     fallende Werte dürfen schneller reagieren (max. -8 %/Update).
@@ -39,7 +98,7 @@ class PredictionEngine:
 
         self._smoothed_remaining: Optional[float] = None
         self._dp_history: list[float] = []
-        self._history_window: int = 30  # Anzahl Werte für Steigungsberechnung
+        self._history_window: int = 30
 
     def update(self, dp_bar: float) -> Optional[float]:
         """
@@ -66,35 +125,28 @@ class PredictionEngine:
         return self._smoothed_remaining
 
     def _calculate_slope(self) -> Optional[float]:
-        """Berechnet die dp-Steigung als Differenz pro Sekunde über den Messfenster."""
+        """Lineare Regression über das dp-Messfenster (1 Index = 1 Sekunde)."""
         n = len(self._dp_history)
         if n < 5:
             return None
-        # Einfache lineare Regression über die letzten N Werte
-        # (Index als Zeiteinheit, 1 Einheit = 1 Sekunde)
         x_mean = (n - 1) / 2.0
         y_mean = sum(self._dp_history) / n
-        numerator = sum((i - x_mean) * (self._dp_history[i] - y_mean) for i in range(n))
+        numerator   = sum((i - x_mean) * (self._dp_history[i] - y_mean) for i in range(n))
         denominator = sum((i - x_mean) ** 2 for i in range(n))
         if denominator == 0:
             return None
-        slope = numerator / denominator
-        return max(slope, 0.0)
+        return max(numerator / denominator, 0.0)
 
     def _apply_smoothing(self, current: float, new_raw: float) -> float:
-        """Wendet exponentielle Glättung mit Sprungbegrenzung an."""
-        # Sprung nach oben begrenzen
+        """Exponentielle Glättung mit asymmetrischer Sprungbegrenzung."""
         if new_raw > current:
-            max_allowed = current * (1.0 + self.max_increase_pct)
-            new_raw = min(new_raw, max_allowed)
-        # Sprung nach unten begrenzen
+            new_raw = min(new_raw, current * (1.0 + self.max_increase_pct))
         else:
-            min_allowed = current * (1.0 - self.max_decrease_pct)
-            new_raw = max(new_raw, min_allowed)
+            new_raw = max(new_raw, current * (1.0 - self.max_decrease_pct))
         return current + self.smoothing_factor * (new_raw - current)
 
     def reset(self):
-        """Setzt die Prognose zurück (z.B. nach Filterwechsel)."""
+        """Setzt die Prognose zurück (z.B. nach Filterwechsel oder Neukonfiguration)."""
         self._smoothed_remaining = None
         self._dp_history.clear()
 
@@ -104,37 +156,52 @@ class PredictionEngine:
         self.dp_clean = dp_clean
 
     # ------------------------------------------------------------------
-    # Ausgabeformatierung
+    # Ausgabe
     # ------------------------------------------------------------------
 
-    def format_remaining(self, remaining_seconds: Optional[float],
-                          validated_mode: bool) -> str:
-        """
-        Formatiert die Reststandzeit abhängig vom Modus.
-
-        Basis-Modus:     Bereich in 10-Minuten-Schritten (z.B. "80–90 min")
-        Validiert-Modus: Konkreter Wert                  (z.B. "112 min")
-        """
-        if remaining_seconds is None or remaining_seconds < 0:
-            return "Unbekannt"
-
-        remaining_min = remaining_seconds / 60.0
-
-        if validated_mode:
-            return f"{int(remaining_min)} min"
-        else:
-            # Auf nächste 10 Minuten abrunden
-            lower = int(remaining_min // 10) * 10
-            upper = lower + 10
-            return f"{lower}–{upper} min"
-
     def get_status(self, remaining_seconds: Optional[float],
-                   validated_mode: bool) -> dict:
-        """Gibt das vollständige Prognose-Statusobjekt zurück."""
-        display = self.format_remaining(remaining_seconds, validated_mode)
+                   heta_activated: bool,
+                   profile_valid: bool,
+                   learned_cycles: int,
+                   required_cycles: int = 3) -> dict:
+        """
+        Gibt das vollständige Prognose-Statusobjekt zurück.
+
+        Modus-Logik:
+          HETA_VALIDIERT  → heta_activated + profile_valid
+          HETA_LERNEND    → heta_activated, aber noch nicht genug Zyklen
+          BASIS           → kein HETA-Code aktiv
+        """
+        if heta_activated and profile_valid:
+            mode = MODE_VALIDIERT
+        elif heta_activated:
+            mode = MODE_LERNEND
+        else:
+            mode = MODE_BASIS
+
+        display = self._format_for_mode(remaining_seconds, mode)
+
         return {
             "remaining_seconds": round(remaining_seconds, 0) if remaining_seconds is not None else None,
             "remaining_display": display,
-            "prediction_mode": "HETA_VALIDIERT" if validated_mode else "BASIS",
+            "prediction_mode": mode,
             "smoothed": self._smoothed_remaining is not None,
+            "learned_cycles": learned_cycles,
+            "required_cycles": required_cycles,
         }
+
+    def _format_for_mode(self, seconds: Optional[float], mode: str) -> str:
+        """Wählt die passende Formatierung je nach Anzeigemodus."""
+        if seconds is None:
+            return "Wird berechnet …"
+
+        if mode == MODE_VALIDIERT:
+            # Minutengenaue Angabe nur für validierte HETA-Elemente
+            return _format_validated(seconds)
+
+        if mode == MODE_LERNEND:
+            # Breite Bereiche während der Lernphase
+            return _format_basis_range(seconds)
+
+        # BASIS – adaptive Bereiche, keine Minutenangaben
+        return _format_basis_range(seconds)

@@ -317,16 +317,14 @@ function updateDashboard(d) {
   setText("val-temp",  fmt(d.temperature_c, 1));
   setText("val-reff",  fmt(d.r_eff, 5));
 
-  const health = d.filter_health_percent ?? 100;
-  setText("val-health", fmt(health, 1));
-  const bar = document.getElementById("health-bar");
-  if (bar) {
-    bar.style.width = `${Math.max(0, Math.min(100, health))}%`;
-    bar.style.background = healthColor(health);
-  }
+  // Beladungsgrad – nur bei aktivem HETA-Code anzeigen
+  updateFilterHealth(d.filter_health_percent, d.show_filter_health);
 
+  // Reststandzeit – Modus-Beschriftung
   setText("val-remaining", d.remaining_display ?? "–");
-  setText("remaining-mode", d.prediction_mode ?? "BASIS");
+  updateRemainingMode(d.prediction_mode, d.learned_cycles, d.required_cycles);
+
+  // HETA-Code
   setText("val-heta-code", d.heta_code || "(kein Code)");
   setText("val-heta-status", d.heta_activated ? "Aktiviert" : "nicht aktiviert");
   setText("val-service-msg", d.service_message || "–");
@@ -529,6 +527,38 @@ function healthColor(pct) {
   if (pct > 50) return "var(--ok-green)";
   if (pct > 20) return "var(--warn-yellow)";
   return "var(--alert-red)";
+}
+
+function updateFilterHealth(healthPct, show) {
+  const card = document.getElementById("card-health");
+  const bar  = document.getElementById("health-bar");
+  if (show) {
+    const h = healthPct ?? 100;
+    setText("val-health", fmt(h, 1));
+    if (bar) { bar.style.width = `${Math.max(0, Math.min(100, h))}%`; bar.style.background = healthColor(h); }
+    if (card) { card.classList.remove("card-health-hidden"); setText("card-health-note", ""); }
+  } else {
+    setText("val-health", "–");
+    if (bar) bar.style.width = "0%";
+    if (card) card.classList.add("card-health-hidden");
+    setText("card-health-note", "HETA-Code erforderlich");
+  }
+}
+
+function updateRemainingMode(mode, learnedCycles, requiredCycles) {
+  const el = document.getElementById("remaining-mode");
+  if (!el) return;
+  const req = requiredCycles ?? 3;
+  if (mode === "HETA_VALIDIERT") {
+    el.textContent = "HETA-Validiert";
+    el.style.color = "var(--ok-green)";
+  } else if (mode === "HETA_LERNEND") {
+    el.textContent = `HETA-Lernend (${learnedCycles ?? 0}/${req} Zyklen)`;
+    el.style.color = "var(--warn-yellow)";
+  } else {
+    el.textContent = "Basis";
+    el.style.color = "var(--text-muted)";
+  }
 }
 
 function clearCharts() {
