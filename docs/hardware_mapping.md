@@ -50,34 +50,39 @@ flow         = ((mA - 4) / 16) × flow_max
 
 ## OLED-Display
 
-| Parameter  | Wert                        |
-|------------|-----------------------------|
-| Größe      | 2,42 Zoll                   |
-| Auflösung  | 128 × 64 Pixel              |
-| Controller | SSD1309 (SPI) / SSD1306 (I2C)|
-| Interface  | SPI (bevorzugt) oder I2C    |
-| Bibliothek | luma.oled                   |
+| Parameter  | Wert                          |
+|------------|-------------------------------|
+| Hersteller | Waveshare 2.42inch OLED Module |
+| Größe      | 2,42 Zoll                     |
+| Auflösung  | 128 × 64 Pixel                |
+| Controller | SSD1309                       |
+| Interface  | 4-Wire SPI (Standard) oder I2C (Lötbrücke umstellen) |
+| Bibliothek | luma.oled (`ssd1309`)         |
 
-### SPI-Anschluss (Raspberry Pi 5)
+### SPI-Anschluss (Raspberry Pi 5) – Werkseinstellung
 
-| OLED-Pin | Raspberry Pi GPIO | Funktion |
-|----------|-------------------|----------|
-| VCC      | 3V3 (Pin 1)       | Stromversorgung |
-| GND      | GND (Pin 6)       | Masse |
-| DIN/MOSI | GPIO 10 (Pin 19)  | SPI MOSI |
-| CLK/SCK  | GPIO 11 (Pin 23)  | SPI Clock |
-| CS       | GPIO 8 (Pin 24)   | SPI Chip Select 0 |
-| DC       | GPIO 24 (Pin 18)  | Data/Command |
-| RST      | GPIO 25 (Pin 22)  | Reset |
+| OLED-Pin | Signal      | Raspberry Pi GPIO | Board-Pin | Funktion            |
+|----------|-------------|-------------------|-----------|---------------------|
+| VCC      | 3,3 V       | 3V3               | Pin 1     | Stromversorgung     |
+| GND      | GND         | GND               | Pin 6     | Masse               |
+| DIN      | SPI MOSI    | GPIO 10           | Pin 19    | SPI-Daten           |
+| CLK      | SPI SCLK    | GPIO 11           | Pin 23    | SPI-Takt            |
+| CS       | SPI CE0     | GPIO  8           | Pin 24    | Chip Select (aktiv Low) |
+| DC       | Data/Cmd    | **GPIO 25**       | **Pin 22**| Data=High, Cmd=Low  |
+| RES      | Reset       | **GPIO 27**       | **Pin 13**| Reset (aktiv Low)   |
 
-### I2C-Anschluss (Alternative)
+> **Wichtig:** DC=GPIO 25 und RES=GPIO 27 sind in `display.py` als Standardwerte hinterlegt (`_SPI_GPIO_DC = 25`, `_SPI_GPIO_RST = 27`). Bei abweichender Verkabelung die Werte im Konstruktor überschreiben.
 
-| OLED-Pin | Raspberry Pi GPIO | Funktion |
-|----------|-------------------|----------|
-| VCC      | 3V3 (Pin 1)       | Stromversorgung |
-| GND      | GND (Pin 6)       | Masse |
-| SCL      | GPIO 3 (Pin 5)    | I2C Clock |
-| SDA      | GPIO 2 (Pin 3)    | I2C Data |
+### I2C-Anschluss (Alternative – Lötbrücke auf Modul umstellen)
+
+| OLED-Pin | Signal   | Raspberry Pi GPIO | Board-Pin | Funktion         |
+|----------|----------|-------------------|-----------|------------------|
+| VCC      | 3,3 V    | 3V3               | Pin 1     | Stromversorgung  |
+| GND      | GND      | GND               | Pin 6     | Masse            |
+| DIN      | I2C SDA  | GPIO  2           | Pin 3     | I2C-Daten        |
+| CLK      | I2C SCL  | GPIO  3           | Pin 5     | I2C-Takt         |
+| DC       | Adresse  | GND / 3V3         | –         | Low=0x3C / High=0x3D |
+| RES      | Reset    | **GPIO 27**       | **Pin 13**| Reset (aktiv Low)|
 
 ---
 
@@ -98,17 +103,30 @@ flow         = ((mA - 4) / 16) × flow_max
 | SCL        | GPIO 3 (Pin 5)    | I2C Clock |
 | SDA        | GPIO 2 (Pin 3)    | I2C Data |
 
-### Tastenzuordnung
+### Tastenzuordnung (Display-Navigation)
 
-| Eingabe        | Funktion              |
-|----------------|-----------------------|
-| Drehen links   | Vorheriger Menüpunkt  |
-| Drehen rechts  | Nächster Menüpunkt    |
-| Drücken        | OK / Bestätigen       |
-| Taste Links    | Zurück                |
-| Taste Rechts   | Untermenü             |
-| Taste Oben     | Wert erhöhen          |
-| Taste Unten    | Wert verringern       |
+| Eingabe        | Funktion                                               |
+|----------------|--------------------------------------------------------|
+| Drehen links   | Vorheriger Bildschirm                                  |
+| Drehen rechts  | Nächster Bildschirm                                    |
+| Taste Links    | Vorheriger Bildschirm / Filterwechsel-Bestätigung abbrechen |
+| Taste Rechts   | Nächster Bildschirm                                    |
+| Drücken (OK)   | Filterwechsel vormerken (1. Druck) oder bestätigen (2. Druck) |
+| Taste Oben     | (reserviert)                                           |
+| Taste Unten    | (reserviert)                                           |
+
+### Bildschirmreihenfolge
+
+| Index | Bildschirm    | Inhalt                                         |
+|-------|---------------|------------------------------------------------|
+| 0     | Status        | p1, p2, dp, Durchfluss, Reststandzeit, Status  |
+| 1     | HETA-Code     | Aktiver Code und Aktivierungsstatus             |
+| 2     | Filterwechsel | dp-Wert, Grenzwert, zweistufige Bestätigung    |
+| 3     | Service       | Aktueller Servicehinweis mit Priorität          |
+| 4     | Historie      | Letzte 4 abgeschlossene Filterzyklen            |
+| 5     | Netzwerk      | IP-Adresse, Port, Betriebsmodus                 |
+
+> **Haupteinstellungen** sind nur über das Web-Dashboard (`http://<IP>:8080 → ⚙`) erreichbar, nicht über den Encoder.
 
 ---
 

@@ -1,7 +1,18 @@
 """
-Display-Modul – steuert das 2.42"-OLED-Display über luma.oled.
+Display-Modul – steuert das 2.42"-OLED-Display (Waveshare SSD1309) über luma.oled.
 
-Unterstützt SSD1309/SSD1306-kompatible Displays via SPI oder I2C.
+Hardwareanschluss am Raspberry Pi 5 (BCM-Nummerierung):
+  DIN  → GPIO 10  (SPI0 MOSI)
+  CLK  → GPIO 11  (SPI0 SCLK)
+  CS   → GPIO  8  (SPI0 CE0)
+  DC   → GPIO 25
+  RST  → GPIO 27
+
+I2C-Betrieb (optional, Lötbrücke auf Modul umstellen):
+  DIN  → GPIO  2  (SDA)
+  CLK  → GPIO  3  (SCL)
+  DC   → LOW → Adresse 0x3C | HIGH → Adresse 0x3D
+
 Bei fehlender Hardware wird die Ausgabe simuliert (Textlog).
 """
 
@@ -14,6 +25,10 @@ logger = logging.getLogger(__name__)
 # Displayauflösung
 DISPLAY_WIDTH = 128
 DISPLAY_HEIGHT = 64
+
+# GPIO-Pins (BCM) – Waveshare 2.42" OLED SSD1309
+_SPI_GPIO_DC  = 25
+_SPI_GPIO_RST = 27
 
 # Bildschirmnamen
 SCREEN_STATUS = "Status"
@@ -29,11 +44,12 @@ SCREENS = [SCREEN_STATUS, SCREEN_HETA, SCREEN_FILTER_CHANGE,
 
 class OLEDDisplay:
     """
-    Steuert das OLED-Display.
+    Steuert das 2.42" OLED-Display (SSD1309, SPI-Betrieb).
     Fällt bei fehlender Hardware auf Simulationsmodus zurück.
     """
 
     def __init__(self, use_spi: bool = True, spi_port: int = 0, spi_device: int = 0,
+                 gpio_dc: int = _SPI_GPIO_DC, gpio_rst: int = _SPI_GPIO_RST,
                  i2c_address: int = 0x3C):
         self._device = None
         self._font = None
@@ -43,12 +59,14 @@ class OLEDDisplay:
         self._current_screen = SCREEN_STATUS
 
         try:
-            self._init_hardware(use_spi, spi_port, spi_device, i2c_address)
+            self._init_hardware(use_spi, spi_port, spi_device,
+                                gpio_dc, gpio_rst, i2c_address)
         except Exception as e:
             logger.warning("OLED-Hardware nicht verfügbar: %s – Simulationsmodus aktiv.", e)
             self._simulated = True
 
-    def _init_hardware(self, use_spi, spi_port, spi_device, i2c_address):
+    def _init_hardware(self, use_spi, spi_port, spi_device,
+                       gpio_dc, gpio_rst, i2c_address):
         """Initialisiert luma.oled Hardware."""
         from PIL import ImageFont  # type: ignore
         from luma.core.render import canvas  # type: ignore  # noqa: F401
@@ -56,22 +74,27 @@ class OLEDDisplay:
         if use_spi:
             from luma.oled.device import ssd1309  # type: ignore
             from luma.core.interface.serial import spi  # type: ignore
-            serial = spi(port=spi_port, device=spi_device)
+            # DC- und RST-Pin müssen explizit angegeben werden (Waveshare: DC=25, RST=27)
+            serial = spi(port=spi_port, device=spi_device,
+                         gpio_DC=gpio_dc, gpio_RST=gpio_rst)
             self._device = ssd1309(serial, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT)
         else:
-            from luma.oled.device import ssd1306  # type: ignore
+            from luma.oled.device import ssd1309  # type: ignore
             from luma.core.interface.serial import i2c  # type: ignore
             serial = i2c(port=1, address=i2c_address)
-            self._device = ssd1306(serial, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT)
+            self._device = ssd1309(serial, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT)
 
         try:
-            self._font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 10)
-            self._font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 8)
+            self._font = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 10)
+            self._font_small = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 8)
         except OSError:
             self._font = ImageFont.load_default()
             self._font_small = self._font
 
-        logger.info("OLED-Display initialisiert (%s).", "SPI" if use_spi else "I2C")
+        logger.info("OLED-Display initialisiert (%s, DC=GPIO%d, RST=GPIO%d).",
+                    "SPI" if use_spi else "I2C", gpio_dc, gpio_rst)
 
     # ------------------------------------------------------------------
     # Bildschirme
