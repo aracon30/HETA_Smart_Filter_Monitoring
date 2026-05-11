@@ -5,33 +5,34 @@
 ```
 HETA_Smart_Filter_Monitoring/
 ├── backend/
-│   ├── app.py              # Flask-Webserver, REST-API, Messzyklus-Thread, Auth
-│   ├── config.py           # Konfigurationsmanagement, Passwort-Hashing
-│   ├── sensors.py          # Sensorlesemodul + Filtersimulator
-│   ├── calculations.py     # Berechnungsalgorithmen + Statuslogik
-│   ├── heta_code.py        # HETA-Code-Validierung + PIN-Algorithmus
-│   ├── learning.py         # Lernzyklen + Referenzprofile
-│   ├── prediction.py       # Reststandzeit-Prognose + Glättung (3 Modi)
-│   ├── service_logic.py    # Serviceempfehlungen + Serviceberichte
-│   ├── database.py         # SQLite-Datenbankmodul + Lerndaten-Reset
-│   ├── display.py          # OLED-Display-Steuerung (luma.oled)
-│   ├── navigation.py       # Drehencoder-Navigation (Seesaw)
-│   └── mqtt_client.py      # Optionaler MQTT-Client (paho-mqtt)
+│   ├── app.py              Flask-Webserver, REST-API, Messzyklus-Thread,
+│   │                       Auth, _DisplayController
+│   ├── config.py           Konfigurationsmanagement, Passwort-Hashing (SHA-256)
+│   ├── sensors.py          Sensorlesemodul + FilterSimulator (S-Kurve)
+│   ├── calculations.py     Berechnungsalgorithmen + Statuslogik
+│   ├── heta_code.py        HETA-Code-Validierung + PIN-Algorithmus
+│   ├── learning.py         Lernzyklen + Referenzprofile
+│   ├── prediction.py       Reststandzeit-Prognose + Glättung (3 Modi)
+│   ├── service_logic.py    Serviceempfehlungen + Serviceberichte
+│   ├── database.py         SQLite-Datenbankmodul + Lerndaten-Reset
+│   ├── display.py          OLED-Display-Steuerung (luma.oled + PIL-Layout)
+│   ├── navigation.py       Drehencoder-Navigation (Adafruit Seesaw)
+│   └── mqtt_client.py      Optionaler MQTT-Client (paho-mqtt)
 ├── frontend/
-│   ├── index.html          # Single-Page Dashboard + Onboarding-Assistent + Einstellungs-Modal
-│   ├── style.css           # Industrielles Stylesheet (HETA-Blau)
-│   └── app.js              # REST-API-Polling, Chart.js, Onboarding, Auth
+│   ├── index.html          Single-Page Dashboard + Onboarding + Einstellungs-Modal
+│   ├── style.css           Industrielles Stylesheet (HETA-Blau)
+│   └── app.js              REST-API-Polling, Chart.js, Onboarding, Auth
 ├── config/
-│   └── settings.json       # Alle Konfigurationsparameter
-├── data/                   # SQLite-Datenbank (auto-erstellt)
-├── logs/                   # Log-Dateien (auto-erstellt)
-├── exports/                # CSV-Exporte (auto-erstellt)
+│   └── settings.json       Alle Konfigurationsparameter
+├── data/                   SQLite-Datenbank (auto-erstellt)
+├── logs/                   Log-Dateien (auto-erstellt)
+├── exports/                CSV-Exporte (auto-erstellt)
 ├── docs/
 │   ├── software_architecture.md
 │   └── hardware_mapping.md
 ├── scripts/
-│   ├── install.sh          # Installationsskript
-│   └── start.sh            # Manueller Startskript
+│   ├── install.sh          Installationsskript
+│   └── start.sh            Manueller Start
 └── requirements.txt
 ```
 
@@ -39,8 +40,8 @@ HETA_Smart_Filter_Monitoring/
 
 ## Ersteinrichtung (Onboarding)
 
-Beim ersten Start erkennt die Software, dass `onboarding_complete: false` in `settings.json`
-gesetzt ist, und zeigt automatisch einen 6-stufigen Einrichtungsassistenten an.
+Beim ersten Start erkennt die Software `onboarding_complete: false` in `settings.json`
+und zeigt automatisch einen 6-stufigen Einrichtungsassistenten an.
 
 | Schritt | Inhalt |
 |---------|--------|
@@ -57,21 +58,20 @@ Der Messzyklus startet erst nach erfolgreich abgeschlossenem Onboarding.
 
 ## Passwortgeschützter Einstellungsbereich
 
-Einstellungen können im laufenden Betrieb über ein Modal geändert werden,
-das über das Zahnrad-Symbol (⚙) im Header erreichbar ist.
+Einstellungen können im laufenden Betrieb über das Zahnrad-Symbol (⚙) im Dashboard
+geändert werden.
 
 ### Authentifizierung
 
-- Passwort wird als SHA-256-Hash in `settings.json` gespeichert (`settings_password_hash`)
-- Nach korrekter Eingabe wird ein zufälliger Session-Token (`secrets.token_hex(32)`) erstellt
-- Token-Timeout: 30 Minuten Inaktivität (konfigurierbar: `session_timeout_minutes`)
-- Token wird im `sessionStorage` des Browsers gehalten
-- Alle Schreib-API-Aufrufe erfordern den Token im Header `X-Auth-Token`
+- Passwort als SHA-256-Hash in `settings.json` (`settings_password_hash`)
+- Nach korrekter Eingabe: zufälliger Session-Token (`secrets.token_hex(32)`)
+- Timeout: 30 Minuten Inaktivität (konfigurierbar: `session_timeout_minutes`)
+- Token im Browser-`sessionStorage`, Header `X-Auth-Token` bei Schreibzugriffen
 
 ### Lernphasen-Reset bei Konfigurationsänderung
 
-Wenn folgende Parameter geändert werden, werden **alle Lerndaten und Profile gelöscht**
-und das System muss erneut 3 Filterzyklen durchlaufen:
+Wenn folgende Parameter geändert werden, löscht `db.reset_all_learning_data()`
+alle Zyklen und Profile – das System muss 3 neue Filterzyklen durchlaufen:
 
 | Parameter | Beschreibung |
 |-----------|-------------|
@@ -80,7 +80,6 @@ und das System muss erneut 3 Filterzyklen durchlaufen:
 | `flow_max_l_min` | Maximaler Durchfluss (Sensorendwert) |
 | `pressure_range_bar` | Messbereich der Drucksensoren |
 
-Der Benutzer wird im UI durch einen gelben Warnhinweis informiert, bevor er speichert.
 Das Ereignis wird als `LERNDATEN_RESET` in der Datenbank protokolliert.
 
 ---
@@ -105,26 +104,25 @@ r_eff = dp_bar / max(flow_l_min, 0.1)    [bar·min/l]
 usage = (dp_bar - dp_clean) / (dp_limit - dp_clean)
 ```
 
-> **Hinweis:** Der Beladungsgrad wird im Dashboard nur angezeigt, wenn ein
-> HETA-Code aktiv ist. Im Basis-Modus (kein HETA-Code) bleibt die Karte
-> ausgegraut, da ohne Referenzprofil keine sinnvolle Aussage möglich ist.
+> Wird im Dashboard nur angezeigt, wenn ein HETA-Code aktiv ist.
+> Im Basis-Modus bleibt die Karte ausgegraut.
 
 ### Filterzustand in Prozent
 
 ```
-filter_health_percent = 100 × (1 - clamp(usage, 0, 1))
+filter_health_percent = 100 × (1 − clamp(usage, 0, 1))
 ```
 
 ### Statuslogik
 
 | Bedingung | Status |
 |-----------|--------|
-| dp < 0,75 × dp_limit, kein Fehler | OK |
-| dp ≥ 0,75 × dp_limit | BEOBACHTEN |
-| dp ≥ dp_limit | WECHSEL |
-| Filterwechsel ausgelöst, wartet auf Bestätigung | WECHSEL_BESTAETIGEN |
-| Beladungsverhalten weicht stark vom Referenz ab | WARNUNG |
-| Sensorfehler (Kabelbruch, Über-/Unterbereich) | FEHLER |
+| dp < 0,75 × dp_limit, kein Fehler | `OK` |
+| dp ≥ 0,75 × dp_limit | `BEOBACHTEN` |
+| dp ≥ dp_limit | `WECHSEL` |
+| Filterwechsel ausgelöst, wartet auf Bestätigung | `WECHSEL_BESTAETIGEN` |
+| Beladungsverhalten weicht stark vom Referenzprofil ab | `WARNUNG` |
+| Sensorfehler (Kabelbruch, Über-/Unterbereich) | `FEHLER` |
 
 ---
 
@@ -145,7 +143,7 @@ filter_health_percent = 100 × (1 - clamp(usage, 0, 1))
 | filter_health_percent | REAL | Beladungsgrad % |
 | status | TEXT | Filterstatus |
 | heta_code | TEXT | Aktiver HETA-Code |
-| sensor_mode | TEXT | hardware / simulation |
+| sensor_mode | TEXT | `hardware` / `simulation` |
 
 ### Tabelle: filter_cycles
 
@@ -165,6 +163,12 @@ filter_health_percent = 100 × (1 - clamp(usage, 0, 1))
 | loading_rate | REAL | Beladungsrate (bar/s) |
 | confirmed_filter_change | INT | 1 = bestätigt |
 
+Relevante Abfragen:
+- `get_cycles_for_heta(heta_code)` – alle Zyklen eines HETA-Codes
+- `get_recent_cycles(limit)` – letzte N Zyklen (alle Codes, für Historie-Display)
+- `count_confirmed_cycles(heta_code)` – Anzahl bestätigter Zyklen
+- `reset_all_learning_data()` – löscht alle Zyklen und Profile
+
 ### Tabelle: heta_profiles
 
 | Feld | Typ | Beschreibung |
@@ -178,7 +182,7 @@ filter_health_percent = 100 × (1 - clamp(usage, 0, 1))
 
 ### Tabelle: service_events
 
-Protokolliert alle systemrelevanten Ereignisse:
+Protokolliert systemrelevante Ereignisse:
 `HETA_AKTIVIERT`, `FILTERWECHSEL_BESTAETIGT`, `SERVICE_ANFRAGE`,
 `LERNDATEN_RESET`, `ONBOARDING_ABGESCHLOSSEN`
 
@@ -186,13 +190,13 @@ Protokolliert alle systemrelevanten Ereignisse:
 
 ## Prognosemodi
 
-Filterlaufzeiten variieren je nach Anwendung extrem – von wenigen Minuten
-bis zu mehreren Tagen ist alles normal. Die Anzeige passt sich daher dem
-verfügbaren Wissensstand an.
+Filterlaufzeiten variieren je nach Anwendung extrem – von Minuten bis Tagen.
+Die Anzeige passt sich dem verfügbaren Wissensstand an.
 
 ### BASIS
-- Aktiv wenn **kein HETA-Code** aktiviert ist
-- Adaptive Bereichsanzeige in Stunden und Tagen, **keine Minutenangaben**
+
+- Kein HETA-Code aktiv
+- Adaptive Bereichsanzeige in Stunden/Tagen, **keine Minutenangaben**
 - Beladungsgrad wird nicht angezeigt
 
 | Reststandzeit | Anzeige |
@@ -209,24 +213,25 @@ verfügbaren Wissensstand an.
 | < 1 Std. | `< 1 Std.` |
 
 ### HETA_LERNEND
-- HETA-Code aktiv, aber noch **weniger als 3 bestätigte Zyklen**
+
+- HETA-Code aktiv, aber < 3 bestätigte Zyklen
 - Breite Bereichsanzeige (identische Tabelle wie BASIS)
-- Lernfortschritt wird angezeigt: `(1/3 Zyklen)`
+- Lernfortschritt sichtbar: z. B. `(1/3 Zyklen)`
 - Beladungsgrad wird angezeigt
 
 ### HETA_VALIDIERT
-- HETA-Code aktiv **und** ≥ 3 vollständige Zyklen abgeschlossen
-- **Minutengenaue** Ausgabe, z.B. `1 Std. 52 min` oder `47 min`
+
+- HETA-Code aktiv **und** ≥ 3 vollständige Zyklen
+- **Minutengenaue** Ausgabe: `1 Std. 52 min` oder `47 min`
 - Beladungsgrad wird angezeigt
 
 ### Glättungsalgorithmus
 
 ```python
-# Sprung nach oben stark begrenzen (max. +2 % pro Update)
+# Anstieg stark begrenzen (max. +2 % pro Update)
 if new_raw > current:
     new_raw = min(new_raw, current * 1.02)
-
-# Sprung nach unten schneller erlaubt (max. -8 % pro Update)
+# Abfall schneller erlaubt (max. −8 % pro Update)
 else:
     new_raw = max(new_raw, current * 0.92)
 
@@ -240,44 +245,133 @@ smoothed = current + 0.15 × (new_raw - current)
 
 1. **Zyklus starten** – beim ersten gültigen Messwert nach Filterwechsel (mit aktivem HETA-Code)
 2. **Messwerte sammeln** – flow, temperature, dp, r_eff je Sekunde
-3. **Zyklus beenden** – wenn Benutzer den Filterwechsel manuell bestätigt
+3. **Zyklus beenden** – wenn Benutzer den Filterwechsel bestätigt (Dashboard oder Encoder)
 4. **Profil berechnen** – Mittelwert aller bestätigten Zyklen
 5. **Validierung** – Profil gilt nach ≥ 3 vollständigen, bestätigten Zyklen
 
 ### Startverhalten-Prüfung
 
-Nach jedem Filterwechsel wird der Startwiderstand r_eff der ersten 10 Sekunden
-mit dem Referenzprofil verglichen. Abweichung > 25 % (konfigurierbar) → Status `WARNUNG`.
+Nach jedem Filterwechsel wird r_eff der ersten 10 Sekunden mit dem Referenzprofil
+verglichen. Abweichung > 25 % → Status `WARNUNG`.
 
-### Reset durch Konfigurationsänderung
+---
 
-Wenn lernrelevante Parameter im Einstellungsbereich geändert werden,
-löscht `db.reset_all_learning_data()` alle Zyklen und Profile.
-Das System beginnt den Lernprozess neu (3 Zyklen erforderlich).
+## OLED-Display und Encoder-Navigation
+
+### Display-Layout (128 × 64 px, monochrom)
+
+```
+y =  0..11  Invertierter Header-Balken (weiß/schwarz)
+y = 12      Trennlinie
+y = 13..57  Inhaltsbereich (5 Zeilen à 9 px, DejaVuSans 8 pt)
+y = 60..62  Navigationspunkte (● aktiv / □ inaktiv)
+```
+
+### 6 Bildschirme
+
+| Index | Name | Inhalt |
+|-------|------|--------|
+| 0 | **Status** | p1, p2, dp + Status-Abzeichen, dp/Grenzwert-Balken, Q, T, Reststandzeit |
+| 1 | **HETA-Code** | Code, Aktivierungsstatus, Zyklen-Kästchen [■][■][□], Prognosemodus |
+| 2 | **Filterwechsel** | dp, Limit, Fortschrittsbalken, zweistufige Bestätigung |
+| 3 | **Service** | Prioritäts-Abzeichen (invertiert bei HOCH), Meldungstext |
+| 4 | **Historie** | Letzte 4 Zyklen mit Dauer und Datum |
+| 5 | **Netzwerk** | IP, Port, Betriebsmodus, vollständige URL |
+
+Auf jedem Bildschirm zeigen 6 Punkte am unteren Rand die aktuelle Position:
+`●` = aktiv, `□` = inaktiv.
+
+### _DisplayController (backend/app.py)
+
+Verbindet `NavigationController` (Encoder) mit `OLEDDisplay` (Display).
+
+```
+Encoder-Ereignis → NavigationController._dispatch()
+                 → _DisplayController._on_event()
+                 → _handle() → Bildschirmwechsel oder Bestätigung
+                             → _display.set_nav_index()
+                             → _refresh_display()
+```
+
+**Encoder-Ereignisse:**
+
+| Ereignis | Aktion |
+|----------|--------|
+| `ROTATE_RIGHT` / `RIGHT` | Nächster Bildschirm (Modulo 6) |
+| `ROTATE_LEFT` / `LEFT` | Vorheriger Bildschirm |
+| `LEFT` (während armed) | Filterwechsel-Bestätigung abbrechen |
+| `PRESS` auf Screen 2, awaiting=False | kein Effekt |
+| `PRESS` auf Screen 2, awaiting=True | Bestätigung vormerken (armed) |
+| `PRESS` auf Screen 2, armed=True | Filterwechsel ausführen, zurück zu Screen 0 |
+
+**Zweistufige Filterwechsel-Bestätigung:**
+
+```
+dp ≥ dp_limit
+    → _state["awaiting_confirmation"] = True
+    → Display springt automatisch auf Screen 2
+    → show_filter_change(awaiting=True)
+
+1. OK-Druck:
+    → _confirm_armed = True
+    → show_filter_change(armed=True): "SICHER? BESTAETIGEN?"
+
+2. OK-Druck (oder Taste LINKS zum Abbrechen):
+    → _do_confirm_filter_change()  ← auch via REST POST /api/filter/confirm-change
+    → predictor.reset() + reset_simulation()
+    → Screen 0 (Status)
+```
+
+### _do_confirm_filter_change()
+
+Zentrale Funktion, die sowohl vom REST-API-Endpunkt als auch vom
+`_DisplayController` aufgerufen wird:
+
+1. Aktiven Lernzyklus mit `learning.end_cycle(confirmed=True)` abschließen
+2. `predictor.reset()` und `reset_simulation()` aufrufen
+3. `_state["awaiting_confirmation"] = False`, Zyklusdaten zurücksetzen
+4. Ereignis `FILTERWECHSEL_BESTAETIGT` in Datenbank protokollieren
 
 ---
 
 ## REST-API-Endpunkte
 
-### Öffentliche Endpunkte
+### Allgemein (öffentlich)
 
 | Methode | Endpunkt | Beschreibung |
 |---------|----------|-------------|
 | GET | `/api/status` | Vollständiger Systemstatus |
-| GET | `/api/measurements/latest` | Letzte N Messwerte |
-| GET | `/api/measurements/history` | Messwerte seit Zeitstempel |
-| POST | `/api/heta/activate` | HETA-Code + PIN aktivieren |
-| GET | `/api/heta/demo` | Demo-PIN anzeigen (nur Entwicklung) |
-| POST | `/api/filter/confirm-change` | Filterwechsel bestätigen |
-| POST | `/api/simulation/start` | Simulation starten |
-| POST | `/api/simulation/stop` | Simulation stoppen |
-| POST | `/api/simulation/reset` | System zurücksetzen |
-| POST | `/api/service/request` | Servicebericht erzeugen |
-| GET | `/api/export/csv` | CSV-Export (Dateiinfo) |
-| GET | `/api/export/csv/download` | CSV-Export (Download) |
+| GET | `/api/measurements/latest` | Letzte N Messwerte (`?limit=100`) |
+| GET | `/api/measurements/history` | Messwerte seit Zeitstempel (`?since=`) |
 | GET | `/api/cycles` | Filterzyklen für HETA-Code |
 | GET | `/api/profile` | Lernprofil für HETA-Code |
-| GET | `/api/settings` | Konfiguration lesen (ohne Passwort-Hash) |
+| POST | `/api/heta/activate` | HETA-Code + PIN aktivieren |
+| GET | `/api/heta/demo` | Demo-PIN anzeigen (Entwicklung) |
+| POST | `/api/filter/confirm-change` | Filterwechsel bestätigen |
+| POST | `/api/simulation/start` | Simulation starten |
+| POST | `/api/simulation/stop` | Messzyklus stoppen |
+| POST | `/api/simulation/reset` | System zurücksetzen |
+| GET | `/api/export/csv` | CSV-Export-Info |
+| GET | `/api/export/csv/download` | CSV-Download |
+| POST | `/api/service/request` | Servicebericht erzeugen |
+
+### Display & Navigation
+
+| Methode | Endpunkt | Beschreibung |
+|---------|----------|-------------|
+| POST | `/api/navigation/event` | Encoder-Ereignis simulieren |
+| GET | `/api/display/screen` | Aktiven Bildschirm und Zustand abfragen |
+
+`POST /api/navigation/event` Body:
+```json
+{ "event": "ROTATE_RIGHT" }
+```
+Gültige Werte: `ROTATE_LEFT`, `ROTATE_RIGHT`, `PRESS`, `LEFT`, `RIGHT`, `UP`, `DOWN`
+
+`GET /api/display/screen` Antwort:
+```json
+{ "screen": "Status", "screen_index": 0, "confirm_armed": false }
+```
 
 ### Onboarding
 
@@ -286,27 +380,30 @@ Das System beginnt den Lernprozess neu (3 Zyklen erforderlich).
 | GET | `/api/onboarding/status` | Prüfen ob Onboarding abgeschlossen |
 | POST | `/api/onboarding/complete` | Onboarding abschließen, Passwort setzen |
 
-### Einstellungen (erfordert Token)
+### Einstellungen (erfordert `X-Auth-Token` Header)
 
 | Methode | Endpunkt | Beschreibung |
 |---------|----------|-------------|
 | POST | `/api/settings/login` | Anmelden, Token erhalten |
-| POST | `/api/settings/logout` | Abmelden, Token ungültig |
+| POST | `/api/settings/logout` | Abmelden, Token löschen |
 | GET | `/api/settings/auth-check` | Token-Gültigkeit prüfen |
-| POST | `/api/settings` | Konfiguration speichern (`X-Auth-Token` Header) |
+| GET | `/api/settings` | Konfiguration lesen (ohne Passwort-Hash) |
+| POST | `/api/settings` | Konfiguration speichern |
 
 ### `/api/status` – Wichtige Felder
 
 | Feld | Typ | Beschreibung |
 |------|-----|-------------|
-| `filter_status` | string | OK / BEOBACHTEN / WECHSEL / WECHSEL_BESTAETIGEN / WARNUNG / FEHLER |
-| `prediction_mode` | string | BASIS / HETA_LERNEND / HETA_VALIDIERT |
+| `filter_status` | string | `OK` / `BEOBACHTEN` / `WECHSEL` / `WECHSEL_BESTAETIGEN` / `WARNUNG` / `FEHLER` |
+| `prediction_mode` | string | `BASIS` / `HETA_LERNEND` / `HETA_VALIDIERT` |
 | `remaining_display` | string | Formatierte Reststandzeit (modus-abhängig) |
 | `show_filter_health` | bool | Beladungsgrad anzeigen (nur wenn HETA aktiv) |
 | `heta_activated` | bool | HETA-Code aktiv |
 | `learned_cycles` | int | Anzahl bestätigter Zyklen |
-| `profile_status` | string | LERNEND / VALIDIERT |
+| `profile_status` | string | `LERNEND` / `VALIDIERT` |
 | `awaiting_confirmation` | bool | Filterwechsel wartet auf Bestätigung |
+| `anomaly_active` | bool | Startverhalten-Anomalie erkannt |
+| `anomaly_percent` | float | Abweichung vom Referenzprofil in % |
 
 ---
 
@@ -323,8 +420,6 @@ def calculate_activation_code(heta_number: str) -> str:
 
 **Beispiel:** `HETA-12345` → PIN `486082`
 
-Der Algorithmus ist identisch mit dem separaten HTML-PIN-Generator.
-
 ---
 
 ## Betriebsmodi
@@ -335,7 +430,7 @@ Der Algorithmus ist identisch mit dem separaten HTML-PIN-Generator.
 | Hardware | Echte 4–20 mA Werte vom AnoPi Shield |
 | Simulations-Fallback | Automatisch wenn Hardware nicht erkannt wird |
 
-Umschaltung über Onboarding, Einstellungsbereich oder API.
+Umschaltung über Onboarding, Einstellungsbereich (⚙) oder `POST /api/settings`.
 
 ---
 
@@ -343,21 +438,26 @@ Umschaltung über Onboarding, Einstellungsbereich oder API.
 
 | Parameter | Standard | Beschreibung |
 |-----------|---------|-------------|
-| `onboarding_complete` | false | Ersteinrichtung abgeschlossen |
-| `settings_password_hash` | "" | SHA-256-Hash des Einstellungspassworts |
-| `session_timeout_minutes` | 30 | Timeout der Einstellungs-Session |
-| `dp_limit_bar` | 2.5 | Differenzdruck-Grenzwert für Filterwechsel |
-| `dp_clean_bar` | 0.2 | Differenzdruck eines sauberen Filters |
-| `pressure_range_bar` | 10 | Messbereich Drucksensoren (20 mA-Endwert) |
-| `temperature_min_c` | -50 | Messbereich Temperatursensor Minimum |
-| `temperature_max_c` | 150 | Messbereich Temperatursensor Maximum |
-| `flow_max_l_min` | 150 | Maximaler Durchfluss (20 mA-Endwert) |
-| `sampling_interval_seconds` | 1 | Messintervall in Sekunden |
-| `simulation_mode` | true | Simulationsmodus aktiv |
-| `mqtt_enabled` | false | MQTT-Client aktivieren |
-| `webserver_port` | 8080 | HTTP-Port der Weboberfläche |
-| `required_cycles_for_profile` | 3 | Anzahl Zyklen für valides Profil |
-| `clean_resistance_tolerance` | 0.25 | Toleranz Startverhalten-Prüfung (25 %) |
-| `smoothing_factor` | 0.15 | Glättungsfaktor Reststandzeit |
-| `max_increase_percent_per_update` | 2 | Max. Anstieg Reststandzeit pro Update |
-| `max_decrease_percent_per_update` | 8 | Max. Abfall Reststandzeit pro Update |
+| `onboarding_complete` | `false` | Ersteinrichtung abgeschlossen |
+| `settings_password_hash` | `""` | SHA-256-Hash des Einstellungspassworts |
+| `session_timeout_minutes` | `30` | Timeout der Einstellungs-Session |
+| `simulation_mode` | `true` | Simulationsmodus aktiv |
+| `dp_limit_bar` | `2.5` | Differenzdruck-Grenzwert für Filterwechsel ⚠ |
+| `dp_clean_bar` | `0.2` | Differenzdruck eines sauberen Filters ⚠ |
+| `pressure_range_bar` | `10` | Messbereich Drucksensoren (20 mA-Endwert) ⚠ |
+| `temperature_min_c` | `-50` | Messbereich Temperatursensor Minimum |
+| `temperature_max_c` | `150` | Messbereich Temperatursensor Maximum |
+| `flow_max_l_min` | `150` | Maximaler Durchfluss (20 mA-Endwert) ⚠ |
+| `sampling_interval_seconds` | `1` | Messintervall in Sekunden |
+| `required_cycles_for_profile` | `3` | Anzahl Zyklen für valides Profil |
+| `clean_resistance_tolerance` | `0.25` | Toleranz Startverhalten-Prüfung (25 %) |
+| `smoothing_factor` | `0.15` | Glättungsfaktor Reststandzeit |
+| `max_increase_percent_per_update` | `2` | Max. Anstieg Reststandzeit pro Update |
+| `max_decrease_percent_per_update` | `8` | Max. Abfall Reststandzeit pro Update |
+| `mqtt_enabled` | `false` | MQTT-Client aktivieren |
+| `webserver_port` | `8080` | HTTP-Port der Weboberfläche |
+| `db_path` | `data/heta_monitor.db` | Datenbankpfad |
+| `log_path` | `logs/` | Log-Verzeichnis |
+| `export_path` | `exports/` | CSV-Export-Verzeichnis |
+
+⚠ = Lernrelevanter Parameter: Änderung löscht alle Zyklen und Profile.
