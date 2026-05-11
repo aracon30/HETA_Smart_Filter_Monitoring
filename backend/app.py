@@ -245,6 +245,7 @@ class _DisplayController:
         self._confirm_armed = False
         self._last_status_data: dict = {}
         self._lock = threading.Lock()
+        disp.set_nav_index(0)
         nav.register_handler(self._on_event)
 
     # ------------------------------------------------------------------
@@ -280,6 +281,7 @@ class _DisplayController:
         if event in (NavigationEvent.ROTATE_RIGHT, NavigationEvent.RIGHT):
             self._screen_idx = (self._screen_idx + 1) % len(self._screens)
             self._confirm_armed = False
+            self._display.set_nav_index(self._screen_idx)
             self._refresh_display()
 
         elif event in (NavigationEvent.ROTATE_LEFT, NavigationEvent.LEFT):
@@ -289,6 +291,7 @@ class _DisplayController:
                 self._refresh_display()
             else:
                 self._screen_idx = (self._screen_idx - 1) % len(self._screens)
+                self._display.set_nav_index(self._screen_idx)
                 self._refresh_display()
 
         elif event == NavigationEvent.PRESS:
@@ -336,9 +339,17 @@ class _DisplayController:
 
         elif screen == SCREEN_HETA:
             with _state_lock:
-                code = _state["heta_code"]
-                activated = _state["heta_activated"]
-            self._display.show_heta_code(code, activated)
+                code           = _state["heta_code"]
+                activated      = _state["heta_activated"]
+                learned        = _state["learned_cycles"]
+                pred_mode      = _state["prediction_mode"]
+            req = settings.get("required_cycles_for_profile", 3)
+            self._display.show_heta_code(
+                code, activated,
+                learned_cycles=learned,
+                required_cycles=req,
+                prediction_mode=pred_mode,
+            )
 
         elif screen == SCREEN_FILTER_CHANGE:
             with _state_lock:
@@ -507,14 +518,16 @@ def _measurement_loop():
 
         # Display aktualisieren
         _status_display_data = {
-            "heta_code": heta_code or "---",
-            "mode": "SIM" if sim_mode else "HW",
-            "p1": fs.p1_bar,
-            "p2": fs.p2_bar,
-            "dp": fs.dp_bar,
-            "flow": fs.flow_l_min,
-            "remaining": pred_status["remaining_display"],
-            "status": fs.status,
+            "heta_code":   heta_code or "---",
+            "mode":        "SIM" if sim_mode else "HW",
+            "p1":          fs.p1_bar,
+            "p2":          fs.p2_bar,
+            "dp":          fs.dp_bar,
+            "dp_limit":    dp_limit,
+            "flow":        fs.flow_l_min,
+            "temperature": fs.temperature_c,
+            "remaining":   pred_status["remaining_display"],
+            "status":      fs.status,
         }
         if _display_ctrl:
             _display_ctrl.update_status(_status_display_data)
