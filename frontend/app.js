@@ -582,6 +582,53 @@ async function apiFetch(path, method = "GET", body = null) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Software-Update via Git Pull
+// ---------------------------------------------------------------------------
+
+async function updateFromGit() {
+  const token = sessionStorage.getItem("settingsToken");
+  if (!token) return;
+
+  const btn = document.getElementById("btn-git-update");
+  const out  = document.getElementById("update-output");
+
+  btn.disabled = true;
+  btn.textContent = "⟳ Verbinde mit GitHub…";
+  out.className   = "update-output";
+  out.textContent = "git pull läuft…";
+
+  const result = await apiFetchAuth("/api/update/pull", "POST", {}, token);
+
+  if (!result) {
+    btn.disabled    = false;
+    btn.textContent = "↓ Update von GitHub holen";
+    out.textContent = "Fehler: Sitzung abgelaufen. Bitte neu anmelden.";
+    return;
+  }
+
+  out.textContent = result.output || "(keine Ausgabe)";
+
+  if (result.restarting) {
+    btn.textContent  = "⟳ Neustart läuft…";
+    out.textContent += "\n\n✓ Änderungen geladen. Dienst wird neu gestartet…";
+    // Warte auf Neustart, dann Seite neu laden
+    setTimeout(() => {
+      out.textContent += "\nSeite wird in 5 Sekunden neu geladen…";
+      setTimeout(() => location.reload(), 5000);
+    }, 3000);
+  } else {
+    btn.disabled    = false;
+    btn.textContent = "↓ Update von GitHub holen";
+    if (result.success && !result.changed) {
+      out.textContent = "✓ Bereits auf dem aktuellen Stand.\n\n" + result.output;
+    } else if (!result.success) {
+      out.textContent = "✗ Fehler beim Update:\n\n" + result.output;
+    }
+  }
+}
+
+
 async function apiFetchAuth(path, method, body, token) {
   try {
     const opts = {

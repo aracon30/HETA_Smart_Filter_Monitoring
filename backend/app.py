@@ -7,6 +7,7 @@ alle Module (Sensoren, Berechnungen, Datenbank, Lernmodul, Prognose, Display).
 
 import os
 import sys
+import subprocess
 import time
 import json
 import socket
@@ -1025,6 +1026,68 @@ def api_display_screen():
         return jsonify({"screen": _display.current_screen, "screen_index": None,
                         "confirm_armed": False})
     return jsonify({"screen": None, "screen_index": None, "confirm_armed": False})
+
+
+# ---------------------------------------------------------------------------
+# Software-Update via Git
+# ---------------------------------------------------------------------------
+
+@app.route("/api/update/pull", methods=["POST"])
+def api_update_pull():
+    """
+    Führt 'git pull --ff-only' im Projektverzeichnis aus und startet den
+    Dienst danach neu (nur wenn es tatsächlich Änderungen gab).
+    Erfordert einen gültigen Auth-Token.
+    """
+    ok, err = _require_auth()
+    if not ok:
+        return err
+
+    try:
+        result = subprocess.run(
+            ["git", "pull", "--ff-only"],
+            capture_output=True,
+            text=True,
+            cwd=_BASE_DIR,
+            timeout=30,
+        )
+    except subprocess.TimeoutExpired:
+        return jsonify({"success": False, "changed": False, "restarting": False,
+                        "output": "Timeout – git pull hat zu lange gebraucht."})
+    except FileNotFoundError:
+        return jsonify({"success": False, "changed": False, "restarting": False,
+                        "output": "git nicht gefunden. Ist Git installiert?"})
+
+    output  = (result.stdout + result.stderr).strip()
+    success = result.returncode == 0
+    changed = success and "Already up to date." not in result.stdout
+
+    logger.info("Git pull: rc=%d changed=%s output=%r", result.returncode, changed, output)
+
+    if changed:
+        def _restart():
+            time.sleep(1.5)
+            logger.info("Neustart nach Git-Update.")
+            # Erst systemd versuchen, dann direkten Prozess-Neustart
+            try:
+                r = subprocess.run(
+                    ["sudo", "systemctl", "restart", "heta-monitor"],
+                    timeout=5, capture_output=True,
+                )
+                if r.returncode == 0:
+                    return
+            except Exception:
+                pass
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+
+        threading.Thread(target=_restart, daemon=True).start()
+
+    return jsonify({
+        "success":   success,
+        "changed":   changed,
+        "restarting": changed,
+        "output":    output,
+    })
 
 
 # ---------------------------------------------------------------------------

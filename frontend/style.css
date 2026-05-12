@@ -498,6 +498,45 @@ footer {
   border-top: 1px solid var(--border);
 }
 
+/* ── Update-Bereich ─────────────────────────────────────── */
+.update-section {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+  margin-top: .5rem;
+}
+
+.update-section .settings-hint {
+  font-size: .85rem;
+  color: var(--text-muted);
+  margin: .25rem 0 .75rem;
+}
+
+.update-section .settings-hint code {
+  background: var(--bg-secondary);
+  padding: .1em .35em;
+  border-radius: 3px;
+  font-family: monospace;
+  font-size: .85em;
+}
+
+.update-output {
+  margin-top: .75rem;
+  padding: .65rem .85rem;
+  background: #0d1117;
+  color: #c9d1d9;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: .8rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.update-output.hidden { display: none; }
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
   .cards-grid { grid-template-columns: 1fr 1fr; }

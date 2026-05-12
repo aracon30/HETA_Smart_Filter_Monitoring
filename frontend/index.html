@@ -258,6 +258,19 @@
           <strong>&#9888; Achtung:</strong> Sie haben lernrelevante Parameter (dp_limit, dp_clean, Durchfluss oder Druckbereich) geändert. Das System wird die <strong>3 Lernphasen neu durchlaufen</strong>, um eine saubere Datenlage zu gewährleisten. Alle bisherigen Lernzyklen und Profile werden gelöscht.
         </div>
 
+        <!-- ── Software-Update ── -->
+        <div class="settings-section update-section">
+          <h3>Software-Update</h3>
+          <p class="settings-hint">
+            Holt den aktuellen Stand von GitHub (<code>git pull</code>) und startet den Dienst
+            automatisch neu, wenn Änderungen vorhanden sind.
+          </p>
+          <button class="btn btn-secondary" id="btn-git-update" onclick="updateFromGit()">
+            &#8595; Update von GitHub holen
+          </button>
+          <pre id="update-output" class="update-output hidden"></pre>
+        </div>
+
         <div class="modal-footer">
           <button class="btn btn-ghost" onclick="settingsLogout()">Abmelden</button>
           <button class="btn btn-primary" onclick="saveSettings()">Einstellungen speichern</button>
