@@ -36,15 +36,15 @@
         <h2>Betriebsart</h2>
         <p>Wie soll das System betrieben werden?</p>
         <div class="mode-cards">
-          <label class="mode-card" id="mode-sim">
-            <input type="radio" name="op-mode" value="simulation" checked />
-            <strong>Simulationsmodus</strong>
-            <span>Für Entwicklung, Messe und Test ohne echte Sensoren.</span>
-          </label>
           <label class="mode-card" id="mode-hw">
-            <input type="radio" name="op-mode" value="hardware" />
+            <input type="radio" name="op-mode" value="hardware" checked />
             <strong>Hardwaremodus</strong>
-            <span>Echte 4–20 mA Signale vom AnoPi Shield (Raspberry Pi 5).</span>
+            <span>Echte 4–20 mA Signale vom AnoPi Shield (Raspberry Pi 5). Empfohlen für Realbetrieb.</span>
+          </label>
+          <label class="mode-card" id="mode-sim">
+            <input type="radio" name="op-mode" value="simulation" />
+            <strong>Simulationsmodus</strong>
+            <span>Ohne echte Sensoren – nur für Entwicklung und Test (Simulations-Fallback).</span>
           </label>
         </div>
       </div>
@@ -394,8 +394,8 @@
     <section class="controls">
       <div class="controls-group">
         <h3>Betrieb</h3>
-        <button class="btn btn-primary" onclick="startSimulation()">Simulation starten</button>
-        <button class="btn btn-secondary" onclick="stopSimulation()">Simulation stoppen</button>
+        <button class="btn btn-primary" onclick="startSimulation()">Messung starten</button>
+        <button class="btn btn-secondary" onclick="stopSimulation()">Messung stoppen</button>
         <button class="btn btn-warning" onclick="resetSystem()">Reset</button>
       </div>
 

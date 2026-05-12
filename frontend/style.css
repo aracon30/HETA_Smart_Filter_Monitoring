@@ -78,9 +78,10 @@ header {
 .badge-warn    { background: var(--warn-yellow);   color: #fff; }
 .badge-alert   { background: var(--alert-red);     color: #fff; }
 .badge-observe { background: var(--observe-blue);  color: #fff; }
-.badge-sim     { background: #607d8b;              color: #fff; }
-.badge-hw      { background: var(--heta-blue-mid); color: #fff; }
-.badge-error   { background: #6d1a1a;              color: #fff; }
+.badge-sim      { background: #607d8b;              color: #fff; }
+.badge-hw       { background: var(--heta-blue-mid); color: #fff; }
+.badge-fallback { background: var(--warn-yellow);   color: #fff; }
+.badge-error    { background: #6d1a1a;              color: #fff; }
 
 /* ===== MAIN ===== */
 main {

@@ -34,6 +34,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       card.querySelector("input").checked = true;
     });
   });
+  // Initiale Auswahl visuell markieren (checked-Attribut → selected-Klasse)
+  const preselected = document.querySelector(".mode-card input:checked")?.closest(".mode-card");
+  if (preselected) preselected.classList.add("selected");
 });
 
 // ============================================================
@@ -578,12 +581,12 @@ function updateChartDpLimit(dpLimitBar) {
 
 async function startSimulation() {
   await apiFetch("/api/simulation/start", "POST");
-  showMsg("heta-msg", "Simulation gestartet.", false);
+  showMsg("heta-msg", "Messung gestartet.", false);
 }
 
 async function stopSimulation() {
   await apiFetch("/api/simulation/stop", "POST");
-  showMsg("heta-msg", "Simulation gestoppt.", false);
+  showMsg("heta-msg", "Messung gestoppt.", false);
 }
 
 async function resetSystem() {
@@ -687,8 +690,15 @@ function updateStatusBadge(status) {
 function updateSensorBadge(mode) {
   const el = document.getElementById("sensor-mode-badge");
   if (!el) return;
-  if (mode === "hardware") { el.className = "badge badge-hw"; el.textContent = "HW"; }
-  else                     { el.className = "badge badge-sim"; el.textContent = "SIM"; }
+  const map = {
+    hardware:            ["badge badge-hw",       "REAL",     "Realbetrieb – echte Sensoren"],
+    simulation:          ["badge badge-sim",       "SIM",      "Simulationsmodus (konfiguriert)"],
+    simulation_fallback: ["badge badge-fallback",  "FALLBACK", "Simulations-Fallback – Hardware nicht erreichbar"],
+  };
+  const [cls, label, title] = map[mode] ?? ["badge badge-sim", "SIM", ""];
+  el.className = cls;
+  el.textContent = label;
+  el.title = title;
 }
 
 function styleCardByStatus(cardId, status) {

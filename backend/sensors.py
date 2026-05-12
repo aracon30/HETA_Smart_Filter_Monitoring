@@ -80,27 +80,46 @@ def _scale_flow(ma: float, flow_max: float = 150.0) -> float:
 
 def _read_anopi_channel(channel: int) -> Optional[float]:
     """
-    Liest einen analogen Kanal vom AnoPi Shield.
-    Gibt den mA-Wert zurück oder None bei Hardwarefehler.
-    Muss bei echter Hardware implementiert/angepasst werden.
+    Liest einen analogen Kanal vom AnoPi Shield via SPI-ADC (MCP3208, 12 Bit).
+    Gibt den skalierten mA-Wert (4–20 mA) zurück oder None bei Hardwarefehler.
+
+    Skalierung: ADC 0–4095 → 0–3,3 V → 0–20 mA (Shunt 165 Ω, 3,3 V Referenz).
+    Kanal-Nummerierung: 1-basiert (wird intern auf 0-basiert umgerechnet).
     """
     try:
-        # AnoPi Shield verwendet typischerweise SPI-ADC (z.B. MCP3208)
-        # Hier Platzhalter – bei echtem Gerät entsprechende Bibliothek einbinden
         import spidev  # type: ignore
         spi = spidev.SpiDev()
         spi.open(0, 0)
-        spi.max_speed_hz = 1350000
-        adc_val = spi.xfer2([1, (8 + channel) << 4, 0])
+        spi.max_speed_hz = 1_350_000
+        ch0 = channel - 1  # AnoPi-Kanäle sind 0-basiert im SPI-Protokoll
+        adc_val = spi.xfer2([1, (8 + ch0) << 4, 0])
         spi.close()
         raw = ((adc_val[1] & 3) << 8) + adc_val[2]
-        # ADC-Wert (0–4095) auf 4–20 mA umrechnen (Shunt 250 Ohm, 3.3V Ref)
         voltage = (raw / 4095.0) * 3.3
-        ma = voltage / 0.25  # U = I * R → I = U/R
+        ma = (voltage / 3.3) * 20.0  # 0–3,3 V → 0–20 mA
         return max(0.0, min(25.0, ma))
     except Exception as e:
         logger.debug("AnoPi Kanal %d Lesefehler: %s", channel, e)
         return None
+
+
+def probe_hardware() -> bool:
+    """
+    Prüft beim Programmstart ob das AnoPi Shield (SPI) erreichbar ist.
+    Gibt True zurück wenn Hardware erkannt wurde, sonst False.
+    Löst keine Exception aus – immer sicher aufrufbar.
+    """
+    try:
+        import spidev  # type: ignore
+        spi = spidev.SpiDev()
+        spi.open(0, 0)
+        spi.close()
+        logger.info("Hardware-Probe: AnoPi Shield auf SPI(0,0) erkannt – Realbetrieb möglich.")
+        return True
+    except Exception as e:
+        logger.info("Hardware-Probe: AnoPi Shield nicht erreichbar (%s) – Simulation verfügbar.",
+                    type(e).__name__)
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -195,6 +214,7 @@ def update_simulation_params(dp_clean: float, dp_limit: float, flow_max: float,
 # ---------------------------------------------------------------------------
 # Öffentliche API
 # ---------------------------------------------------------------------------
+# Exportiert: read_sensors, reset_simulation, update_simulation_params, probe_hardware
 
 def read_sensors(simulation: bool = True,
                  pressure_range: float = 10.0,

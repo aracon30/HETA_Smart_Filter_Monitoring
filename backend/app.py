@@ -24,7 +24,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 from config import settings, save_settings, get_abs_path, hash_password, verify_password
-from sensors import read_sensors, reset_simulation, update_simulation_params
+from sensors import read_sensors, reset_simulation, update_simulation_params, probe_hardware
 from calculations import calculate_filter_state, FilterState
 from heta_code import verify_activation, validate_heta_format, get_demo_info
 from database import Database
@@ -141,6 +141,13 @@ def _parse_i2cdetect(output: str) -> list:
 
 
 # ---------------------------------------------------------------------------
+# Hardware-Erkennung beim Programmstart
+# ---------------------------------------------------------------------------
+# Einmalige Probe beim Import: Hat das AnoPi Shield (SPI) eine Verbindung?
+# Ergebnis wird im _state gespeichert und an die Weboberfläche übertragen.
+_hw_available: bool = probe_hardware()
+
+# ---------------------------------------------------------------------------
 # Systemzustand
 # ---------------------------------------------------------------------------
 _state_lock = threading.Lock()
@@ -149,6 +156,7 @@ _state = {
     # Betriebsmodus
     "simulation_mode": settings.get("simulation_mode", True),
     "sensor_mode": "simulation",
+    "sensor_hw_available": _hw_available,  # Hardware beim Start erkannt?
     "running": False,
 
     # Messwerte
@@ -462,6 +470,16 @@ def _measurement_loop():
         flow = readings["flow"]
         sensor_mode = readings["mode"]
         sensor_error = not (p1.is_valid and p2.is_valid and temp.is_valid and flow.is_valid)
+
+        # Plausibilitätsprüfung im Realbetrieb: p2 > p1 ist physikalisch nicht möglich
+        if (sensor_mode == "hardware" and not sensor_error
+                and p1.is_valid and p2.is_valid
+                and p2.value > p1.value + 0.05):
+            logger.warning(
+                "Plausibilitätswarnung: p2 (%.3f bar) > p1 (%.3f bar) – "
+                "Sensorkabel vertauscht oder Druckverhältnisse unplausibel.",
+                p2.value, p1.value,
+            )
 
         # Berechnungen
         fs: FilterState = calculate_filter_state(
@@ -1472,9 +1490,18 @@ if __name__ == "__main__":
     host = settings.get("webserver_host", "0.0.0.0")
     port = settings.get("webserver_port", 8080)
 
-    logger.info("HETA Smart Filter Monitoring startet auf %s:%d", host, port)
-    logger.info("Simulationsmodus: %s", settings.get("simulation_mode", True))
-    logger.info("Onboarding abgeschlossen: %s", settings.get("onboarding_complete", False))
+    logger.info("=" * 60)
+    logger.info("HETA Smart Filter Monitoring – Start auf %s:%d", host, port)
+    sim = settings.get("simulation_mode", True)
+    if sim:
+        logger.info("Betriebsart : Simulationsmodus")
+    elif _hw_available:
+        logger.info("Betriebsart : Realbetrieb – AnoPi Shield erkannt")
+    else:
+        logger.warning("Betriebsart : Realbetrieb konfiguriert, "
+                       "aber AnoPi Shield NICHT erkannt – Fallback zur Simulation aktiv!")
+    logger.info("Onboarding  : %s", "abgeschlossen" if settings.get("onboarding_complete") else "ausstehend")
+    logger.info("=" * 60)
 
     # Messzyklus nur starten wenn Onboarding abgeschlossen
     if settings.get("onboarding_complete", False):

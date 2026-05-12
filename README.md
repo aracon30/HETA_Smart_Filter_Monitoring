@@ -1,8 +1,13 @@
-# HETA Smart Filter Monitoring
+# HETA Smart Filter Monitoring – Realsystem mit Simulations-Fallback
 
-Prototyp-Software für ein intelligentes Filterüberwachungssystem auf Basis des **Raspberry Pi 5**.
-Die Software erfasst Sensordaten (4–20 mA), berechnet den Filterzustand, protokolliert Daten
-und stellt eine lokale Weboberfläche sowie ein OLED-Display mit Encoder-Navigation bereit.
+Industrielle Filterüberwachung auf Basis des **Raspberry Pi 5**, im aktiven Einsatz auf einem
+realen Testsystem. Die Software erfasst echte 4–20-mA-Sensordaten, berechnet den Filterzustand,
+protokolliert Messwerte und stellt eine lokale Weboberfläche sowie ein OLED-Display mit
+Encoder-Navigation bereit.
+
+**Betriebspriorität:**
+1. **Realbetrieb** – echte Sensoren via AnoPi Shield (SPI-ADC)
+2. **Simulations-Fallback** – automatisch aktiv wenn keine Sensoren erkannt werden oder der Testmodus bewusst gewählt wurde
 
 ---
 
@@ -27,18 +32,19 @@ und stellt eine lokale Weboberfläche sowie ein OLED-Display mit Encoder-Navigat
 
 | Komponente / Funktion              | Status           | Umgebung                        |
 |------------------------------------|------------------|---------------------------------|
-| Backend-Start                      | ✅ getestet      | Debian 13 VM (VirtualBox)       |
-| Weboberfläche                      | ✅ getestet      | Debian 13 VM (VirtualBox)       |
-| Simulierte Messwerte               | ✅ getestet      | Debian 13 VM (VirtualBox)       |
-| Filterüberwachungs-Grundlogik      | ✅ getestet      | Debian 13 VM (VirtualBox)       |
-| Datenhaltung / Statusanzeige       | ✅ getestet      | Debian 13 VM (VirtualBox)       |
-| Raspberry Pi 5 (Echtbetrieb)       | ⏳ ausstehend    | –                               |
+| Backend-Start                      | ✅ getestet      | Debian 13 VM + Raspberry Pi 5   |
+| Weboberfläche                      | ✅ getestet      | Debian 13 VM + Raspberry Pi 5   |
+| Simulierte Messwerte               | ✅ getestet      | Debian 13 VM                    |
+| Filterüberwachungs-Grundlogik      | ✅ getestet      | Debian 13 VM                    |
+| Datenhaltung / Statusanzeige       | ✅ getestet      | Debian 13 VM                    |
+| Raspberry Pi 5 (Echtbetrieb)       | 🔄 in Betrieb    | Raspberry Pi 5 (Testsystem)     |
+| Autostart via systemd              | 🔄 in Betrieb    | Raspberry Pi 5 (Testsystem)     |
 | OLED-Display (SSD1309 via SPI)     | ⏳ ausstehend    | –                               |
 | ANO-Rotary-Encoder (I2C)           | ⏳ ausstehend    | –                               |
 | 4–20-mA-Sensorik (AnoPi Shield)    | ⏳ ausstehend    | –                               |
-| Autostart via systemd              | ⏳ ausstehend    | –                               |
 
-> Alle bisherigen Tests liefen im **Simulationsmodus** ohne angeschlossene Raspberry-Pi-Hardware.
+> Das System läuft auf einem **realen Raspberry Pi 5 Testsystem**. Echtbetrieb mit Sensoren hat Vorrang.
+> Der Simulationsmodus dient nur als Fallback oder für Entwicklung ohne Hardware.
 
 ---
 
@@ -275,13 +281,14 @@ Der Messzyklus startet erst nach Abschluss.
 | Schritt | Inhalt |
 |---------|--------|
 | 1 | Willkommen – Ablauf des Assistenten |
-| 2 | Betriebsart wählen: **Simulation** (kein Hardware nötig) oder **Hardware** |
+| 2 | Betriebsart wählen: **Hardware** (Realbetrieb, Voreinstellung) oder **Simulation** (Fallback/Test) |
 | 3 | Filterparameter: dp-Grenzwert, Sauberwiderstand, max. Durchfluss, Druckbereich |
 | 4 | Temperatursensor-Bereich (min/max °C) |
 | 5 | Zugriffspasswort für den Einstellungsbereich festlegen (mind. 4 Zeichen) |
 | 6 | Zusammenfassung bestätigen → System startet |
 
-> Für erste Tests **Simulation** wählen – es wird keine Hardware benötigt.
+> **Hardwaremodus** ist die Voreinstellung. Wenn kein AnoPi Shield erkannt wird, schaltet das
+> System automatisch in den Simulations-Fallback um – sichtbar am **FALLBACK**-Badge im Header.
 
 ---
 
@@ -420,15 +427,16 @@ ssh-copy-id pi@<IP-Adresse>
 
 Der Dienst startet nach einem Update automatisch neu:
 
-1. Versuch: `sudo systemctl restart heta-monitor` (systemd-Service)
-2. Fallback: Der Python-Prozess startet sich selbst neu (`os.execv`)
+1. Versuch: `sudo systemctl restart heta-monitor` (systemd-Service, bevorzugt)
+2. Fallback: Ein losgelöster Kindprozess startet `backend/app.py` nach 3 Sekunden neu
+   (kein FD-Erbe, kein „Port belegt"-Fehler – funktioniert auch ohne systemd)
 
-Für den systemd-Weg muss `sudo` ohne Passwort für diesen Befehl erlaubt sein.
-Einmalig einrichten:
+Der sudo-Eintrag für `systemctl restart` wird automatisch durch `install.sh` angelegt.
+Falls nötig manuell einrichten:
 
 ```bash
-sudo visudo
-# Zeile hinzufügen:
+sudo visudo -f /etc/sudoers.d/heta-monitor
+# Zeile:
 pi ALL=(ALL) NOPASSWD: /bin/systemctl restart heta-monitor
 ```
 
@@ -641,9 +649,13 @@ ls /dev/i2c-*
 i2cdetect -y 1
 ```
 
-**Sensorwerte bleiben 0:**
-Betriebsart auf **Simulation** prüfen (Einstellungen → Betriebsart).
-Im Hardwaremodus: AnoPi-Verkabelung und 24-V-Sensorversorgung kontrollieren.
+**Sensorwerte bleiben 0 oder Badge zeigt FALLBACK:**
+- Header-Badge `FALLBACK` (orange): Hardwaremodus konfiguriert, aber AnoPi Shield nicht erkannt
+  → SPI aktiviert? `ls /dev/spidev*` muss `/dev/spidev0.0` zeigen
+  → AnoPi Shield korrekt aufgesteckt?
+  → 24-V-Sensorversorgung vorhanden?
+- Header-Badge `SIM` (grau): Simulationsmodus bewusst gewählt (Einstellungen → Betriebsart)
+- Für Diagnose: Einstellungen → Hardware-Diagnose → Selbstcheck starten
 
 **HETA-Code ungültig:**
 Format `HETA-XXXXX` (nur Ziffern nach dem Bindestrich), PIN 6-stellig mit führenden Nullen.
