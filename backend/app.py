@@ -24,7 +24,8 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 from config import settings, save_settings, get_abs_path, hash_password, verify_password
-from sensors import read_sensors, reset_simulation, update_simulation_params, probe_hardware
+from sensors import (read_sensors, reset_simulation, update_simulation_params,
+                     probe_hardware, check_hardware_sensors)
 from calculations import calculate_filter_state, FilterState
 from heta_code import verify_activation, validate_heta_format, get_demo_info
 from database import Database
@@ -174,6 +175,11 @@ _state = {
     "heta_code": "",
     "heta_activated": False,
     "heta_number": "",
+
+    # Sensorfehler (Hardwaremodus – Messung gestoppt)
+    "sensor_fault": False,
+    "sensor_fault_channels": [],
+    "sensor_fault_message": "",
 
     # Filterwechsel
     "awaiting_confirmation": False,
@@ -469,6 +475,23 @@ def _measurement_loop():
         temp = readings["temperature"]
         flow = readings["flow"]
         sensor_mode = readings["mode"]
+
+        # Sensorfehler im Hardwaremodus: Messung sofort stoppen, Bediener informieren
+        if sensor_mode == "sensor_fault":
+            failed_ch = readings.get("failed_channels", [])
+            failed_names = readings.get("failed_names", [])
+            msg = f"Sensorfehler: {', '.join(failed_names)} – Messung gestoppt."
+            logger.error("Messung gestoppt wegen Sensorfehler auf Kanal(en) %s.", failed_ch)
+            with _state_lock:
+                _state["running"] = False
+                _state["sensor_fault"] = True
+                _state["sensor_fault_channels"] = failed_ch
+                _state["sensor_fault_message"] = msg
+                _state["filter_status"] = "FEHLER"
+                _state["sensor_error"] = True
+                _state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+            break
+
         sensor_error = not (p1.is_valid and p2.is_valid and temp.is_valid and flow.is_valid)
 
         # Plausibilitätsprüfung im Realbetrieb: p2 > p1 ist physikalisch nicht möglich
@@ -1033,6 +1056,43 @@ def api_confirm_filter_change():
     """Bestätigt den Filterwechsel und startet einen neuen Zyklus."""
     _do_confirm_filter_change()
     return jsonify({"success": True, "message": "Filterwechsel bestätigt. Neuer Zyklus startet."})
+
+
+@app.route("/api/sensor/recheck", methods=["POST"])
+def api_sensor_recheck():
+    """
+    Bediener hat bestätigt, alle Sensoren angeschlossen zu haben.
+    System prüft alle 4 Kanäle und startet die Messung neu wenn alles OK ist.
+    """
+    with _state_lock:
+        sim_mode = _state["simulation_mode"]
+
+    if sim_mode:
+        return jsonify({"success": False,
+                        "message": "Sensorprüfung nur im Hardwaremodus verfügbar."})
+
+    result = check_hardware_sensors()
+
+    if result["all_ok"]:
+        with _state_lock:
+            _state["sensor_fault"] = False
+            _state["sensor_fault_channels"] = []
+            _state["sensor_fault_message"] = ""
+            _state["sensor_error"] = False
+        _start_measurement_thread()
+        logger.info("Sensorprüfung erfolgreich – alle Kanäle lesbar, Messung neu gestartet.")
+        return jsonify({"success": True,
+                        "message": "Alle Sensoren erkannt. Messung wird neu gestartet."})
+
+    msg = f"Sensorfehler: {', '.join(result['failed_names'])} weiterhin nicht lesbar."
+    with _state_lock:
+        _state["sensor_fault_channels"] = result["failed_channels"]
+        _state["sensor_fault_message"] = msg
+    logger.error("Sensorprüfung fehlgeschlagen: Kanal(e) %s.", result["failed_channels"])
+    return jsonify({"success": False,
+                    "message": msg,
+                    "failed_channels": result["failed_channels"],
+                    "failed_names": result["failed_names"]})
 
 
 @app.route("/api/settings", methods=["GET"])

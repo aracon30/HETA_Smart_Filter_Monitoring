@@ -227,7 +227,11 @@ async function loadSettingsIntoForm() {
     setInputVal("s-temp-max",        s.temperature_max_c);
     setInputVal("s-interval",        s.sampling_interval_seconds);
     const cb = document.getElementById("s-simulation-mode");
-    if (cb) cb.checked = !!s.simulation_mode;
+    if (cb) {
+      cb.checked = !!s.simulation_mode;
+      const warnEl = document.getElementById("sim-mode-warning");
+      if (warnEl) warnEl.classList.toggle("hidden", !s.simulation_mode);
+    }
     setText("dp-limit-hint", `Limit: ${Number(s.dp_limit_bar).toFixed(2)} bar`);
     updateChartDpLimit(s.dp_limit_bar ?? 2.5);
   } catch (e) { console.warn("Einstellungen konnten nicht geladen werden.", e); }
@@ -314,6 +318,9 @@ async function fetchStatus() {
 // ============================================================
 
 function updateDashboard(d) {
+  // Sensorfehler-Overlay (Hardwaremodus) hat Vorrang
+  handleSensorFault(d);
+
   setText("val-p1",    fmt(d.p1_bar, 3));
   setText("val-p2",    fmt(d.p2_bar, 3));
   setText("val-dp",    fmt(d.dp_bar, 3));
@@ -691,9 +698,9 @@ function updateSensorBadge(mode) {
   const el = document.getElementById("sensor-mode-badge");
   if (!el) return;
   const map = {
-    hardware:            ["badge badge-hw",       "REAL",     "Realbetrieb – echte Sensoren"],
-    simulation:          ["badge badge-sim",       "SIM",      "Simulationsmodus (konfiguriert)"],
-    simulation_fallback: ["badge badge-fallback",  "FALLBACK", "Simulations-Fallback – Hardware nicht erreichbar"],
+    hardware:     ["badge badge-hw",      "REAL",   "Realbetrieb – echte Sensoren"],
+    simulation:   ["badge badge-sim",     "SIM",    "Simulationsmodus (konfiguriert)"],
+    sensor_fault: ["badge badge-error",   "FEHLER", "Sensorfehler – Messung gestoppt"],
   };
   const [cls, label, title] = map[mode] ?? ["badge badge-sim", "SIM", ""];
   el.className = cls;
@@ -808,6 +815,71 @@ async function runDiagnostics() {
   }
 
   results.innerHTML = html;
+}
+
+// ============================================================
+// Sensorfehler-Behandlung
+// ============================================================
+
+function handleSensorFault(d) {
+  const overlay = document.getElementById("sensor-fault-overlay");
+  if (!overlay) return;
+
+  if (!d.sensor_fault) {
+    overlay.classList.add("hidden");
+    return;
+  }
+
+  // Overlay einblenden
+  overlay.classList.remove("hidden");
+  setText("sensor-fault-message", d.sensor_fault_message || "Ein oder mehrere Sensoren sind nicht erreichbar.");
+
+  // Ausgefallene Kanäle auflisten
+  const listEl = document.getElementById("sensor-fault-channels");
+  if (listEl) {
+    const channels = d.sensor_fault_channels || [];
+    const nameMap = {1: "Kanal 1 – p1 (Eintrittsdruck)", 2: "Kanal 2 – p2 (Austrittsdruck)",
+                     3: "Kanal 3 – T (Temperatur)",       4: "Kanal 4 – Q (Durchfluss)"};
+    listEl.innerHTML = channels.map(ch =>
+      `<div class="sensor-fault-channel">⚠ ${nameMap[ch] || "Kanal " + ch}</div>`
+    ).join("");
+  }
+}
+
+async function recheckSensors() {
+  const btn    = document.getElementById("btn-sensor-recheck");
+  const result = document.getElementById("sensor-fault-result");
+
+  btn.disabled = true;
+  btn.textContent = "Prüfung läuft…";
+  if (result) { result.classList.remove("hidden"); result.className = "sensor-fault-result checking"; result.textContent = "Sensorkanäle werden geprüft…"; }
+
+  const data = await apiFetch("/api/sensor/recheck", "POST");
+
+  btn.disabled = false;
+  btn.textContent = "Alle Sensoren angeschlossen – System prüfen";
+
+  if (!data) {
+    if (result) { result.className = "sensor-fault-result error"; result.textContent = "Verbindungsfehler – Bitte erneut versuchen."; }
+    return;
+  }
+
+  if (data.success) {
+    // Overlay wird beim nächsten Poll-Zyklus automatisch ausgeblendet (sensor_fault = false)
+    if (result) { result.className = "sensor-fault-result ok"; result.textContent = data.message; }
+  } else {
+    if (result) { result.className = "sensor-fault-result error"; result.textContent = data.message; }
+  }
+}
+
+// ============================================================
+// Simulationsmodus-Warnung in den Einstellungen
+// ============================================================
+
+function onSimModeToggle(checkbox) {
+  const warnEl = document.getElementById("sim-mode-warning");
+  if (!warnEl) return;
+  warnEl.classList.toggle("hidden", !checkbox.checked);
 }
 
 async function apiFetch(path, method = "GET", body = null) {

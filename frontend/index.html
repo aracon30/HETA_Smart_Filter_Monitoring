@@ -9,6 +9,33 @@
 <body>
 
   <!-- ================================================================
+       SENSORFEHLER-OVERLAY (blockierend – Bediener muss bestätigen)
+       ================================================================ -->
+  <div id="sensor-fault-overlay" class="overlay hidden">
+    <div class="sensor-fault-box">
+      <div class="sensor-fault-header">
+        <span class="sensor-fault-icon">&#9888;</span>
+        <h2>Sensorfehler – Messung gestoppt</h2>
+      </div>
+      <div class="sensor-fault-body">
+        <p id="sensor-fault-message">Ein oder mehrere Sensoren sind nicht erreichbar.</p>
+        <div id="sensor-fault-channels" class="sensor-fault-list"></div>
+        <p class="sensor-fault-hint">
+          Bitte prüfen Sie die Verkabelung aller Sensoren und bestätigen Sie anschließend,
+          dass alle Sensoren korrekt angeschlossen sind. Das System führt dann eine
+          automatische Prüfung durch.
+        </p>
+        <div id="sensor-fault-result" class="sensor-fault-result hidden"></div>
+      </div>
+      <div class="sensor-fault-footer">
+        <button class="btn btn-primary" id="btn-sensor-recheck" onclick="recheckSensors()">
+          Alle Sensoren angeschlossen – System prüfen
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================
        ONBOARDING-ASSISTENT (wird beim ersten Start angezeigt)
        ================================================================ -->
   <div id="onboarding-overlay" class="overlay hidden">
@@ -234,10 +261,18 @@
               </div>
             </label>
             <label class="checkbox-label">
-              <input type="checkbox" id="s-simulation-mode" />
+              <input type="checkbox" id="s-simulation-mode" onchange="onSimModeToggle(this)" />
               Simulationsmodus
             </label>
           </div>
+        </div>
+
+        <div id="sim-mode-warning" class="settings-warning sim-mode-warning hidden">
+          <strong>&#9888; Achtung – Simulationsmodus:</strong>
+          Im Simulationsmodus werden <strong>keine echten Sensordaten</strong> erfasst –
+          alle Messwerte sind künstlich erzeugt. Dieser Modus ist ausschließlich für
+          Tests und Entwicklung vorgesehen.<br>
+          <strong>Für den Produktionsbetrieb muss der Hardwaremodus aktiv sein.</strong>
         </div>
 
         <div class="settings-section">

@@ -121,9 +121,31 @@ def probe_hardware() -> bool:
         return False
 
 
-# ---------------------------------------------------------------------------
-# Simulation
-# ---------------------------------------------------------------------------
+# Sensorkanalbezeichnungen für Fehlermeldungen
+_CHANNEL_NAMES = {
+    1: "p1 (Eintrittsdruck)",
+    2: "p2 (Austrittsdruck)",
+    3: "T (Temperatur)",
+    4: "Q (Durchfluss)",
+}
+
+
+def check_hardware_sensors() -> dict:
+    """
+    Prüft alle 4 Sensorkanäle auf Erreichbarkeit (z. B. nach Bediener-Bestätigung).
+    Gibt zurück: {'all_ok': bool, 'failed_channels': list, 'failed_names': list}.
+    """
+    failed = []
+    for ch in range(1, 5):
+        if _read_anopi_channel(ch) is None:
+            failed.append(ch)
+    return {
+        "all_ok": len(failed) == 0,
+        "failed_channels": failed,
+        "failed_names": [_CHANNEL_NAMES.get(ch, f"Kanal {ch}") for ch in failed],
+    }
+
+
 
 class FilterSimulator:
     """
@@ -233,22 +255,33 @@ def read_sensors(simulation: bool = True,
             "mode": "simulation",
         }
 
-    # Realbetrieb: echte SPI-Kanäle lesen, bei Fehler Simulations-Fallback
+    # Realbetrieb: alle 4 SPI-Kanäle lesen, bei Fehler Messung sofort stoppen.
+    # Kein Simulations-Fallback im Hardwaremodus – verfälschte Messwerte sind
+    # im Produktionsbetrieb nicht akzeptabel.
     ma_values: dict = {}
-    mode = "hardware"
+    failed_channels = []
     for ch in range(1, 5):
         val = _read_anopi_channel(ch)
         if val is None:
-            logger.warning("Kanal %d nicht lesbar – Simulations-Fallback aktiv.", ch)
-            phys = _simulator.get_readings()
-            return {
-                "p1":          SensorReading(1, 0.0, phys["p1"],   "bar"),
-                "p2":          SensorReading(2, 0.0, phys["p2"],   "bar"),
-                "temperature": SensorReading(3, 0.0, phys["temp"], "°C"),
-                "flow":        SensorReading(4, 0.0, phys["flow"], "l/min"),
-                "mode": "simulation_fallback",
-            }
-        ma_values[ch] = val
+            failed_channels.append(ch)
+        else:
+            ma_values[ch] = val
+
+    if failed_channels:
+        names = [_CHANNEL_NAMES.get(ch, f"Kanal {ch}") for ch in failed_channels]
+        logger.error(
+            "Sensorfehler auf Kanal(en) %s (%s) – Messung wird gestoppt.",
+            failed_channels, ", ".join(names),
+        )
+        return {
+            "p1":          SensorReading(1, 0.0, float("nan"), "bar",   SENSOR_WIRE_BREAK),
+            "p2":          SensorReading(2, 0.0, float("nan"), "bar",   SENSOR_WIRE_BREAK),
+            "temperature": SensorReading(3, 0.0, float("nan"), "°C",   SENSOR_WIRE_BREAK),
+            "flow":        SensorReading(4, 0.0, float("nan"), "l/min", SENSOR_WIRE_BREAK),
+            "mode": "sensor_fault",
+            "failed_channels": failed_channels,
+            "failed_names": names,
+        }
 
     def make_reading(channel, ma, scale_fn, unit):
         status = _check_status(ma)

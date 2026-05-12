@@ -647,6 +647,99 @@ footer {
 }
 .diag-hints li { margin-bottom: .1rem; }
 
+/* ===== SENSORFEHLER-OVERLAY ===== */
+.sensor-fault-box {
+  background: var(--card-bg);
+  border-radius: 14px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.45);
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 5px solid var(--alert-red);
+}
+.sensor-fault-header {
+  background: var(--alert-red);
+  color: #fff;
+  padding: 1.1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: .85rem;
+}
+.sensor-fault-header h2 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0;
+}
+.sensor-fault-icon {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+.sensor-fault-body {
+  padding: 1.4rem 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: .9rem;
+}
+.sensor-fault-body p {
+  color: var(--text-main);
+  font-size: .92rem;
+  line-height: 1.5;
+  margin: 0;
+}
+.sensor-fault-hint {
+  color: var(--text-muted) !important;
+  font-size: .83rem !important;
+  border-left: 3px solid var(--border);
+  padding-left: .75rem !important;
+}
+.sensor-fault-list {
+  display: flex;
+  flex-direction: column;
+  gap: .3rem;
+}
+.sensor-fault-channel {
+  background: #fdf3f3;
+  border: 1px solid #f5c6cb;
+  border-left: 4px solid var(--alert-red);
+  border-radius: 6px;
+  padding: .45rem .8rem;
+  font-size: .88rem;
+  font-weight: 600;
+  color: #721c24;
+}
+.sensor-fault-result {
+  border-radius: 6px;
+  padding: .55rem .85rem;
+  font-size: .88rem;
+  font-weight: 600;
+}
+.sensor-fault-result.checking { background: #e8f0f9; color: var(--heta-blue); }
+.sensor-fault-result.ok       { background: #d4edda; color: #155724; }
+.sensor-fault-result.error    { background: #f8d7da; color: #721c24; }
+.sensor-fault-footer {
+  padding: 1rem 1.6rem 1.4rem;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+}
+.sensor-fault-footer .btn {
+  min-width: 240px;
+}
+
+/* ===== SIMULATIONSMODUS-WARNUNG (Einstellungen) ===== */
+.sim-mode-warning {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-left: 4px solid var(--warn-yellow);
+  border-radius: 6px;
+  padding: .75rem 1rem;
+  font-size: .88rem;
+  color: #7d4e00;
+  margin-bottom: 1rem;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
   .cards-grid { grid-template-columns: 1fr 1fr; }
