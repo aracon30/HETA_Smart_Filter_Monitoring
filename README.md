@@ -1,4 +1,4 @@
-# HETA Smart Filter Monitoring – Realsystem mit Simulations-Fallback
+# HETA Smart Filter Monitoring
 
 Industrielle Filterüberwachung auf Basis des **Raspberry Pi 5**, im aktiven Einsatz auf einem
 realen Testsystem. Die Software erfasst echte 4–20-mA-Sensordaten, berechnet den Filterzustand,
@@ -7,7 +7,10 @@ Encoder-Navigation bereit.
 
 **Betriebspriorität:**
 1. **Realbetrieb** – echte Sensoren via AnoPi Shield (SPI-ADC)
-2. **Simulations-Fallback** – automatisch aktiv wenn keine Sensoren erkannt werden oder der Testmodus bewusst gewählt wurde
+2. **Simulationsmodus** – explizit konfiguriert (Onboarding oder Einstellungen), ausschließlich für Tests
+
+Kein automatischer Simulations-Fallback. Ein Sensorausfall im Hardwaremodus stoppt die Messung und
+fordert den Bediener zur Prüfung auf.
 
 ---
 
@@ -287,8 +290,10 @@ Der Messzyklus startet erst nach Abschluss.
 | 5 | Zugriffspasswort für den Einstellungsbereich festlegen (mind. 4 Zeichen) |
 | 6 | Zusammenfassung bestätigen → System startet |
 
-> **Hardwaremodus** ist die Voreinstellung. Wenn kein AnoPi Shield erkannt wird, schaltet das
-> System automatisch in den Simulations-Fallback um – sichtbar am **FALLBACK**-Badge im Header.
+> **Hardwaremodus** ist die Voreinstellung. Wird ein Sensor nicht erreicht, stoppt die Messung
+> sofort und ein Overlay fordert den Bediener zur Prüfung der Verdrahtung auf. Der Simulationsmodus
+> ist kein automatischer Fallback – er muss bewusst aktiviert werden (hier im Onboarding oder später
+> über die Einstellungen).
 
 ---
 
@@ -302,7 +307,7 @@ Der Messzyklus startet erst nach Abschluss.
 **Beispiel:** Code `HETA-12345` → PIN `486082`
 
 Mit aktivem HETA-Code werden der **Beladungsgrad** angezeigt und nach 3 Filterzyklen
-eine **minutengenaue Reststandzeit** ausgegeben.
+eine **sekundengenaue Reststandzeit** ausgegeben.
 
 ---
 
@@ -312,7 +317,7 @@ eine **minutengenaue Reststandzeit** ausgegeben.
 |-------|-----------|---------|
 | **BASIS** | Kein HETA-Code | `2–4 Std.`, `1–2 Tage` |
 | **HETA-Lernend** | HETA aktiv, < 3 Zyklen | `4–6 Std.` (1/3 Zyklen) |
-| **HETA-Validiert** | 3 Zyklen abgeschlossen | `1 Std. 52 min`, `47 min` |
+| **HETA-Validiert** | 3 Zyklen abgeschlossen | `1 Std. 52 min 30 s`, `47 min 15 s`, `23 s` |
 
 Filterlaufzeiten variieren je nach Anwendung von Minuten bis Tagen –
 daher im Basis-Modus bewusst nur Bereiche ohne Minutenangabe.
@@ -552,6 +557,7 @@ Screen 5 – Netzwerk
 | POST | `/api/heta/activate` | HETA-Code + PIN aktivieren |
 | GET  | `/api/heta/demo` | Demo-PIN berechnen |
 | POST | `/api/filter/confirm-change` | Filterwechsel bestätigen |
+| POST | `/api/sensor/recheck` | Sensoren nach Bediener-Bestätigung prüfen – Messung neu starten |
 
 ### Display & Navigation
 
@@ -649,13 +655,25 @@ ls /dev/i2c-*
 i2cdetect -y 1
 ```
 
-**Sensorwerte bleiben 0 oder Badge zeigt FALLBACK:**
-- Header-Badge `FALLBACK` (orange): Hardwaremodus konfiguriert, aber AnoPi Shield nicht erkannt
-  → SPI aktiviert? `ls /dev/spidev*` muss `/dev/spidev0.0` zeigen
-  → AnoPi Shield korrekt aufgesteckt?
-  → 24-V-Sensorversorgung vorhanden?
-- Header-Badge `SIM` (grau): Simulationsmodus bewusst gewählt (Einstellungen → Betriebsart)
-- Für Diagnose: Einstellungen → Hardware-Diagnose → Selbstcheck starten
+**Sensor-Fault – Overlay erscheint, Messung gestoppt:**
+
+Ein Sensorausfall im Hardwaremodus stoppt die Messung sofort. Im Dashboard erscheint ein blockierendes
+rotes Overlay mit den ausgefallenen Kanälen (z. B. „p1 (Eintrittsdruck)", „Q (Durchfluss)").
+
+Vorgehensweise:
+1. Verdrahtung und Versorgung der genannten Kanäle prüfen
+2. „Alle Sensoren angeschlossen – System prüfen" klicken → `POST /api/sensor/recheck`
+   - Alle OK: Messung startet automatisch neu, Overlay verschwindet
+   - Noch Fehler: Overlay bleibt mit aktualisierten Kanalinformationen
+3. Falls Weiterbetrieb im Simulationsmodus nötig: aufklappbaren Bereich „Im Simulationsmodus fortfahren"
+   öffnen → Passwort eingeben → Simulation wird aktiviert (nur für Tests)
+
+Prüfpunkte bei Sensor-Fault:
+- SPI aktiviert? `ls /dev/spidev*` muss `/dev/spidev0.0` zeigen
+- AnoPi Shield korrekt aufgesteckt?
+- 24-V-Sensorversorgung vorhanden?
+- Header-Badge `SIM` (grau): Simulationsmodus bewusst gewählt
+- Header-Badge `FEHLER` (dunkelrot): aktiver Sensor-Fault
 
 **HETA-Code ungültig:**
 Format `HETA-XXXXX` (nur Ziffern nach dem Bindestrich), PIN 6-stellig mit führenden Nullen.

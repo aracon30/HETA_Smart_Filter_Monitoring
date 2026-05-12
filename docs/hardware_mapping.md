@@ -48,6 +48,29 @@ flow         = ((mA - 4) / 16) × flow_max
 
 ---
 
+## Sensor-Fault-Verhalten (Hardwaremodus)
+
+Wenn im Hardwaremodus mindestens einer der 4 SPI-Kanäle nicht lesbar ist:
+
+- Messung wird sofort gestoppt (kein Simulations-Fallback)
+- State: `sensor_fault=True`, `sensor_fault_channels` (Liste ausgefallener Kanal-Nummern), `sensor_fault_message`
+- Frontend: blockierendes rotes Overlay zeigt ausgefallene Kanäle mit Namen (z. B. „p1 (Eintrittsdruck)", „Q (Durchfluss)")
+- Bediener prüft Verdrahtung und Versorgung → klickt „System prüfen" → `POST /api/sensor/recheck`
+  - Alle Kanäle OK: `sensor_fault=False`, Messung startet automatisch neu
+  - Noch Fehler: Overlay bleibt mit aktualisierten Kanalinformationen
+- Optional aus dem Overlay: Simulationsmodus aktivieren (passwortgeschützt) – nur für Tests
+
+Kanalbezeichnungen (aus `_CHANNEL_NAMES` in `sensors.py`):
+
+| Kanal | Name |
+|-------|------|
+| 1 | p1 (Eintrittsdruck) |
+| 2 | p2 (Austrittsdruck) |
+| 3 | T (Temperatur) |
+| 4 | Q (Durchfluss) |
+
+---
+
 ## OLED-Display
 
 | Parameter  | Wert                          |

@@ -12,3 +12,6 @@ adafruit-blinka>=8.20.0
 
 # MQTT (optional, nur wenn mqtt_enabled=true in settings.json)
 paho-mqtt>=1.6.1
+
+# SPI-ADC (AnoPi Shield) – nur auf Raspberry Pi
+spidev

@@ -29,3 +29,7 @@ Thumbs.db
 
 # Raspberry Pi / systemd
 *.pid
+*.sock
+
+# Lokale Konfigurationsüberschreibungen (Passwort etc.)
+config/settings.local.json

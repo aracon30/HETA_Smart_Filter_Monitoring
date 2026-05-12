@@ -85,6 +85,43 @@ Das Ereignis wird als `LERNDATEN_RESET` in der Datenbank protokolliert.
 
 ---
 
+## sensors.py – Architektur
+
+### FilterSimulator
+
+- Thread-sicher: interner `threading.Lock` (`_lock`) schützt `_step`-Zugriff
+- `get_readings()` gibt `dp` als Primärwert zurück (auf 4 Stellen gerundet) – nie aus p1–p2 zurückgerechnet
+- Im Simulationsmodus enthält `read_sensors()` zusätzlich den Schlüssel `"dp_direct"` mit dem physikalischen dp-Wert
+- `update_simulation_params()` setzt `_step=0` innerhalb des Locks (keine Diskontinuität im Signal)
+
+### Neue Funktion: check_hardware_sensors()
+
+```python
+check_hardware_sensors() -> dict
+# Prüft alle 4 SPI-Kanäle
+# Rückgabe: {"all_ok": bool, "failed_channels": [int, ...], "failed_names": [str, ...]}
+```
+
+### Kanalbezeichnungen (_CHANNEL_NAMES)
+
+```python
+_CHANNEL_NAMES = {
+    1: "p1 (Eintrittsdruck)",
+    2: "p2 (Austrittsdruck)",
+    3: "T (Temperatur)",
+    4: "Q (Durchfluss)"
+}
+```
+
+### Sensor-Fault statt Fallback
+
+`read_sensors()` im Hardwaremodus: Bei Ausfall eines Kanals wird **kein** Simulations-Fallback
+ausgelöst. Stattdessen gibt die Funktion `mode="sensor_fault"` zurück. `app.py` setzt daraufhin
+`_state["sensor_fault"] = True`, `_state["sensor_fault_channels"]` und `_state["sensor_fault_message"]`
+und stoppt den Messzyklus.
+
+---
+
 ## Berechnungsalgorithmen
 
 ### Differenzdruck
@@ -92,6 +129,10 @@ Das Ereignis wird als `LERNDATEN_RESET` in der Datenbank protokolliert.
 ```
 dp_bar = max(0, p1_bar - p2_bar)
 ```
+
+`calculate_filter_state()` akzeptiert den optionalen Parameter `dp_override: Optional[float] = None`.
+Wenn gesetzt, wird die p1–p2-Subtraktion übersprungen und `dp_override` direkt verwendet
+(Simulationsmodus – verhindert Float-Artefakte durch doppelte Subtraktion).
 
 ### Effektiver Filterwiderstand
 
@@ -223,7 +264,7 @@ Die Anzeige passt sich dem verfügbaren Wissensstand an.
 ### HETA_VALIDIERT
 
 - HETA-Code aktiv **und** ≥ 3 vollständige Zyklen
-- **Minutengenaue** Ausgabe: `1 Std. 52 min` oder `47 min`
+- **Sekundengenaue** Ausgabe: `1 Std. 52 min 30 s`, `47 min 15 s`, `23 s`
 - Beladungsgrad wird angezeigt
 
 ### Glättungsalgorithmus
@@ -323,6 +364,16 @@ dp ≥ dp_limit
     → Screen 0 (Status)
 ```
 
+### Frontend (app.js / index.html)
+
+- **Sensor-Fault-Overlay:** Blockierendes rotes Overlay, wenn `sensor_fault=True` im Status.
+  Zeigt ausgefallene Kanäle, Prüf-Button und aufklappbaren Bereich zur Sim-Aktivierung.
+- **Sim-Mode-Aktivierung aus dem Overlay:** Passwortgeschützt – Login erforderlich bevor
+  `POST /api/settings` und `POST /api/simulation/start` aufgerufen werden.
+- **Sim-Mode-Warnung in Einstellungen:** Sobald die Simulation-Checkbox aktiviert wird,
+  erscheint eine gelbe Warnbox: „Im Simulationsmodus werden keine echten Sensordaten erfasst –
+  nur für Tests."
+
 ### _do_confirm_filter_change()
 
 Zentrale Funktion, die sowohl vom REST-API-Endpunkt als auch vom
@@ -349,8 +400,9 @@ Zentrale Funktion, die sowohl vom REST-API-Endpunkt als auch vom
 | POST | `/api/heta/activate` | HETA-Code + PIN aktivieren |
 | GET | `/api/heta/demo` | Demo-PIN anzeigen (Entwicklung) |
 | POST | `/api/filter/confirm-change` | Filterwechsel bestätigen |
-| POST | `/api/simulation/start` | Simulation starten |
+| POST | `/api/simulation/start` | Simulation starten (löscht auch `sensor_fault`-State) |
 | POST | `/api/simulation/stop` | Messzyklus stoppen |
+| POST | `/api/sensor/recheck` | Alle 4 SPI-Kanäle nach Bediener-Bestätigung prüfen – Messung neu starten wenn alle OK |
 | POST | `/api/simulation/reset` | System zurücksetzen |
 | GET | `/api/export/csv` | CSV-Export-Info |
 | GET | `/api/export/csv/download` | CSV-Download |
@@ -426,6 +478,9 @@ Bei `"restarting": true` startet der systemd-Service `heta-monitor` automatisch 
 | `awaiting_confirmation` | bool | Filterwechsel wartet auf Bestätigung |
 | `anomaly_active` | bool | Startverhalten-Anomalie erkannt |
 | `anomaly_percent` | float | Abweichung vom Referenzprofil in % |
+| `sensor_fault` | bool | Mindestens ein Sensor nicht erreichbar (Messung gestoppt) |
+| `sensor_fault_channels` | list | Kanal-Nummern ausgefallener Sensoren |
+| `sensor_fault_message` | string | Lesbare Fehlerbeschreibung |
 
 ---
 
@@ -448,11 +503,51 @@ def calculate_activation_code(heta_number: str) -> str:
 
 | Modus | Beschreibung |
 |-------|-------------|
-| Simulation | Simulierte Sensordaten ohne Hardware (Standard beim Onboarding) |
-| Hardware | Echte 4–20 mA Werte vom AnoPi Shield |
-| Simulations-Fallback | Automatisch wenn Hardware nicht erkannt wird |
+| Hardware | Echte 4–20 mA Werte vom AnoPi Shield (Voreinstellung) |
+| Simulation | Simulierte Sensordaten, explizit konfiguriert (Onboarding oder Einstellungen) – nur für Tests |
+
+Kein automatischer Simulations-Fallback. Wird im Hardwaremodus ein Sensor nicht erreicht, setzt
+`read_sensors()` den State `sensor_fault=True` und gibt `mode="sensor_fault"` zurück – die Messung
+stoppt sofort.
 
 Umschaltung über Onboarding, Einstellungsbereich (⚙) oder `POST /api/settings`.
+
+---
+
+## Sensor-Fault-Handling
+
+### Flow bei Sensorausfall (Hardwaremodus)
+
+```
+read_sensors() → Kanal nicht lesbar
+    → gibt mode="sensor_fault" zurück
+    → app.py: _state["sensor_fault"] = True
+              _state["sensor_fault_channels"] = [<Kanal-Nr>, ...]
+              _state["sensor_fault_message"] = "<Beschreibung>"
+    → Messzyklus stoppt sofort
+    → /api/status liefert sensor_fault=True an das Frontend
+```
+
+### Frontend: Sensor-Fault-Overlay
+
+- Blockierendes rotes Overlay überlagert das Dashboard
+- Zeigt ausgefallene Kanäle mit Namen (aus `_CHANNEL_NAMES`)
+- Primär-Button: „Alle Sensoren angeschlossen – System prüfen"
+  → `POST /api/sensor/recheck`
+  → Alle OK: `sensor_fault=False`, Messung startet neu, Overlay verschwindet
+  → Noch Fehler: Overlay bleibt, zeigt aktualisierte Kanalliste
+- Sekundär (aufklappbar): „Im Simulationsmodus fortfahren"
+  → Passwort-Eingabe → Login (`POST /api/settings/login`)
+  → `POST /api/settings` (simulation_mode=true)
+  → `POST /api/simulation/start` (löscht sensor_fault-State)
+
+### Sensor-Badge
+
+| Zustand | Badge | Farbe |
+|---------|-------|-------|
+| Hardwaremodus, alle Sensoren OK | `REAL` | blau |
+| Simulationsmodus | `SIM` | grau |
+| Sensor-Fault aktiv | `FEHLER` | dunkelrot |
 
 ---
 
