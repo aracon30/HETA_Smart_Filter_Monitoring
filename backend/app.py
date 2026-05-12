@@ -1407,22 +1407,52 @@ def api_update_pull():
 
     if changed:
         def _restart():
-            time.sleep(1.5)
-            logger.info("Neustart nach Git-Update.")
+            time.sleep(2.0)
+            logger.info("Neustart nach Git-Update – versuche systemctl…")
+
+            # Versuch 1: systemd (Produktion – Pi läuft als Service)
             try:
                 r = subprocess.run(
                     ["sudo", "systemctl", "restart", "heta-monitor"],
                     timeout=10, capture_output=True,
                 )
                 if r.returncode == 0:
+                    logger.info("systemctl restart erfolgreich.")
                     return
-            except Exception:
-                pass
-            # Fallback: Prozess sauber beenden, systemd (Restart=always) startet neu.
-            # os.execv() wird NICHT verwendet, da es den offenen Flask-Socket
-            # an den neuen Prozess vererbt, der dann den Port nicht binden kann.
-            logger.info("Fallback: Prozess wird beendet, systemd übernimmt den Neustart.")
-            os._exit(0)
+                logger.warning(
+                    "systemctl restart fehlgeschlagen (rc=%d): %s",
+                    r.returncode,
+                    (r.stdout + r.stderr).decode(errors="replace").strip(),
+                )
+            except Exception as exc:
+                logger.warning("systemctl nicht ausführbar: %s", exc)
+
+            # Fallback: neuen Python-Prozess vollständig losgelöst starten,
+            # dann diesen Prozess beenden.  close_fds=True verhindert, dass
+            # der neue Prozess den offenen Flask-Socket erbt und "Port belegt"
+            # meldet.  start_new_session=True schützt vor SIGHUP beim Exit.
+            # sleep 3 gibt dem Betriebssystem Zeit, den Port freizugeben.
+            logger.info(
+                "Fallback: Starte neuen Prozess und beende mich – "
+                "Port wird nach ~3 s wieder erreichbar sein."
+            )
+            try:
+                restart_cmd = (
+                    f"sleep 3 && exec {sys.executable} "
+                    f"{os.path.join(_BASE_DIR, 'backend', 'app.py')}"
+                )
+                subprocess.Popen(
+                    ["bash", "-c", restart_cmd],
+                    cwd=_BASE_DIR,
+                    close_fds=True,
+                    start_new_session=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except Exception as exc:
+                logger.error("Fallback-Neustart konnte nicht gestartet werden: %s", exc)
+            finally:
+                os._exit(0)
 
         threading.Thread(target=_restart, daemon=True).start()
 

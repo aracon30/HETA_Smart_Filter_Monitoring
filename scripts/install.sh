@@ -110,6 +110,18 @@ sudo systemctl daemon-reload
 sudo systemctl enable "${SERVICE_NAME}"
 echo "  Service '${SERVICE_NAME}' installiert und aktiviert."
 
+# Sudoers-Eintrag: pi darf den Service ohne Passwort neu starten
+# (wird vom Software-Update über die Weboberfläche benötigt)
+SUDOERS_FILE="/etc/sudoers.d/heta-monitor"
+SUDOERS_LINE="pi ALL=(ALL) NOPASSWD: /bin/systemctl restart ${SERVICE_NAME}"
+if ! sudo grep -qF "${SUDOERS_LINE}" "${SUDOERS_FILE}" 2>/dev/null; then
+    echo "${SUDOERS_LINE}" | sudo tee "${SUDOERS_FILE}" > /dev/null
+    sudo chmod 0440 "${SUDOERS_FILE}"
+    echo "  Sudoers-Eintrag für 'systemctl restart ${SERVICE_NAME}' angelegt."
+else
+    echo "  Sudoers-Eintrag bereits vorhanden."
+fi
+
 # -----------------------------------------------------------
 # 7. Abschluss
 # -----------------------------------------------------------
