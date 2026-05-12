@@ -58,18 +58,18 @@ def _format_basis_range(seconds: float) -> str:
 
 
 def _format_validated(seconds: float) -> str:
-    """
-    Minutengenaue Ausgabe für den validierten HETA-Modus.
-    Bei > 1 Stunde wird in Stunden und Minuten ausgegeben.
-    """
-    total_min = int(seconds / 60)
-    if total_min <= 0:
-        return "< 1 min"
-    if total_min >= 60:
-        h = total_min // 60
-        m = total_min % 60
-        return f"{h} Std. {m} min" if m > 0 else f"{h} Std."
-    return f"{total_min} min"
+    """Sekundengenaue Ausgabe für den validierten HETA-Modus."""
+    total_s = max(0, int(seconds))
+    if total_s == 0:
+        return "< 1 s"
+    h = total_s // 3600
+    m = (total_s % 3600) // 60
+    s = total_s % 60
+    if h > 0:
+        return f"{h} Std. {m:02d} min {s:02d} s"
+    if m > 0:
+        return f"{m} min {s:02d} s"
+    return f"{s} s"
 
 
 class PredictionEngine:
