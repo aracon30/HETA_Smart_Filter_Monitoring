@@ -96,10 +96,14 @@ def calculate_filter_state(
     anomaly_active: bool = False,
     anomaly_percent: float = 0.0,
     min_flow: float = 0.1,
+    dp_override: Optional[float] = None,
 ) -> FilterState:
     """
     Führt alle Berechnungen für einen Messzeitpunkt durch und liefert
     ein vollständiges FilterState-Objekt.
+
+    dp_override: wenn gesetzt, wird dieser Wert als dp verwendet statt p1-p2
+    zu subtrahieren (verhindert Gleitkomma-Artefakte im Simulationsmodus).
     """
     if sensor_error or math.isnan(p1_bar) or math.isnan(p2_bar):
         return FilterState(
@@ -115,7 +119,7 @@ def calculate_filter_state(
             sensor_error=True,
         )
 
-    dp = calculate_differential_pressure(p1_bar, p2_bar)
+    dp = dp_override if dp_override is not None else calculate_differential_pressure(p1_bar, p2_bar)
     r_eff = calculate_r_eff(dp, flow_l_min, min_flow)
     usage = calculate_usage(dp, dp_clean, dp_limit)
     health = calculate_filter_health(usage)

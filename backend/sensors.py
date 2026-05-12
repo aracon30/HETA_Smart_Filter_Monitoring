@@ -11,8 +11,8 @@ Alle Sensoren liefern 4–20 mA Signale.
 """
 
 import time
-import math
 import logging
+import threading
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -127,11 +127,12 @@ def probe_hardware() -> bool:
 
 class FilterSimulator:
     """
-    Simuliert einen Filterbeladungszyklus – deterministisch und rauschfrei.
+    Simuliert einen Filterbeladungszyklus – deterministisch, rauschfrei, thread-safe.
 
-    Verwendet einen Schrittzähler statt Echtzeit, damit NTP-Sprünge oder
-    Systemlast keine Schwankungen verursachen können.
-    Jeder Aufruf von get_readings() erhöht den Zähler um 1 (= 1 Sekunde).
+    Schrittzähler statt Echtzeit: jeder get_readings()-Aufruf erhöht _step um 1.
+    Ein Mutex schützt _step gegen Race Conditions aus mehreren Threads.
+    dp wird direkt als physikalischer Wert zurückgegeben und nie aus p1-p2
+    rekonstruiert, um Gleitkomma-Subtraktionsartefakte zu vermeiden.
     """
 
     def __init__(self, dp_clean: float = 0.2, dp_limit: float = 2.5,
@@ -141,32 +142,36 @@ class FilterSimulator:
         self.cycle_steps = max(1, int(cycle_seconds))
         self.flow_max = flow_max
         self._step = 0
+        self._lock = threading.Lock()
 
     def reset(self):
-        self._step = 0
+        with self._lock:
+            self._step = 0
 
     def get_readings(self) -> dict:
         """
-        Gibt exakte physikalische Simulationswerte zurück – ohne mA-Konversion,
-        ohne Rauschen, ohne Schwankungen.
+        Gibt physikalische Simulationswerte zurück.
+        dp ist der Primärwert – p2 wird nur zur Anzeige aus p1-dp abgeleitet,
+        aber dp selbst wird als eigener Schlüssel zurückgegeben.
         """
-        progress = min(self._step / self.cycle_steps, 1.0)
-        self._step += 1
+        with self._lock:
+            step = self._step
+            self._step += 1
 
-        # Differenzdruck: S-förmig, streng monoton steigend
+        progress = min(step / self.cycle_steps, 1.0)
+
+        # dp: S-Kurve, streng monoton steigend 0 → 1.0
         dp = self.dp_clean + (self.dp_limit - self.dp_clean) * progress ** 1.5
-        dp = max(self.dp_clean, min(dp, self.dp_limit))
+        dp = round(max(self.dp_clean, min(dp, self.dp_limit)), 4)
 
         p1 = 3.5
-        p2 = max(0.0, p1 - dp)
+        p2 = round(max(0.0, p1 - dp), 4)
 
-        # Durchfluss sinkt proportional mit Differenzdruck
         dp_fraction = (dp - self.dp_clean) / max(self.dp_limit - self.dp_clean, 1e-9)
         dp_fraction = max(0.0, min(1.0, dp_fraction))
-        flow = self.flow_max * 0.53 * (1.0 - 0.50 * dp_fraction)
+        flow = round(self.flow_max * 0.53 * (1.0 - 0.50 * dp_fraction), 2)
 
-        # Temperatur steigt gleichmäßig
-        temp = 20.0 + progress * 15.0
+        temp = round(20.0 + progress * 15.0, 2)
 
         return {"p1": p1, "p2": p2, "dp": dp, "flow": flow, "temp": temp}
 
@@ -183,11 +188,13 @@ def reset_simulation():
 
 def update_simulation_params(dp_clean: float, dp_limit: float, flow_max: float,
                               cycle_seconds: float = 300.0):
-    """Aktualisiert Simulationsparameter ohne Neustart."""
-    _simulator.dp_clean = dp_clean
-    _simulator.dp_limit = dp_limit
-    _simulator.flow_max = flow_max
-    _simulator.cycle_steps = max(1, int(cycle_seconds))
+    """Aktualisiert Simulationsparameter und setzt den Schrittzähler zurück."""
+    with _simulator._lock:
+        _simulator.dp_clean = dp_clean
+        _simulator.dp_limit = dp_limit
+        _simulator.flow_max = flow_max
+        _simulator.cycle_steps = max(1, int(cycle_seconds))
+        _simulator._step = 0
 
 
 # ---------------------------------------------------------------------------
@@ -213,14 +220,16 @@ def read_sensors(simulation: bool = True,
         }
     """
     if simulation:
-        # Im Simulationsmodus: exakte physikalische Werte direkt verwenden.
-        # Keine mA-Konversion → keine Gleitkomma-Artefakte, keine Schwankungen.
+        # Exakte physikalische Werte direkt verwenden – keine mA-Konversion.
+        # "dp_direct" enthält den Primärwert des Simulators: kein Gleitkomma-
+        # Subtraktionsartefakt durch p1-p2 in der Berechnungsebene.
         phys = _simulator.get_readings()
         return {
             "p1":          SensorReading(1, 0.0, phys["p1"],   "bar"),
             "p2":          SensorReading(2, 0.0, phys["p2"],   "bar"),
             "temperature": SensorReading(3, 0.0, phys["temp"], "°C"),
             "flow":        SensorReading(4, 0.0, phys["flow"], "l/min"),
+            "dp_direct":   phys["dp"],
             "mode": "simulation",
         }
 

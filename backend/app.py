@@ -482,6 +482,9 @@ def _measurement_loop():
             )
 
         # Berechnungen
+        # dp_direct: Simulationsmodus liefert dp als Primärwert – verhindert
+        # Gleitkomma-Artefakte durch p1-p2-Subtraktion in calculate_filter_state.
+        dp_direct = readings.get("dp_direct")
         fs: FilterState = calculate_filter_state(
             p1_bar=p1.value,
             p2_bar=p2.value,
@@ -493,6 +496,7 @@ def _measurement_loop():
             sensor_error=sensor_error,
             anomaly_active=_state["anomaly_active"],
             anomaly_percent=_state["anomaly_percent"],
+            dp_override=dp_direct,
         )
 
         # Zyklus starten falls nötig
