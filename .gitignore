@@ -1,9 +1,31 @@
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
 .venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Laufzeit-Daten (lokal erzeugt, nicht versionieren)
 data/
 logs/
 exports/
 *.db
 *.log
+
+# Betriebssystem
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Raspberry Pi / systemd
+*.pid
