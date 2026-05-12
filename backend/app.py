@@ -668,6 +668,17 @@ def _do_confirm_filter_change():
     predictor.reset()
     reset_simulation()
 
+    # Startwert aus dem validierten Lernprofil setzen, damit die Reststandzeit
+    # nach dem Filterwechsel sofort einen sinnvollen Wert zeigt.
+    if heta_code:
+        profile = learning.get_profile(heta_code)
+        if (profile and profile.get("profile_valid")
+                and profile.get("reference_loading_rate", 0) > 0):
+            dp_start = settings.get("dp_clean_bar", 0.2)
+            dp_lim   = settings.get("dp_limit_bar", 2.5)
+            seed_secs = (dp_lim - dp_start) / profile["reference_loading_rate"]
+            predictor.seed(seed_secs)
+
     with _state_lock:
         _state["awaiting_confirmation"] = False
         _state["cycle_active"] = False

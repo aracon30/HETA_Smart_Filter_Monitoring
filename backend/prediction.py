@@ -116,7 +116,11 @@ class PredictionEngine:
         raw_remaining = (self.dp_limit - dp_bar) / max(slope, self.min_slope)
 
         if self._smoothed_remaining is None:
-            self._smoothed_remaining = raw_remaining
+            # Startwert nur übernehmen wenn plausibel (≥ 60 s),
+            # um ein "Stuck near zero" nach Reset durch Rauschen zu vermeiden.
+            if raw_remaining >= 60:
+                self._smoothed_remaining = raw_remaining
+            return self._smoothed_remaining
         else:
             self._smoothed_remaining = self._apply_smoothing(
                 self._smoothed_remaining, raw_remaining
@@ -149,6 +153,16 @@ class PredictionEngine:
         """Setzt die Prognose zurück (z.B. nach Filterwechsel oder Neukonfiguration)."""
         self._smoothed_remaining = None
         self._dp_history.clear()
+
+    def seed(self, initial_seconds: float):
+        """
+        Setzt einen Startwert direkt nach dem Reset, wenn ein valides Lernprofil
+        vorliegt. Verhindert 'Wird berechnet…' und ermöglicht sofortige Anzeige.
+        """
+        if initial_seconds > 60:
+            self._smoothed_remaining = initial_seconds
+            self._dp_history.clear()
+            logger.info("Prognose-Startwert aus Profil: %.0f s", initial_seconds)
 
     def update_limits(self, dp_limit: float, dp_clean: float):
         """Aktualisiert die Grenzwerte ohne Neustart."""

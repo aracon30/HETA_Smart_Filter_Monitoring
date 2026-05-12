@@ -134,19 +134,28 @@ class FilterSimulator:
         elapsed = self._elapsed()
         progress = min(elapsed / self.cycle_seconds, 1.0)
 
-        # Differenzdruck steigt S-förmig
+        # Differenzdruck steigt S-förmig.
+        # Die Schwingung wird über die ersten 60 s eingeblendet, damit
+        # der Prädiktor am Zyklusanfang keinen falschen Slope-Spike bekommt.
+        osc_ramp = min(elapsed / 60.0, 1.0)
         dp = self.dp_clean + (self.dp_limit - self.dp_clean) * (
-            progress ** 1.5 + 0.05 * math.sin(elapsed * 0.3)
+            progress ** 1.5 + osc_ramp * 0.04 * math.sin(elapsed * 0.25)
         )
-        dp += random.gauss(0, 0.01)
-        dp = max(self.dp_clean * 0.8, dp)
+        dp += random.gauss(0, 0.008)
+        dp = max(self.dp_clean * 0.9, min(dp, self.dp_limit * 1.02))
 
         # p1 schwankt leicht um 3.5 bar
         p1 = 3.5 + random.gauss(0, 0.03)
         p2 = max(0.0, p1 - dp)
 
-        # Durchfluss schwankt um 80 l/min
-        flow = 80.0 + random.gauss(0, 1.5)
+        # Durchfluss sinkt mit steigendem Differenzdruck (physikalisches Modell:
+        # zusetzendes Filter = höherer Widerstand = reduzierter Volumenstrom).
+        # Bei dp_clean: ~53 % von flow_max; bei dp_limit: ~50 % davon (≈ Halbierung).
+        flow_nominal = self.flow_max * 0.53
+        dp_fraction = max(0.0, min(1.0,
+            (dp - self.dp_clean) / max(self.dp_limit - self.dp_clean, 1e-6)))
+        flow_base = flow_nominal * (1.0 - 0.50 * dp_fraction)
+        flow = flow_base + random.gauss(0, 1.0)
         flow = max(0.0, min(self.flow_max, flow))
 
         # Temperatur steigt langsam von 20 auf 35 °C
