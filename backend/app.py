@@ -26,8 +26,8 @@ from flask_cors import CORS
 from config import settings, save_settings, get_abs_path, hash_password, verify_password
 from sensors import (read_sensors, reset_simulation, update_simulation_params,
                      probe_hardware, check_hardware_sensors,
-                     set_simulation_manual, clear_simulation_manual,
-                     get_simulation_manual_active, get_simulation_cycle_steps)
+                     set_simulation_rates, clear_simulation_rates,
+                     get_simulation_rates_active, get_simulation_cycle_steps)
 from calculations import calculate_filter_state, FilterState
 from heta_code import verify_activation, validate_heta_format, get_demo_info
 from database import Database
@@ -183,8 +183,14 @@ _state = {
     "sensor_fault_channels": [],
     "sensor_fault_message": "",
 
-    # Manuelle Simulations-Steuerung
-    "sim_manual_active": False,
+    # Simulations-Raten-Steuerung
+    "sim_rates_active":      False,
+    "sim_dp_factor":         1.0,
+    "sim_flow_factor":       1.0,
+    "sim_temp_offset":       0.0,
+    "sim_dp_deviation_pct":  0.0,
+    "sim_flow_deviation_pct": 0.0,
+    "sim_temp_deviation":    0.0,
 
     # Filterwechsel
     "awaiting_confirmation": False,
@@ -640,7 +646,7 @@ def _measurement_loop():
                 "service_message": rec["message"],
                 "service_priority": rec["priority"],
                 "last_update": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                "sim_manual_active": get_simulation_manual_active(),
+                "sim_rates_active": get_simulation_rates_active(),
             })
 
         elapsed = time.time() - t_start
@@ -1310,17 +1316,17 @@ def api_simulation_start():
 @app.route("/api/simulation/stop", methods=["POST"])
 def api_simulation_stop():
     """Stoppt den Messzyklus."""
-    clear_simulation_manual()
+    clear_simulation_rates()
     with _state_lock:
         _state["running"] = False
-        _state["sim_manual_active"] = False
+        _state["sim_rates_active"] = False
     return jsonify({"success": True, "message": "Simulation gestoppt."})
 
 
 @app.route("/api/simulation/reset", methods=["POST"])
 def api_simulation_reset():
     """Setzt Simulation und Prognose zurück."""
-    clear_simulation_manual()
+    clear_simulation_rates()
     reset_simulation()
     predictor.reset()
     with _state_lock:
@@ -1331,7 +1337,13 @@ def api_simulation_reset():
         _state["heta_activated"] = False
         _state["heta_code"] = ""
         _state["heta_number"] = ""
-        _state["sim_manual_active"] = False
+        _state["sim_rates_active"] = False
+        _state["sim_dp_factor"] = 1.0
+        _state["sim_flow_factor"] = 1.0
+        _state["sim_temp_offset"] = 0.0
+        _state["sim_dp_deviation_pct"] = 0.0
+        _state["sim_flow_deviation_pct"] = 0.0
+        _state["sim_temp_deviation"] = 0.0
     return jsonify({"success": True, "message": "System zurückgesetzt."})
 
 
@@ -1404,36 +1416,60 @@ def api_simulation_quick_learn():
     })
 
 
-@app.route("/api/simulation/set-values", methods=["POST"])
-def api_simulation_set_values():
-    """Setzt oder löscht manuelle Prozesswerte für den Simulationsmodus."""
+@app.route("/api/simulation/set-rates", methods=["POST"])
+def api_simulation_set_rates():
+    """Setzt Beladungsraten-Faktoren für den Simulations-Demo-Vergleich."""
     with _state_lock:
-        sim_mode = _state["simulation_mode"]
+        sim_mode  = _state["simulation_mode"]
+        heta_code = _state["heta_code"]
+
     if not sim_mode:
         return jsonify({"success": False, "message": "Nur im Simulationsmodus verfügbar."})
 
     data = request.get_json(force=True, silent=True) or {}
+
     if not data.get("active", True):
-        clear_simulation_manual()
+        clear_simulation_rates()
         with _state_lock:
-            _state["sim_manual_active"] = False
-        return jsonify({"success": True, "active": False, "message": "Manuelle Steuerung deaktiviert."})
+            _state["sim_rates_active"]      = False
+            _state["sim_dp_factor"]         = 1.0
+            _state["sim_flow_factor"]       = 1.0
+            _state["sim_temp_offset"]       = 0.0
+            _state["sim_dp_deviation_pct"]  = 0.0
+            _state["sim_flow_deviation_pct"] = 0.0
+            _state["sim_temp_deviation"]    = 0.0
+        return jsonify({"success": True, "active": False, "message": "Raten-Vergleich deaktiviert."})
 
     pressure_range = settings.get("pressure_range_bar", 10.0)
-    t_min = settings.get("temperature_min_c", -50.0)
-    t_max = settings.get("temperature_max_c", 150.0)
-    flow_max = settings.get("flow_max_l_min", 150.0)
+    dp_factor   = max(0.1, min(float(data.get("dp_factor",   1.0)), 5.0))
+    flow_factor = max(0.1, min(float(data.get("flow_factor", 1.0)), 3.0))
+    temp_offset = max(-50.0, min(float(data.get("temp_offset", 0.0)), 80.0))
+    p1_bar      = max(0.5, min(float(data.get("p1_bar", 3.5)), pressure_range))
 
-    p1   = max(0.0, min(float(data.get("p1", 3.5)), pressure_range))
-    dp   = max(0.0, min(float(data.get("dp", 0.2)), p1))
-    temp = max(t_min, min(float(data.get("temperature", 20.0)), t_max))
-    flow = max(0.0, min(float(data.get("flow", 79.5)), flow_max))
+    set_simulation_rates(dp_factor, flow_factor, temp_offset, p1_bar)
 
-    set_simulation_manual(p1, dp, temp, flow)
+    # Abweichungen aus Referenzprofil berechnen
+    dp_dev_pct   = round((dp_factor - 1.0) * 100.0, 1)
+    flow_dev_pct = round((flow_factor - 1.0) * 100.0, 1)
+    temp_dev     = round(temp_offset, 1)
+
     with _state_lock:
-        _state["sim_manual_active"] = True
+        _state["sim_rates_active"]       = True
+        _state["sim_dp_factor"]          = dp_factor
+        _state["sim_flow_factor"]        = flow_factor
+        _state["sim_temp_offset"]        = temp_offset
+        _state["sim_dp_deviation_pct"]   = dp_dev_pct
+        _state["sim_flow_deviation_pct"] = flow_dev_pct
+        _state["sim_temp_deviation"]     = temp_dev
 
-    return jsonify({"success": True, "active": True, "p1": p1, "dp": dp, "temperature": temp, "flow": flow})
+    return jsonify({
+        "success": True, "active": True,
+        "dp_factor": dp_factor, "flow_factor": flow_factor,
+        "temp_offset": temp_offset, "p1_bar": p1_bar,
+        "dp_deviation_pct": dp_dev_pct,
+        "flow_deviation_pct": flow_dev_pct,
+        "temp_deviation": temp_dev,
+    })
 
 
 @app.route("/api/service/request", methods=["POST"])

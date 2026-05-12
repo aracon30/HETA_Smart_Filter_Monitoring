@@ -149,76 +149,89 @@ def check_hardware_sensors() -> dict:
 
 class FilterSimulator:
     """
-    Simuliert einen Filterbeladungszyklus – deterministisch, rauschfrei, thread-safe.
+    Simuliert einen Filterbeladungszyklus – deterministisch, thread-safe.
 
     Schrittzähler statt Echtzeit: jeder get_readings()-Aufruf erhöht _step um 1.
-    Ein Mutex schützt _step gegen Race Conditions aus mehreren Threads.
-    dp wird direkt als physikalischer Wert zurückgegeben und nie aus p1-p2
-    rekonstruiert, um Gleitkomma-Subtraktionsartefakte zu vermeiden.
+    Steigungsfaktoren (dp_factor, flow_factor, temp_offset, p1_bar) modifizieren
+    den Verlauf kontinuierlich – kein Reset beim Ändern der Faktoren.
+    dp_factor > 1.0 beschleunigt die Beladung; < 1.0 verlangsamt sie.
     """
 
     def __init__(self, dp_clean: float = 0.2, dp_limit: float = 2.5,
                  cycle_seconds: float = 300.0, flow_max: float = 150.0):
-        self.dp_clean = dp_clean
-        self.dp_limit = dp_limit
-        self.cycle_steps = max(1, int(cycle_seconds))
-        self.flow_max = flow_max
-        self._step = 0
-        self._lock = threading.Lock()
-        self._manual: Optional[dict] = None
+        self.dp_clean     = dp_clean
+        self.dp_limit     = dp_limit
+        self.cycle_steps  = max(1, int(cycle_seconds))
+        self.flow_max     = flow_max
+        self._step        = 0
+        self._lock        = threading.Lock()
+        # Steigungsfaktoren (Baseline = 1.0 / 0.0)
+        self._dp_factor   = 1.0   # Multiplikator der Beladungsrate
+        self._flow_factor = 1.0   # Multiplikator des Solldurchflusses
+        self._temp_offset = 0.0   # Temperaturabweichung in °C
+        self._p1_bar      = 3.5   # Eintrittsdruck (absolut)
+        self._rates_active = False
 
     def reset(self):
         with self._lock:
-            self._step = 0
-            self._manual = None
+            self._step        = 0
+            self._dp_factor   = 1.0
+            self._flow_factor = 1.0
+            self._temp_offset = 0.0
+            self._p1_bar      = 3.5
+            self._rates_active = False
 
-    def set_manual(self, p1: float, dp: float, temperature: float, flow: float):
-        """Setzt manuelle Prozesswerte – überschreibt die automatische Simulation."""
-        dp = round(max(0.0, min(dp, p1)), 4)
+    def set_rate_factors(self, dp_factor: float, flow_factor: float,
+                         temp_offset: float, p1_bar: float):
+        """Setzt Steigungsfaktoren – Simulation läuft ohne Reset weiter."""
         with self._lock:
-            self._manual = {
-                "p1":   round(p1, 4),
-                "p2":   round(max(0.0, p1 - dp), 4),
-                "dp":   dp,
-                "flow": round(max(0.0, flow), 2),
-                "temp": round(temperature, 2),
-            }
+            self._dp_factor    = max(0.1, dp_factor)
+            self._flow_factor  = max(0.1, flow_factor)
+            self._temp_offset  = temp_offset
+            self._p1_bar       = max(0.0, p1_bar)
+            self._rates_active = True
 
-    def clear_manual(self):
+    def clear_rate_factors(self):
+        """Setzt alle Faktoren auf Baseline zurück."""
         with self._lock:
-            self._manual = None
+            self._dp_factor    = 1.0
+            self._flow_factor  = 1.0
+            self._temp_offset  = 0.0
+            self._p1_bar       = 3.5
+            self._rates_active = False
 
     @property
-    def manual_active(self) -> bool:
+    def rates_active(self) -> bool:
         with self._lock:
-            return self._manual is not None
+            return self._rates_active
 
     def get_readings(self) -> dict:
         """
         Gibt physikalische Simulationswerte zurück.
-        Wenn _manual gesetzt ist, werden diese Werte direkt zurückgegeben.
-        dp ist stets der Primärwert – nie aus p1-p2 zurückberechnet.
+        dp_factor skaliert die effektive Schrittweite → beschleunigt/verlangsamt Beladung.
         """
         with self._lock:
-            if self._manual is not None:
-                return dict(self._manual)
-            step = self._step
-            self._step += 1
+            step         = self._step
+            self._step  += 1
+            dp_factor    = self._dp_factor
+            flow_factor  = self._flow_factor
+            temp_offset  = self._temp_offset
+            p1           = self._p1_bar
 
-        progress = min(step / self.cycle_steps, 1.0)
+        # Effektiver Fortschritt: dp_factor > 1 → schnellere Beladung
+        eff_progress = min(step * dp_factor / self.cycle_steps, 1.0)
 
-        # dp: S-Kurve, streng monoton steigend 0 → 1.0
-        dp = self.dp_clean + (self.dp_limit - self.dp_clean) * progress ** 1.5
+        dp = self.dp_clean + (self.dp_limit - self.dp_clean) * eff_progress ** 1.5
         dp = round(max(self.dp_clean, min(dp, self.dp_limit)), 4)
 
-        p1 = 3.5
         p2 = round(max(0.0, p1 - dp), 4)
 
         dp_fraction = (dp - self.dp_clean) / max(self.dp_limit - self.dp_clean, 1e-9)
         dp_fraction = max(0.0, min(1.0, dp_fraction))
-        flow = round(self.flow_max * 0.53 * (1.0 - 0.50 * dp_fraction), 2)
+        flow = round(self.flow_max * 0.53 * flow_factor * (1.0 - 0.50 * dp_fraction), 2)
 
-        temp = round(20.0 + progress * 15.0, 2)
+        # Basistemperaturtrend + Abweichung
+        temp = round(20.0 + eff_progress * 15.0 + temp_offset, 2)
 
         return {"p1": p1, "p2": p2, "dp": dp, "flow": flow, "temp": temp}
 
@@ -244,19 +257,20 @@ def update_simulation_params(dp_clean: float, dp_limit: float, flow_max: float,
         _simulator._step = 0
 
 
-def set_simulation_manual(p1: float, dp: float, temperature: float, flow: float):
-    """Aktiviert manuelle Prozesswerte (überschreibt automatische Simulation)."""
-    _simulator.set_manual(p1, dp, temperature, flow)
+def set_simulation_rates(dp_factor: float, flow_factor: float,
+                         temp_offset: float, p1_bar: float):
+    """Aktiviert modifizierte Beladungsraten für Demo-Vergleich."""
+    _simulator.set_rate_factors(dp_factor, flow_factor, temp_offset, p1_bar)
 
 
-def clear_simulation_manual():
-    """Deaktiviert die manuelle Prozesssteuerung."""
-    _simulator.clear_manual()
+def clear_simulation_rates():
+    """Setzt alle Steigungsfaktoren auf Baseline zurück."""
+    _simulator.clear_rate_factors()
 
 
-def get_simulation_manual_active() -> bool:
-    """Gibt zurück ob die manuelle Prozesssteuerung aktiv ist."""
-    return _simulator.manual_active
+def get_simulation_rates_active() -> bool:
+    """Gibt zurück ob modifizierte Raten aktiv sind."""
+    return _simulator.rates_active
 
 
 def get_simulation_cycle_steps() -> int:

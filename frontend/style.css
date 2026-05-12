@@ -923,6 +923,69 @@ footer {
 .btn-accent:hover { background: #1a5db8; }
 .btn-accent:disabled { background: #9ab5d8; cursor: not-allowed; }
 
+/* Slider-Beschriftung für Einheit */
+.sim-slider-note {
+  display: block;
+  font-size: .75rem;
+  color: #888;
+  font-weight: 400;
+}
+
+/* ===== VERGLEICHSANZEIGE ===== */
+.sim-comparison {
+  margin-top: 1.25rem;
+  border-top: 1px solid #c5d9f0;
+  padding-top: 1rem;
+}
+
+.sim-cmp-title {
+  font-weight: 600;
+  font-size: .88rem;
+  color: var(--heta-blue);
+  margin-bottom: .6rem;
+}
+
+.sim-cmp-grid {
+  display: grid;
+  grid-template-columns: 110px 1fr 1fr 80px;
+  gap: .3rem .5rem;
+  font-size: .82rem;
+  margin-bottom: .75rem;
+  align-items: center;
+}
+
+.sim-cmp-head {
+  font-weight: 600;
+  color: #666;
+  border-bottom: 1px solid #dde8f5;
+  padding-bottom: .2rem;
+}
+
+.sim-cmp-label { color: #444; }
+.sim-cmp-val   { color: #222; }
+
+.sim-cmp-dev {
+  font-weight: 700;
+  text-align: right;
+  border-radius: 4px;
+  padding: .1rem .35rem;
+  white-space: nowrap;
+}
+
+.sim-cmp-dev.dev-ok   { background: #d4edda; color: #155724; }
+.sim-cmp-dev.dev-warn { background: #fff3cd; color: #7d4e00; }
+.sim-cmp-dev.dev-crit { background: #f8d7da; color: #721c24; }
+
+.sim-diagnosis {
+  background: #eaf4ff;
+  border-left: 3px solid var(--heta-blue);
+  border-radius: 0 6px 6px 0;
+  padding: .6rem .8rem;
+  font-size: .85rem;
+  color: #2a4b70;
+  line-height: 1.5;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
   .cards-grid { grid-template-columns: 1fr 1fr; }
@@ -934,4 +997,8 @@ footer {
   .modal  { max-height: 95vh; }
   .sim-slider-row { grid-template-columns: 1fr; }
   .sim-slider-val { text-align: left; }
+  .sim-cmp-grid { grid-template-columns: 1fr 1fr; }
+  .sim-cmp-head:nth-child(n+3),
+  .sim-cmp-val:nth-child(3n),
+  .sim-cmp-dev { display: none; }
 }

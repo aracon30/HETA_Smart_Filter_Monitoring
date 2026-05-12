@@ -234,15 +234,9 @@ async function loadSettingsIntoForm() {
     }
     setText("dp-limit-hint", `Limit: ${Number(s.dp_limit_bar).toFixed(2)} bar`);
     updateChartDpLimit(s.dp_limit_bar ?? 2.5);
-    // Slider-Grenzen synchronisieren
-    const slDp = document.getElementById("sl-dp");
-    if (slDp) slDp.max = s.dp_limit_bar ?? 2.5;
+    // p1-Regler-Maximum synchronisieren
     const slP1 = document.getElementById("sl-p1");
     if (slP1) slP1.max = s.pressure_range_bar ?? 10;
-    const slFlow = document.getElementById("sl-flow");
-    if (slFlow) slFlow.max = s.flow_max_l_min ?? 150;
-    const slTemp = document.getElementById("sl-temp");
-    if (slTemp) { slTemp.min = s.temperature_min_c ?? -50; slTemp.max = s.temperature_max_c ?? 150; }
   } catch (e) { console.warn("Einstellungen konnten nicht geladen werden.", e); }
 }
 
@@ -932,7 +926,7 @@ async function recheckSensors() {
 // ============================================================
 
 let _sliderDebounce = null;
-let _sliderValues   = { p1: 3.5, dp: 0.2, flow: 79, temp: 20.0 };
+let _rateValues = { dp_factor: 1.0, flow_factor: 1.0, temp_offset: 0.0, p1_bar: 3.5 };
 
 function updateSimDemoPanel(d) {
   const panel = document.getElementById("sim-demo-panel");
@@ -946,15 +940,13 @@ function updateSimDemoPanel(d) {
   const learnArea    = document.getElementById("sim-learn-area");
   const manualArea   = document.getElementById("sim-manual-area");
 
-  // Lernbereich
-  const needed   = (d.required_cycles ?? 3) - Math.min(d.learned_cycles ?? 0, d.required_cycles ?? 3);
+  const needed   = Math.max(0, (d.required_cycles ?? 3) - (d.learned_cycles ?? 0));
   const totalReq = d.required_cycles ?? 3;
   setText("sim-learn-needed", needed > 0 ? needed : totalReq);
 
-  // Zyklen-Punkte
   const dotsEl = document.getElementById("sim-learn-dots");
   if (dotsEl) {
-    const done  = Math.min(d.learned_cycles ?? 0, totalReq);
+    const done = Math.min(d.learned_cycles ?? 0, totalReq);
     dotsEl.innerHTML = Array.from({length: totalReq}, (_, i) =>
       `<span class="sim-dot ${i < done ? "done" : ""}"></span>`
     ).join("");
@@ -966,13 +958,91 @@ function updateSimDemoPanel(d) {
   if (profileValid) {
     if (learnArea)  learnArea.classList.add("hidden");
     if (manualArea) manualArea.classList.remove("hidden");
-    // Sync manual-toggle checkbox state
     const toggle = document.getElementById("sim-manual-toggle");
-    if (toggle && !toggle.dataset.userSet) toggle.checked = !!d.sim_manual_active;
+    if (toggle && !toggle.dataset.userSet) toggle.checked = !!d.sim_rates_active;
+    updateComparison(d);
   } else {
     if (learnArea)  learnArea.classList.remove("hidden");
     if (manualArea) manualArea.classList.add("hidden");
   }
+}
+
+function updateComparison(d) {
+  const cmpEl = document.getElementById("sim-comparison");
+  if (!cmpEl) return;
+
+  const active = !!d.sim_rates_active;
+  cmpEl.classList.toggle("hidden", !active);
+  if (!active) return;
+
+  const s = window._settings || {};
+  const dp_clean  = s.dp_clean_bar            ?? 0.2;
+  const dp_limit  = s.dp_limit_bar            ?? 2.5;
+  const samp      = parseFloat(s.sampling_interval_seconds ?? 1);
+  const cyc_steps = s.cycle_steps             ?? 300;
+  const ref_rate  = (dp_limit - dp_clean) / Math.max(samp * cyc_steps, 1);
+  const ref_flow  = (s.flow_max_l_min ?? 150) * 0.53;
+  const ref_temp  = 27.5;
+
+  const dp_factor   = d.sim_dp_factor    ?? 1.0;
+  const flow_factor = d.sim_flow_factor  ?? 1.0;
+  const temp_offset = d.sim_temp_offset  ?? 0.0;
+  const dp_dev      = d.sim_dp_deviation_pct   ?? 0.0;
+  const flow_dev    = d.sim_flow_deviation_pct ?? 0.0;
+  const temp_dev    = d.sim_temp_deviation     ?? 0.0;
+
+  setText("cmp-dp-ref",   `${(ref_rate * 1000).toFixed(2)} mbar/s`);
+  setText("cmp-dp-cur",   `${(ref_rate * dp_factor * 1000).toFixed(2)} mbar/s`);
+  setDev("cmp-dp-dev",    dp_dev,   "%");
+
+  setText("cmp-flow-ref", `${ref_flow.toFixed(0)} l/min`);
+  setText("cmp-flow-cur", `${(ref_flow * flow_factor).toFixed(0)} l/min`);
+  setDev("cmp-flow-dev",  flow_dev, "%");
+
+  setText("cmp-temp-ref", `${ref_temp.toFixed(1)} °C`);
+  setText("cmp-temp-cur", `${(ref_temp + temp_offset).toFixed(1)} °C`);
+  setDev("cmp-temp-dev",  temp_dev, "°C", true);
+
+  setText("sim-diagnosis", buildDiagnosis(dp_factor, flow_factor, temp_offset));
+}
+
+function setDev(id, val, unit, isAbsolute = false) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const sign = val > 0 ? "+" : "";
+  el.textContent = `${sign}${val.toFixed(isAbsolute ? 1 : 0)} ${unit}`;
+  el.className = "sim-cmp-dev " + (
+    Math.abs(val) < (isAbsolute ? 5 : 10)  ? "dev-ok"  :
+    Math.abs(val) < (isAbsolute ? 15 : 30) ? "dev-warn" : "dev-crit"
+  );
+}
+
+function buildDiagnosis(dpF, flowF, tempOff) {
+  const hints = [];
+  if (dpF > 1.5 && flowF < 0.8) {
+    hints.push("💡 Schnelle Beladung + reduzierter Durchfluss → Verdacht auf Filterverstopfung oder erhöhten Verschmutzungseintrag.");
+  } else if (dpF > 1.5) {
+    hints.push("💡 Δp steigt deutlich schneller als gelernt → erhöhte Partikelkonzentration im Medium oder beschädigtes Filterelement möglich.");
+  } else if (dpF < 0.6) {
+    hints.push("💡 Sehr langsame Beladung → Prozess läuft mit deutlich reduzierter Last. Filterwechselintervall verlängert sich.");
+  }
+  if (flowF < 0.7) {
+    hints.push("💡 Durchfluss stark reduziert → mögliche Ursache: Pumpenproblem, Leckage im Bypass oder Vorverstopfung.");
+  } else if (flowF > 1.2) {
+    hints.push("💡 Erhöhter Durchfluss → kürzere Filterstandzeit zu erwarten, Filterwechselintervall verkürzt sich.");
+  }
+  if (tempOff > 20) {
+    hints.push("💡 Deutlich erhöhte Prozesstemperatur → Filterkapazität kann reduziert sein, Materialbeständigkeit prüfen.");
+  } else if (tempOff < -15) {
+    hints.push("💡 Deutlich niedrigere Temperatur → Viskositätsänderung kann den Differenzdruck beeinflussen.");
+  }
+  if (hints.length === 0) {
+    if (Math.abs(dpF - 1.0) < 0.1 && Math.abs(flowF - 1.0) < 0.1 && Math.abs(tempOff) < 5) {
+      return "✔ Alle Parameter im gelernten Normalbereich – kein Handlungsbedarf.";
+    }
+    hints.push("💡 Leichte Abweichungen vom gelernten Profil – Prozess und Filter im Auge behalten.");
+  }
+  return hints.join(" ");
 }
 
 async function quickLearn() {
@@ -991,71 +1061,30 @@ async function quickLearn() {
   }
   if (res.success) {
     showMsg("sim-learn-msg", res.message, false);
-    // Panel wechselt beim nächsten Poll-Zyklus in den Manual-Bereich
   } else {
     showMsg("sim-learn-msg", res.message, true);
     btn.disabled = false;
   }
 }
 
-// Regler-Logik mit gegenseitiger Synchronisation dp ↔ Beladung%
 function onSliderInput(which, rawVal) {
-  const s     = window._settings || {};
-  const dp_clean = s.dp_clean_bar ?? 0.2;
-  const dp_limit = s.dp_limit_bar ?? 2.5;
-
-  const p1Slider      = document.getElementById("sl-p1");
-  const dpSlider      = document.getElementById("sl-dp");
-  const loadSlider    = document.getElementById("sl-loading");
-
-  const p1    = parseFloat(p1Slider.value);
-  let   dp    = parseFloat(dpSlider.value);
-  let   load  = parseFloat(loadSlider.value);
-
+  const v = parseFloat(rawVal);
   if (which === "p1") {
-    // p1 geändert → dp cap an p1
-    const newP1 = parseFloat(rawVal);
-    if (dp > newP1) { dp = newP1; dpSlider.value = dp; }
-    // Beladung aus dp ableiten
-    load = dpToLoading(dp, dp_clean, dp_limit);
-    loadSlider.value = load;
-  } else if (which === "dp") {
-    dp   = parseFloat(rawVal);
-    load = dpToLoading(dp, dp_clean, dp_limit);
-    loadSlider.value = load;
-  } else if (which === "loading") {
-    load = parseFloat(rawVal);
-    dp   = loadingToDp(load, dp_clean, dp_limit);
-    // dp darf p1 nicht überschreiten
-    dp = Math.min(dp, p1);
-    dpSlider.value = dp;
+    _rateValues.p1_bar = v;
+    setText("sv-p1", v.toFixed(1) + " bar");
+  } else if (which === "dp_rate") {
+    _rateValues.dp_factor = v / 100.0;
+    setText("sv-dp-rate", Math.round(v) + " %");
+  } else if (which === "flow_rate") {
+    _rateValues.flow_factor = v / 100.0;
+    setText("sv-flow-rate", Math.round(v) + " %");
+  } else if (which === "temp_off") {
+    _rateValues.temp_offset = v;
+    const sign = v > 0 ? "+" : "";
+    setText("sv-temp-off", sign + v.toFixed(0) + " °C");
   }
-
-  _sliderValues = {
-    p1:   parseFloat(p1Slider.value),
-    dp:   dp,
-    flow: parseFloat(document.getElementById("sl-flow").value),
-    temp: parseFloat(document.getElementById("sl-temp").value),
-  };
-
-  setText("sv-p1",      parseFloat(p1Slider.value).toFixed(1)   + " bar");
-  setText("sv-dp",      dp.toFixed(2)                            + " bar");
-  setText("sv-loading", Math.round(load)                         + " %");
-  setText("sv-flow",    _sliderValues.flow.toFixed(0)            + " l/min");
-  setText("sv-temp",    _sliderValues.temp.toFixed(1)            + " °C");
-
   const toggle = document.getElementById("sim-manual-toggle");
   if (toggle && toggle.checked) scheduleSendValues();
-}
-
-function dpToLoading(dp, dp_clean, dp_limit) {
-  const range = dp_limit - dp_clean;
-  if (range <= 0) return 0;
-  return Math.round(Math.max(0, Math.min(100, ((dp - dp_clean) / range) * 100)));
-}
-
-function loadingToDp(pct, dp_clean, dp_limit) {
-  return parseFloat((dp_clean + (dp_limit - dp_clean) * (pct / 100)).toFixed(3));
 }
 
 function scheduleSendValues() {
@@ -1064,12 +1093,12 @@ function scheduleSendValues() {
 }
 
 async function sendSliderValues() {
-  await apiFetch("/api/simulation/set-values", "POST", {
+  await apiFetch("/api/simulation/set-rates", "POST", {
     active:      true,
-    p1:          _sliderValues.p1,
-    dp:          _sliderValues.dp,
-    flow:        _sliderValues.flow,
-    temperature: _sliderValues.temp,
+    dp_factor:   _rateValues.dp_factor,
+    flow_factor: _rateValues.flow_factor,
+    temp_offset: _rateValues.temp_offset,
+    p1_bar:      _rateValues.p1_bar,
   });
 }
 
@@ -1079,35 +1108,21 @@ async function onManualToggle(checkbox) {
     await sendSliderValues();
   } else {
     clearTimeout(_sliderDebounce);
-    await apiFetch("/api/simulation/set-values", "POST", { active: false });
+    await apiFetch("/api/simulation/set-rates", "POST", { active: false });
   }
+  setTimeout(() => { checkbox.dataset.userSet = ""; }, 3000);
 }
 
 function resetSliders() {
-  const s        = window._settings || {};
-  const dp_clean = s.dp_clean_bar   ?? 0.2;
-  const dp_limit = s.dp_limit_bar   ?? 2.5;
-  const flow_max = s.flow_max_l_min ?? 150.0;
-
-  const p1  = 3.5;
-  const dp  = dp_clean;
-  const pct = dpToLoading(dp, dp_clean, dp_limit);
-  const fl  = Math.round(flow_max * 0.53);
-
-  document.getElementById("sl-p1").value      = p1;
-  document.getElementById("sl-dp").value      = dp;
-  document.getElementById("sl-loading").value = pct;
-  document.getElementById("sl-flow").value    = fl;
-  document.getElementById("sl-temp").value    = 20;
-
-  setText("sv-p1",      p1.toFixed(1)    + " bar");
-  setText("sv-dp",      dp.toFixed(2)    + " bar");
-  setText("sv-loading", pct              + " %");
-  setText("sv-flow",    fl               + " l/min");
-  setText("sv-temp",    "20.0 °C");
-
-  _sliderValues = { p1, dp, flow: fl, temp: 20.0 };
-
+  _rateValues = { dp_factor: 1.0, flow_factor: 1.0, temp_offset: 0.0, p1_bar: 3.5 };
+  document.getElementById("sl-p1").value        = 3.5;
+  document.getElementById("sl-dp-rate").value   = 100;
+  document.getElementById("sl-flow-rate").value = 100;
+  document.getElementById("sl-temp-off").value  = 0;
+  setText("sv-p1",        "3.5 bar");
+  setText("sv-dp-rate",   "100 %");
+  setText("sv-flow-rate", "100 %");
+  setText("sv-temp-off",  "0 °C");
   const toggle = document.getElementById("sim-manual-toggle");
   if (toggle && toggle.checked) scheduleSendValues();
 }

@@ -455,7 +455,8 @@
       <!-- Lernphase -->
       <div id="sim-learn-area">
         <p class="sim-demo-hint">
-          Simuliert <strong id="sim-learn-needed">3</strong> Lernzyklen, damit Prognose und Beladungsgrad berechnet werden können.
+          Simuliert <strong id="sim-learn-needed">3</strong> Lernzyklen,
+          damit Prognose und Beladungsgrad berechnet werden können.
         </p>
         <div class="sim-learn-dots" id="sim-learn-dots"></div>
         <button class="btn btn-accent" id="btn-quick-learn" onclick="quickLearn()">
@@ -464,53 +465,97 @@
         <div id="sim-learn-msg" class="msg"></div>
       </div>
 
-      <!-- Manuelle Prozesswerte (nach Lernphase) -->
+      <!-- Raten-Steuerung (nach Lernphase) -->
       <div id="sim-manual-area" class="hidden">
         <div class="sim-manual-header">
-          <span>Manuelle Prozesswerte</span>
+          <span>Prozessabweichungen simulieren</span>
           <label class="toggle-wrap">
             <input type="checkbox" id="sim-manual-toggle" onchange="onManualToggle(this)">
-            <span class="toggle-label">Aktiv</span>
+            <span class="toggle-label">Vergleich aktiv</span>
           </label>
         </div>
         <p class="sim-demo-hint">
-          Regler zur Darstellung von Prozessabweichungen. Beladungsgrad und Reststandzeit reagieren in Echtzeit.
+          Die Regler ändern den <strong>Verlauf über die Zeit</strong> –
+          nicht den Momentanwert. Die Simulation läuft weiter und zeigt,
+          wie sich Reststandzeit, Beladungsgrad und Servicehinweis verändern.
         </p>
 
         <div class="sim-sliders" id="sim-sliders">
+
           <div class="sim-slider-row">
-            <label class="sim-slider-label">Eintrittsdruck p1</label>
-            <input type="range" id="sl-p1" class="sim-slider" min="0" max="10" step="0.1" value="3.5"
+            <label class="sim-slider-label">
+              Eintrittsdruck p1
+              <span class="sim-slider-note">absolut</span>
+            </label>
+            <input type="range" id="sl-p1" class="sim-slider"
+                   min="0.5" max="10" step="0.1" value="3.5"
                    oninput="onSliderInput('p1', this.value)">
             <span class="sim-slider-val" id="sv-p1">3.5 bar</span>
           </div>
+
           <div class="sim-slider-row">
-            <label class="sim-slider-label">Beladungsgrad %</label>
-            <input type="range" id="sl-loading" class="sim-slider" min="0" max="100" step="1" value="10"
-                   oninput="onSliderInput('loading', this.value)">
-            <span class="sim-slider-val" id="sv-loading">10 %</span>
+            <label class="sim-slider-label">
+              &#916;p-Beladungsrate
+              <span class="sim-slider-note">% der gelernten Rate</span>
+            </label>
+            <input type="range" id="sl-dp-rate" class="sim-slider"
+                   min="30" max="300" step="5" value="100"
+                   oninput="onSliderInput('dp_rate', this.value)">
+            <span class="sim-slider-val" id="sv-dp-rate">100 %</span>
           </div>
+
           <div class="sim-slider-row">
-            <label class="sim-slider-label">Differenzdruck Δp</label>
-            <input type="range" id="sl-dp" class="sim-slider" min="0" max="5" step="0.01" value="0.2"
-                   oninput="onSliderInput('dp', this.value)">
-            <span class="sim-slider-val" id="sv-dp">0.20 bar</span>
+            <label class="sim-slider-label">
+              Durchfluss Q
+              <span class="sim-slider-note">% des Solldurchflusses</span>
+            </label>
+            <input type="range" id="sl-flow-rate" class="sim-slider"
+                   min="30" max="150" step="5" value="100"
+                   oninput="onSliderInput('flow_rate', this.value)">
+            <span class="sim-slider-val" id="sv-flow-rate">100 %</span>
           </div>
+
           <div class="sim-slider-row">
-            <label class="sim-slider-label">Durchfluss Q</label>
-            <input type="range" id="sl-flow" class="sim-slider" min="0" max="150" step="1" value="79"
-                   oninput="onSliderInput('flow', this.value)">
-            <span class="sim-slider-val" id="sv-flow">79 l/min</span>
+            <label class="sim-slider-label">
+              Temperaturabweichung
+              <span class="sim-slider-note">&#916;&#176;C zum gelernten Mittel</span>
+            </label>
+            <input type="range" id="sl-temp-off" class="sim-slider"
+                   min="-30" max="50" step="1" value="0"
+                   oninput="onSliderInput('temp_off', this.value)">
+            <span class="sim-slider-val" id="sv-temp-off">0 &#176;C</span>
           </div>
-          <div class="sim-slider-row">
-            <label class="sim-slider-label">Temperatur T</label>
-            <input type="range" id="sl-temp" class="sim-slider" min="-50" max="150" step="0.5" value="20"
-                   oninput="onSliderInput('temp', this.value)">
-            <span class="sim-slider-val" id="sv-temp">20.0 °C</span>
-          </div>
+
           <div class="sim-slider-actions">
-            <button class="btn btn-ghost btn-sm" onclick="resetSliders()">Zurücksetzen</button>
+            <button class="btn btn-ghost btn-sm" onclick="resetSliders()">Auf Baseline zurücksetzen</button>
           </div>
+        </div>
+
+        <!-- Vergleichsanzeige -->
+        <div id="sim-comparison" class="sim-comparison hidden">
+          <div class="sim-cmp-title">Vergleich mit gelerntem Profil</div>
+          <div class="sim-cmp-grid">
+            <div class="sim-cmp-head">Größe</div>
+            <div class="sim-cmp-head">Gelernt</div>
+            <div class="sim-cmp-head">Aktuell</div>
+            <div class="sim-cmp-head">Abweichung</div>
+
+            <div class="sim-cmp-label">&#916;p-Anstieg</div>
+            <div id="cmp-dp-ref" class="sim-cmp-val">–</div>
+            <div id="cmp-dp-cur" class="sim-cmp-val">–</div>
+            <div id="cmp-dp-dev" class="sim-cmp-dev">–</div>
+
+            <div class="sim-cmp-label">Durchfluss</div>
+            <div id="cmp-flow-ref" class="sim-cmp-val">–</div>
+            <div id="cmp-flow-cur" class="sim-cmp-val">–</div>
+            <div id="cmp-flow-dev" class="sim-cmp-dev">–</div>
+
+            <div class="sim-cmp-label">Temperatur</div>
+            <div id="cmp-temp-ref" class="sim-cmp-val">–</div>
+            <div id="cmp-temp-cur" class="sim-cmp-val">–</div>
+            <div id="cmp-temp-dev" class="sim-cmp-dev">–</div>
+          </div>
+          <div id="sim-diagnosis" class="sim-diagnosis"></div>
         </div>
       </div>
     </section>
