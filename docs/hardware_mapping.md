@@ -71,7 +71,10 @@ flow         = ((mA - 4) / 16) × flow_max
 | DC       | Data/Cmd    | **GPIO 25**       | **Pin 22**| Data=High, Cmd=Low  |
 | RES      | Reset       | **GPIO 27**       | **Pin 13**| Reset (aktiv Low)   |
 
-> **Wichtig:** DC=GPIO 25 und RES=GPIO 27 sind in `display.py` als Standardwerte hinterlegt (`_SPI_GPIO_DC = 25`, `_SPI_GPIO_RST = 27`). Bei abweichender Verkabelung die Werte im Konstruktor überschreiben.
+> **Konfigurierbar:** DC und RES sind über `config/settings.json` einstellbar:
+> `display_gpio_dc` (Standard: 25) und `display_gpio_rst` (Standard: 27).
+> SPI-Bus und CE über `display_spi_port` / `display_spi_device`.
+> Zum Deaktivieren des Displays: `display_enabled: false`.
 
 ### I2C-Anschluss (Alternative – Lötbrücke auf Modul umstellen)
 
@@ -84,6 +87,9 @@ flow         = ((mA - 4) / 16) × flow_max
 | DC       | Adresse  | GND / 3V3         | –         | Low=0x3C / High=0x3D |
 | RES      | Reset    | **GPIO 27**       | **Pin 13**| Reset (aktiv Low)|
 
+> Für I2C in `config/settings.json` setzen: `display_use_spi: false`,
+> `display_i2c_address: 60` (0x3C) bzw. `61` (0x3D).
+
 ---
 
 ## Adafruit ANO Rotary Encoder (I2C)
@@ -91,8 +97,10 @@ flow         = ((mA - 4) / 16) × flow_max
 | Parameter     | Wert                        |
 |---------------|-----------------------------|
 | Interface     | I2C                         |
-| I2C-Adresse   | 0x49 (Standard)             |
-| Bibliothek    | adafruit-circuitpython-seesaw |
+| I2C-Adresse   | 0x49 / 73 dez. (konfigurierbar: `encoder_i2c_address`) |
+| Bibliothek    | adafruit-circuitpython-seesaw + adafruit-blinka |
+
+> Zum Deaktivieren des Encoders: `navigation_enabled: false` in `config/settings.json`.
 
 ### I2C-Anschluss
 
@@ -146,11 +154,12 @@ Die Architektur wird nur zu Dokumentationszwecken abgebildet.
 
 ## LAN-Anschluss
 
-| Parameter  | Wert                  |
-|------------|-----------------------|
-| Interface  | Raspberry Pi Ethernet |
-| Protokoll  | HTTP (Flask)          |
-| Port       | 8080 (konfigurierbar) |
-| Webzugriff | `http://<IP>:8080`    |
+| Parameter  | Wert                                      |
+|------------|-------------------------------------------|
+| Interface  | Raspberry Pi Ethernet                     |
+| Protokoll  | HTTP (Flask)                              |
+| Port       | 8080 (konfigurierbar: `webserver_port`)   |
+| Bind       | 0.0.0.0 (konfigurierbar: `webserver_host`)|
+| Webzugriff | `http://<IP>:8080`                        |
 
-IP-Adresse auf dem OLED-Display ablesen oder mit `hostname -I` ermitteln.
+IP-Adresse auf dem OLED-Display (Bildschirm 5 – Netzwerk) ablesen oder mit `hostname -I` ermitteln.

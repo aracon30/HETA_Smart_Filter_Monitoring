@@ -21,18 +21,19 @@ HETA_Smart_Filter_Monitoring/
 ├── frontend/
 │   ├── index.html          Single-Page Dashboard + Onboarding + Einstellungs-Modal
 │   ├── style.css           Industrielles Stylesheet (HETA-Blau)
-│   └── app.js              REST-API-Polling, Chart.js, Onboarding, Auth
+│   └── app.js              REST-API-Polling, Chart.js, Onboarding, Auth, Git-Update
 ├── config/
-│   └── settings.json       Alle Konfigurationsparameter
-├── data/                   SQLite-Datenbank (auto-erstellt)
-├── logs/                   Log-Dateien (auto-erstellt)
-├── exports/                CSV-Exporte (auto-erstellt)
+│   └── settings.json       Alle Konfigurationsparameter (Defaults für Erst-Deployment)
+├── data/                   SQLite-Datenbank (auto-erstellt, nicht im Git)
+├── logs/                   Log-Dateien (auto-erstellt, nicht im Git)
+├── exports/                CSV-Exporte (auto-erstellt, nicht im Git)
 ├── docs/
 │   ├── software_architecture.md
 │   └── hardware_mapping.md
 ├── scripts/
-│   ├── install.sh          Installationsskript
-│   └── start.sh            Manueller Start
+│   ├── install.sh          Installationsskript (systemd-Service, Abhängigkeiten)
+│   ├── start.sh            Manueller Start ohne systemd
+│   └── deploy.sh           SSH-Deploy-Skript für Entwickler-Rechner
 └── requirements.txt
 ```
 
@@ -373,6 +374,27 @@ Gültige Werte: `ROTATE_LEFT`, `ROTATE_RIGHT`, `PRESS`, `LEFT`, `RIGHT`, `UP`, `
 { "screen": "Status", "screen_index": 0, "confirm_armed": false }
 ```
 
+### Software-Update
+
+| Methode | Endpunkt | Beschreibung |
+|---------|----------|-------------|
+| POST | `/api/update/pull` | `git pull --ff-only` ausführen und bei Änderung neu starten |
+
+Erfordert `X-Auth-Token` Header.
+
+`POST /api/update/pull` Antwort:
+```json
+{
+  "success": true,
+  "changed": true,
+  "restarting": true,
+  "output": "From github.com:aracon30/...\nUpdating abc1234..def5678\nFast-forward\n ..."
+}
+```
+
+Bei `"restarting": true` startet der systemd-Service `heta-monitor` automatisch neu
+(Fallback: `os.execv()`). Das Dashboard lädt die Seite nach ~8 Sekunden selbst neu.
+
 ### Onboarding
 
 | Methode | Endpunkt | Beschreibung |
@@ -436,28 +458,71 @@ Umschaltung über Onboarding, Einstellungsbereich (⚙) oder `POST /api/settings
 
 ## Konfigurationsparameter (`config/settings.json`)
 
+**Allgemein**
+
 | Parameter | Standard | Beschreibung |
 |-----------|---------|-------------|
 | `onboarding_complete` | `false` | Ersteinrichtung abgeschlossen |
 | `settings_password_hash` | `""` | SHA-256-Hash des Einstellungspassworts |
 | `session_timeout_minutes` | `30` | Timeout der Einstellungs-Session |
 | `simulation_mode` | `true` | Simulationsmodus aktiv |
+| `sampling_interval_seconds` | `1` | Messintervall in Sekunden |
+| `log_level` | `"INFO"` | Log-Level (`DEBUG`, `INFO`, `WARNING`, `ERROR`) |
+| `webserver_port` | `8080` | HTTP-Port der Weboberfläche |
+| `webserver_host` | `"0.0.0.0"` | Bind-Adresse des Webservers |
+| `db_path` | `"data/heta_monitor.db"` | Datenbankpfad |
+| `log_path` | `"logs/"` | Log-Verzeichnis |
+| `export_path` | `"exports/"` | CSV-Export-Verzeichnis |
+
+**Filterparameter**
+
+| Parameter | Standard | Beschreibung |
+|-----------|---------|-------------|
 | `dp_limit_bar` | `2.5` | Differenzdruck-Grenzwert für Filterwechsel ⚠ |
 | `dp_clean_bar` | `0.2` | Differenzdruck eines sauberen Filters ⚠ |
 | `pressure_range_bar` | `10` | Messbereich Drucksensoren (20 mA-Endwert) ⚠ |
 | `temperature_min_c` | `-50` | Messbereich Temperatursensor Minimum |
 | `temperature_max_c` | `150` | Messbereich Temperatursensor Maximum |
 | `flow_max_l_min` | `150` | Maximaler Durchfluss (20 mA-Endwert) ⚠ |
-| `sampling_interval_seconds` | `1` | Messintervall in Sekunden |
+
+**Lern- und Prognosealgorithmus**
+
+| Parameter | Standard | Beschreibung |
+|-----------|---------|-------------|
 | `required_cycles_for_profile` | `3` | Anzahl Zyklen für valides Profil |
 | `clean_resistance_tolerance` | `0.25` | Toleranz Startverhalten-Prüfung (25 %) |
+| `anomaly_threshold_percent` | `25` | Anomalie-Schwelle für WARNUNG-Status (%) |
 | `smoothing_factor` | `0.15` | Glättungsfaktor Reststandzeit |
-| `max_increase_percent_per_update` | `2` | Max. Anstieg Reststandzeit pro Update |
-| `max_decrease_percent_per_update` | `8` | Max. Abfall Reststandzeit pro Update |
+| `max_increase_percent_per_update` | `2` | Max. Anstieg Reststandzeit pro Update (%) |
+| `max_decrease_percent_per_update` | `8` | Max. Abfall Reststandzeit pro Update (%) |
+| `min_slope` | `0.001` | Minimale Beladungsrate (verhindert Division durch 0) |
+
+**MQTT** (optional)
+
+| Parameter | Standard | Beschreibung |
+|-----------|---------|-------------|
 | `mqtt_enabled` | `false` | MQTT-Client aktivieren |
-| `webserver_port` | `8080` | HTTP-Port der Weboberfläche |
-| `db_path` | `data/heta_monitor.db` | Datenbankpfad |
-| `log_path` | `logs/` | Log-Verzeichnis |
-| `export_path` | `exports/` | CSV-Export-Verzeichnis |
+| `mqtt_broker` | `"localhost"` | Hostname oder IP des MQTT-Brokers |
+| `mqtt_port` | `1883` | Port des MQTT-Brokers |
+| `mqtt_client_id` | `"heta_monitor"` | MQTT Client-ID |
+
+**OLED-Display** (Waveshare 2.42" SSD1309)
+
+| Parameter | Standard | Beschreibung |
+|-----------|---------|-------------|
+| `display_enabled` | `true` | Display-Initialisierung aktivieren |
+| `display_use_spi` | `true` | `true` = SPI, `false` = I2C |
+| `display_spi_port` | `0` | SPI-Bus-Nummer |
+| `display_spi_device` | `0` | SPI CE-Nummer (CE0 = 0) |
+| `display_gpio_dc` | `25` | GPIO-Nummer Data/Command-Pin |
+| `display_gpio_rst` | `27` | GPIO-Nummer Reset-Pin |
+| `display_i2c_address` | `60` | I2C-Adresse in Dezimal (0x3C = 60, 0x3D = 61) |
+
+**ANO-Rotary-Encoder** (Adafruit Seesaw)
+
+| Parameter | Standard | Beschreibung |
+|-----------|---------|-------------|
+| `navigation_enabled` | `true` | Encoder-Initialisierung aktivieren |
+| `encoder_i2c_address` | `73` | I2C-Adresse in Dezimal (0x49 = 73) |
 
 ⚠ = Lernrelevanter Parameter: Änderung löscht alle Zyklen und Profile.
