@@ -748,6 +748,53 @@ function clearCharts() {
   combinedChart.update("none");
 }
 
+// ---------------------------------------------------------------------------
+// Hardware-Diagnose
+// ---------------------------------------------------------------------------
+
+async function runDiagnostics() {
+  const btn = document.getElementById("btn-diag");
+  const results = document.getElementById("diag-results");
+  btn.disabled = true;
+  btn.textContent = "⟳ Selbstcheck läuft…";
+  results.className = "diag-results";
+  results.innerHTML = '<div class="diag-running">Komponenten werden geprüft…</div>';
+
+  const data = await apiFetch("/api/diagnostics");
+
+  btn.disabled = false;
+  btn.textContent = "🔍 Selbstcheck starten";
+
+  if (!data) {
+    results.innerHTML = '<div class="diag-check diag-error"><span class="diag-icon">✗</span><div><strong>Verbindungsfehler</strong><span>API nicht erreichbar.</span></div></div>';
+    return;
+  }
+
+  const overallClass = { ok: "diag-overall-ok", warning: "diag-overall-warn", error: "diag-overall-err" }[data.overall] ?? "diag-overall-err";
+  const overallLabel = { ok: "Alle Komponenten OK", warning: "Warnungen vorhanden", error: "Fehler gefunden" }[data.overall] ?? "Unbekannt";
+
+  let html = `<div class="diag-overall ${overallClass}">${overallLabel}</div>`;
+
+  for (const c of data.checks) {
+    const iconMap = { ok: "✓", warning: "⚠", error: "✗", info: "ℹ" };
+    const icon = iconMap[c.status] ?? "?";
+    const hintsHtml = c.hints.length
+      ? `<ul class="diag-hints">${c.hints.map(h => `<li>${h}</li>`).join("")}</ul>`
+      : "";
+    html += `
+      <div class="diag-check diag-${c.status}">
+        <span class="diag-icon">${icon}</span>
+        <div class="diag-body">
+          <strong>${c.label}</strong>
+          <span class="diag-detail">${c.detail}</span>
+          ${hintsHtml}
+        </div>
+      </div>`;
+  }
+
+  results.innerHTML = html;
+}
+
 async function apiFetch(path, method = "GET", body = null) {
   try {
     const opts = { method, headers: { "Content-Type": "application/json" } };

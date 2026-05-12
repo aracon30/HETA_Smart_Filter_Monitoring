@@ -547,6 +547,78 @@ footer {
 
 .update-output.hidden { display: none; }
 
+/* ===== HARDWARE-DIAGNOSE ===== */
+.diag-section .settings-hint {
+  font-size: .85rem;
+  color: var(--text-muted);
+  margin: .25rem 0 .75rem;
+}
+.diag-results {
+  margin-top: .9rem;
+  display: flex;
+  flex-direction: column;
+  gap: .45rem;
+}
+.diag-running {
+  color: var(--text-muted);
+  font-size: .88rem;
+  padding: .4rem 0;
+}
+.diag-overall {
+  font-weight: 700;
+  font-size: .88rem;
+  padding: .45rem .85rem;
+  border-radius: 6px;
+  margin-bottom: .2rem;
+}
+.diag-overall-ok   { background: #d4edda; color: #155724; }
+.diag-overall-warn { background: #fff3cd; color: #7d4e00; }
+.diag-overall-err  { background: #f8d7da; color: #721c24; }
+
+.diag-check {
+  display: flex;
+  align-items: flex-start;
+  gap: .65rem;
+  padding: .55rem .75rem;
+  border-radius: 7px;
+  border-left: 4px solid transparent;
+  background: #f8fafc;
+  font-size: .85rem;
+}
+.diag-ok      { border-color: var(--ok-green);    background: #f0faf3; }
+.diag-warning { border-color: var(--warn-yellow);  background: #fffbef; }
+.diag-error   { border-color: var(--alert-red);    background: #fdf3f3; }
+.diag-info    { border-color: var(--heta-accent);  background: #f0f6ff; }
+
+.diag-icon {
+  font-size: 1rem;
+  font-weight: 800;
+  min-width: 18px;
+  margin-top: .05rem;
+}
+.diag-ok    .diag-icon { color: var(--ok-green); }
+.diag-warning .diag-icon { color: var(--warn-yellow); }
+.diag-error .diag-icon { color: var(--alert-red); }
+.diag-info  .diag-icon { color: var(--heta-accent); }
+
+.diag-body {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  flex: 1;
+}
+.diag-body strong { color: var(--text-main); font-size: .85rem; }
+.diag-detail { color: var(--text-muted); font-size: .82rem; }
+
+.diag-hints {
+  margin: .35rem 0 0 .8rem;
+  padding: 0;
+  color: var(--text-muted);
+  font-size: .78rem;
+  line-height: 1.6;
+}
+.diag-hints li { margin-bottom: .1rem; }
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
   .cards-grid { grid-template-columns: 1fr 1fr; }

@@ -258,6 +258,18 @@
           <strong>&#9888; Achtung:</strong> Sie haben lernrelevante Parameter (dp_limit, dp_clean, Durchfluss oder Druckbereich) geändert. Das System wird die <strong>3 Lernphasen neu durchlaufen</strong>, um eine saubere Datenlage zu gewährleisten. Alle bisherigen Lernzyklen und Profile werden gelöscht.
         </div>
 
+        <!-- ── Hardware-Diagnose ── -->
+        <div class="settings-section diag-section">
+          <h3>Hardware-Diagnose</h3>
+          <p class="settings-hint">
+            Prüft alle angeschlossenen Komponenten und zeigt Fehlerursachen mit Lösungshinweisen.
+          </p>
+          <button class="btn btn-secondary" id="btn-diag" onclick="runDiagnostics()">
+            &#128270; Selbstcheck starten
+          </button>
+          <div id="diag-results" class="diag-results hidden"></div>
+        </div>
+
         <!-- ── Software-Update ── -->
         <div class="settings-section update-section">
           <h3>Software-Update</h3>

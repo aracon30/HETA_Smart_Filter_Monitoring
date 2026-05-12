@@ -124,6 +124,22 @@ def _get_local_ip() -> str:
         return "127.0.0.1"
 
 
+def _parse_i2cdetect(output: str) -> list:
+    """Parst die Ausgabe von 'i2cdetect -y 1' und gibt gefundene Adressen als int-Liste zurück."""
+    addresses = []
+    for line in output.splitlines():
+        parts = line.split()
+        if not parts or ":" not in parts[0]:
+            continue
+        for p in parts[1:]:
+            if p not in ("--", "UU"):
+                try:
+                    addresses.append(int(p, 16))
+                except ValueError:
+                    pass
+    return addresses
+
+
 # ---------------------------------------------------------------------------
 # Systemzustand
 # ---------------------------------------------------------------------------
@@ -689,6 +705,305 @@ def _do_confirm_filter_change():
     db.insert_service_event("FILTERWECHSEL_BESTAETIGT", heta_code,
                             json.dumps({"timestamp": time.time()}))
     logger.info("Filterwechsel bestätigt. Neuer Zyklus beginnt.")
+
+
+@app.route("/api/diagnostics", methods=["GET"])
+def api_diagnostics():
+    """Selbstcheck aller Hardware-Komponenten. Öffentlich (kein Auth erforderlich)."""
+    import platform
+
+    checks = []
+
+    # ── System ──────────────────────────────────────────────────────────────
+    checks.append({
+        "id": "system",
+        "label": "System",
+        "status": "ok",
+        "detail": f"Python {sys.version.split()[0]}  ·  {platform.machine()}  ·  {platform.system()} {platform.release()}",
+        "hints": [],
+    })
+
+    # ── Git-Version ──────────────────────────────────────────────────────────
+    try:
+        gres = subprocess.run(
+            ["git", "log", "--oneline", "-1"],
+            capture_output=True, text=True, timeout=5, cwd=_BASE_DIR,
+        )
+        git_info = gres.stdout.strip() if gres.returncode == 0 else "unbekannt"
+    except Exception:
+        git_info = "git nicht verfügbar"
+    checks.append({
+        "id": "git",
+        "label": "Software-Version (Git)",
+        "status": "ok",
+        "detail": git_info,
+        "hints": [],
+    })
+
+    # ── SPI-Bus ──────────────────────────────────────────────────────────────
+    spi_port   = settings.get("display_spi_port", 0)
+    spi_device = settings.get("display_spi_device", 0)
+    spi_dev    = f"/dev/spidev{spi_port}.{spi_device}"
+    spi_exists = os.path.exists(spi_dev)
+    checks.append({
+        "id": "spi",
+        "label": f"SPI-Bus ({spi_dev})",
+        "status": "ok" if spi_exists else "error",
+        "detail": f"{spi_dev} {'gefunden' if spi_exists else 'nicht gefunden'}",
+        "hints": [] if spi_exists else [
+            "SPI aktivieren: sudo raspi-config → Interface Options → SPI",
+            "Danach Neustart erforderlich: sudo reboot",
+            f"Prüfen mit: ls /dev/spidev*",
+        ],
+    })
+
+    # ── I2C-Bus ──────────────────────────────────────────────────────────────
+    i2c_dev    = "/dev/i2c-1"
+    i2c_exists = os.path.exists(i2c_dev)
+    checks.append({
+        "id": "i2c_bus",
+        "label": f"I2C-Bus ({i2c_dev})",
+        "status": "ok" if i2c_exists else "error",
+        "detail": f"{i2c_dev} {'gefunden' if i2c_exists else 'nicht gefunden'}",
+        "hints": [] if i2c_exists else [
+            "I2C aktivieren: sudo raspi-config → Interface Options → I2C",
+            "Danach Neustart erforderlich: sudo reboot",
+            "Prüfen mit: ls /dev/i2c*",
+        ],
+    })
+
+    # ── I2C-Scan (Encoder-Adresse 0x49) ──────────────────────────────────────
+    enc_addr     = settings.get("encoder_i2c_address", 73)
+    enc_addr_hex = f"0x{enc_addr:02x}"
+    if i2c_exists:
+        try:
+            ires = subprocess.run(
+                ["i2cdetect", "-y", "1"],
+                capture_output=True, text=True, timeout=5,
+            )
+            found_addrs = _parse_i2cdetect(ires.stdout)
+            enc_found   = enc_addr in found_addrs
+            addr_list   = ", ".join(f"0x{a:02x}" for a in sorted(found_addrs)) or "–"
+            checks.append({
+                "id": "i2c_scan",
+                "label": f"I2C-Scan (Encoder erwartet bei {enc_addr_hex})",
+                "status": "ok" if enc_found else "error",
+                "detail": (f"Encoder bei {enc_addr_hex} erkannt  ·  Alle Geräte: {addr_list}"
+                           if enc_found else
+                           f"Encoder NICHT gefunden  ·  Gefundene Adressen: {addr_list}"),
+                "hints": [] if enc_found else [
+                    f"Kabel prüfen: SDA→Pin 3 (GPIO2), SCL→Pin 5 (GPIO3), VCC→3,3V, GND→Pin 6",
+                    f"I2C-Adresse in settings.json: encoder_i2c_address={enc_addr} (={enc_addr_hex})",
+                    "Direkttest: sudo i2cdetect -y 1",
+                ],
+            })
+        except FileNotFoundError:
+            checks.append({
+                "id": "i2c_scan",
+                "label": f"I2C-Scan (Encoder {enc_addr_hex})",
+                "status": "warning",
+                "detail": "i2cdetect nicht installiert",
+                "hints": ["sudo apt install i2c-tools"],
+            })
+        except Exception as exc:
+            checks.append({
+                "id": "i2c_scan",
+                "label": f"I2C-Scan (Encoder {enc_addr_hex})",
+                "status": "error",
+                "detail": f"Scan fehlgeschlagen: {exc}",
+                "hints": [],
+            })
+    else:
+        checks.append({
+            "id": "i2c_scan",
+            "label": f"I2C-Scan (Encoder {enc_addr_hex})",
+            "status": "error",
+            "detail": "I2C-Bus nicht verfügbar – Scan übersprungen",
+            "hints": [],
+        })
+
+    # ── OLED-Display ─────────────────────────────────────────────────────────
+    if not settings.get("display_enabled", True):
+        checks.append({
+            "id": "display",
+            "label": "OLED-Display (SSD1309)",
+            "status": "info",
+            "detail": "Display deaktiviert (display_enabled=false in settings.json)",
+            "hints": [],
+        })
+    elif _display is None:
+        dc  = settings.get("display_gpio_dc", 25)
+        rst = settings.get("display_gpio_rst", 27)
+        checks.append({
+            "id": "display",
+            "label": "OLED-Display (SSD1309)",
+            "status": "error",
+            "detail": "Display konnte beim Start nicht initialisiert werden",
+            "hints": [
+                f"SPI-Verbindung: DC→GPIO{dc} (Pin 22), RST→GPIO{rst} (Pin 13), DIN→GPIO10, CLK→GPIO11, CS→GPIO8",
+                "SPI-Bus aktiv? (ls /dev/spidev*)",
+                "Bibliothek installiert? (pip show luma.oled)",
+                "Logs: journalctl -u heta-monitor | grep -i display",
+            ],
+        })
+    else:
+        try:
+            _display.show_network(_get_local_ip(), settings.get("webserver_port", 8080), "DIAGNOSE")
+            checks.append({
+                "id": "display",
+                "label": "OLED-Display (SSD1309)",
+                "status": "ok",
+                "detail": "Display antwortet – Testbild 'DIAGNOSE' gerendert (Bildschirm 5 aktiv)",
+                "hints": [],
+            })
+        except Exception as exc:
+            checks.append({
+                "id": "display",
+                "label": "OLED-Display (SSD1309)",
+                "status": "error",
+                "detail": f"Render-Fehler: {exc}",
+                "hints": ["Verkabelung prüfen", "sudo pip install --upgrade luma.oled"],
+            })
+
+    # ── ANO-Encoder ──────────────────────────────────────────────────────────
+    if not settings.get("navigation_enabled", True):
+        checks.append({
+            "id": "encoder",
+            "label": "ANO-Encoder (Adafruit Seesaw I2C)",
+            "status": "info",
+            "detail": "Encoder deaktiviert (navigation_enabled=false in settings.json)",
+            "hints": [],
+        })
+    elif _navigation is None:
+        checks.append({
+            "id": "encoder",
+            "label": "ANO-Encoder (Adafruit Seesaw I2C)",
+            "status": "error",
+            "detail": "Encoder konnte beim Start nicht initialisiert werden",
+            "hints": [
+                f"I2C-Adresse {enc_addr_hex} mit i2cdetect prüfen",
+                "Kabel: SDA→Pin 3, SCL→Pin 5, VCC→3,3V, GND→Pin 6",
+                "Bibliothek: pip show adafruit-circuitpython-seesaw adafruit-blinka",
+            ],
+        })
+    elif _navigation.is_simulated:
+        checks.append({
+            "id": "encoder",
+            "label": "ANO-Encoder (Adafruit Seesaw I2C)",
+            "status": "warning",
+            "detail": "Encoder läuft im Simulationsmodus – keine Hardware erkannt",
+            "hints": [
+                "Encoder anschließen (SDA/SCL/VCC/GND)",
+                f"I2C-Adresse {enc_addr_hex} mit i2cdetect -y 1 prüfen",
+            ],
+        })
+    else:
+        try:
+            pos = _navigation._seesaw.encoder_position()
+            checks.append({
+                "id": "encoder",
+                "label": "ANO-Encoder (Adafruit Seesaw I2C)",
+                "status": "ok",
+                "detail": f"Encoder antwortet – aktuelle Position: {pos}",
+                "hints": [],
+            })
+        except Exception as exc:
+            checks.append({
+                "id": "encoder",
+                "label": "ANO-Encoder (Adafruit Seesaw I2C)",
+                "status": "error",
+                "detail": f"Lesefehler: {exc}",
+                "hints": ["I2C-Verbindung und Kabel prüfen", "Encoder neu anschließen"],
+            })
+
+    # ── Sensoren / AnoPi Shield ───────────────────────────────────────────────
+    sim_mode = settings.get("simulation_mode", True)
+    if sim_mode:
+        checks.append({
+            "id": "sensors",
+            "label": "Sensoren (4–20 mA / AnoPi Shield)",
+            "status": "info",
+            "detail": "Simulationsmodus aktiv – echte Sensor-Hardware nicht geprüft",
+            "hints": ["Für Echtbetrieb: simulation_mode=false in den Einstellungen"],
+        })
+    elif not spi_exists:
+        checks.append({
+            "id": "sensors",
+            "label": "Sensoren (4–20 mA / AnoPi Shield)",
+            "status": "error",
+            "detail": f"SPI-Bus {spi_dev} nicht verfügbar – AnoPi Shield nicht erreichbar",
+            "hints": ["SPI aktivieren und neu starten"],
+        })
+    else:
+        try:
+            import spidev  # type: ignore
+            _spi = spidev.SpiDev()
+            _spi.open(0, 0)
+            _spi.max_speed_hz = 1350000
+            raw = _spi.xfer2([1, (8 + 0) << 4, 0])
+            _spi.close()
+            adc_raw = ((raw[1] & 3) << 8) + raw[2]
+            checks.append({
+                "id": "sensors",
+                "label": "Sensoren (4–20 mA / AnoPi Shield)",
+                "status": "ok",
+                "detail": f"SPI-Testlesung erfolgreich (ADC Kanal 0 Rohwert: {adc_raw} / 4095)",
+                "hints": [],
+            })
+        except ImportError:
+            checks.append({
+                "id": "sensors",
+                "label": "Sensoren (4–20 mA / AnoPi Shield)",
+                "status": "error",
+                "detail": "spidev nicht installiert",
+                "hints": ["pip install spidev"],
+            })
+        except Exception as exc:
+            checks.append({
+                "id": "sensors",
+                "label": "Sensoren (4–20 mA / AnoPi Shield)",
+                "status": "error",
+                "detail": f"SPI-Lesefehler: {exc}",
+                "hints": [
+                    "AnoPi Shield korrekt aufgesteckt?",
+                    "SPI-Gerätekonflikte prüfen (Display und Shield auf unterschiedlichen CE?)",
+                ],
+            })
+
+    # ── Datenbank ─────────────────────────────────────────────────────────────
+    try:
+        with db._conn() as _dbcon:
+            row_count = _dbcon.execute("SELECT COUNT(*) FROM measurements").fetchone()[0]
+        checks.append({
+            "id": "database",
+            "label": "Datenbank (SQLite)",
+            "status": "ok",
+            "detail": f"{row_count} Messwerte gespeichert  ·  Pfad: {db.db_path}",
+            "hints": [],
+        })
+    except Exception as exc:
+        checks.append({
+            "id": "database",
+            "label": "Datenbank (SQLite)",
+            "status": "error",
+            "detail": f"Datenbankfehler: {exc}",
+            "hints": ["data/-Verzeichnis vorhanden?", "Schreibrechte prüfen"],
+        })
+
+    # ── Gesamtstatus ──────────────────────────────────────────────────────────
+    statuses = [c["status"] for c in checks]
+    if "error" in statuses:
+        overall = "error"
+    elif "warning" in statuses:
+        overall = "warning"
+    else:
+        overall = "ok"
+
+    return jsonify({
+        "overall": overall,
+        "timestamp": time.time(),
+        "checks": checks,
+    })
 
 
 @app.route("/api/filter/confirm-change", methods=["POST"])
