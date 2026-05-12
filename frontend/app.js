@@ -9,9 +9,9 @@ const POLL_INTERVAL_MS = 1500;
 // Lernrelevante Parameter – Änderung löst Reset der Lernphasen aus
 const LEARNING_SENSITIVE = ["dp_limit_bar", "dp_clean_bar", "flow_max_l_min", "pressure_range_bar"];
 
-// Chart.js Instanzen
-const MAX_CHART_POINTS = 120;
-let charts = {};
+// Chart.js Instanz (kombiniert)
+const MAX_CHART_POINTS = 300;
+let combinedChart = null;
 
 // Session-Token für Einstellungsbereich (wird im sessionStorage gehalten)
 const TOKEN_KEY = "heta_settings_token";
@@ -226,6 +226,7 @@ async function loadSettingsIntoForm() {
     const cb = document.getElementById("s-simulation-mode");
     if (cb) cb.checked = !!s.simulation_mode;
     setText("dp-limit-hint", `Limit: ${Number(s.dp_limit_bar).toFixed(2)} bar`);
+    updateChartDpLimit(s.dp_limit_bar ?? 2.5);
   } catch (e) { console.warn("Einstellungen konnten nicht geladen werden.", e); }
 }
 
@@ -353,43 +354,222 @@ function updateDashboard(d) {
 }
 
 // ============================================================
-// Charts
+// Chart (kombiniert)
 // ============================================================
 
 function initCharts() {
-  const opts = (label, color) => ({
+  const ctx = document.getElementById("chart-combined");
+  if (!ctx) return;
+
+  const dpLimit = window._settings?.dp_limit_bar ?? 2.5;
+
+  combinedChart = new Chart(ctx, {
     type: "line",
-    data: { labels: [], datasets: [{ label, data: [], borderColor: color,
-      backgroundColor: color + "22", borderWidth: 2, pointRadius: 0, fill: true, tension: 0.3 }] },
-    options: { animation: false, responsive: true, maintainAspectRatio: true,
-      plugins: { legend: { display: false } },
-      scales: { x: { display: false }, y: { ticks: { font: { size: 10 } } } } }
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: "p1 [bar]",
+          data: [],
+          yAxisID: "yPressure",
+          borderColor: "#7bafd4",
+          backgroundColor: "transparent",
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: "p2 [bar]",
+          data: [],
+          yAxisID: "yPressure",
+          borderColor: "#a8c8e8",
+          backgroundColor: "transparent",
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: "Δp [bar]",
+          data: [],
+          yAxisID: "yPressure",
+          borderColor: "#0077cc",
+          backgroundColor: "rgba(0,119,204,0.07)",
+          borderWidth: 2,
+          pointRadius: 0,
+          tension: 0.3,
+          fill: true,
+        },
+        {
+          label: "Q [l/min]",
+          data: [],
+          yAxisID: "yFlow",
+          borderColor: "#1a9e3c",
+          backgroundColor: "transparent",
+          borderWidth: 1.5,
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: "R_eff [bar·min/l]",
+          data: [],
+          yAxisID: "yReff",
+          borderColor: "#7b1fa2",
+          backgroundColor: "transparent",
+          borderWidth: 1.5,
+          borderDash: [4, 2],
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: "Reststandzeit [min]",
+          data: [],
+          yAxisID: "yTime",
+          borderColor: "#d4820a",
+          backgroundColor: "transparent",
+          borderWidth: 1.5,
+          borderDash: [4, 2],
+          pointRadius: 0,
+          tension: 0.3,
+        },
+      ],
+    },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: "top",
+          labels: {
+            usePointStyle: true,
+            padding: 14,
+            font: { size: 11 },
+            color: "#1a1a2e",
+          },
+        },
+        tooltip: {
+          mode: "index",
+          intersect: false,
+          backgroundColor: "rgba(15, 25, 40, 0.93)",
+          titleColor: "#a8c8f0",
+          bodyColor: "#e0eaf5",
+          borderColor: "#1c3a5c",
+          borderWidth: 1,
+          padding: 10,
+          usePointStyle: true,
+          callbacks: {
+            label: (ctx) => {
+              const v = ctx.parsed.y;
+              if (v == null || isNaN(v)) return null;
+              const decimals = {
+                "p1 [bar]": 3, "p2 [bar]": 3, "Δp [bar]": 3,
+                "Q [l/min]": 1, "R_eff [bar·min/l]": 5, "Reststandzeit [min]": 1,
+              };
+              return ` ${ctx.dataset.label}: ${v.toFixed(decimals[ctx.dataset.label] ?? 2)}`;
+            },
+          },
+        },
+        zoom: {
+          pan: { enabled: true, mode: "x" },
+          zoom: {
+            wheel: { enabled: true, speed: 0.08 },
+            pinch: { enabled: true },
+            mode: "x",
+          },
+        },
+        annotation: {
+          annotations: {
+            dpLimitLine: {
+              type: "line",
+              scaleID: "yPressure",
+              value: dpLimit,
+              borderColor: "rgba(192, 57, 43, 0.65)",
+              borderWidth: 1.5,
+              borderDash: [6, 3],
+              label: {
+                display: true,
+                content: `dp-Limit (${Number(dpLimit).toFixed(2)} bar)`,
+                position: "end",
+                backgroundColor: "rgba(192, 57, 43, 0.08)",
+                color: "#c0392b",
+                font: { size: 10 },
+                padding: { x: 5, y: 2 },
+              },
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          ticks: { maxTicksLimit: 8, maxRotation: 0, font: { size: 10 }, color: "#5f6878" },
+          grid: { color: "rgba(100,130,160,0.12)" },
+        },
+        yPressure: {
+          type: "linear",
+          position: "left",
+          min: 0,
+          title: { display: true, text: "Druck [bar]", font: { size: 10 }, color: "#0077cc" },
+          ticks: { font: { size: 10 }, color: "#0077cc" },
+          grid: { color: "rgba(100,130,160,0.12)" },
+        },
+        yFlow: {
+          type: "linear",
+          position: "right",
+          min: 0,
+          title: { display: true, text: "Durchfluss [l/min]", font: { size: 10 }, color: "#1a9e3c" },
+          ticks: { font: { size: 10 }, color: "#1a9e3c" },
+          grid: { drawOnChartArea: false },
+        },
+        yReff: {
+          type: "linear",
+          position: "right",
+          display: false,
+          min: 0,
+          grid: { drawOnChartArea: false },
+        },
+        yTime: {
+          type: "linear",
+          position: "right",
+          display: false,
+          min: 0,
+          grid: { drawOnChartArea: false },
+        },
+      },
+    },
   });
-
-  charts.dp        = new Chart(document.getElementById("chart-dp"),        opts("Δp [bar]", "#0077cc"));
-  charts.flow      = new Chart(document.getElementById("chart-flow"),      opts("Q [l/min]", "#1a9e3c"));
-  charts.reff      = new Chart(document.getElementById("chart-reff"),      opts("R_eff", "#7b1fa2"));
-  charts.remaining = new Chart(document.getElementById("chart-remaining"), opts("Rest [min]", "#d4820a"));
 }
 
-function pushChartData(d) {
-  const label  = new Date().toLocaleTimeString("de-DE");
-  const remMin = d.remaining_seconds != null ? d.remaining_seconds / 60 : null;
-  pushPoint(charts.dp,        label, d.dp_bar);
-  pushPoint(charts.flow,      label, d.flow_l_min);
-  pushPoint(charts.reff,      label, d.r_eff);
-  pushPoint(charts.remaining, label, remMin);
-}
-
-function pushPoint(chart, label, value) {
-  if (!chart) return;
-  chart.data.labels.push(label);
-  chart.data.datasets[0].data.push(value);
-  if (chart.data.labels.length > MAX_CHART_POINTS) {
-    chart.data.labels.shift();
-    chart.data.datasets[0].data.shift();
+function pushChartData(status) {
+  if (!combinedChart) return;
+  const label = new Date().toLocaleTimeString("de-DE");
+  const remMin = status.remaining_seconds != null ? status.remaining_seconds / 60 : null;
+  const datasets = combinedChart.data.datasets;
+  combinedChart.data.labels.push(label);
+  datasets[0].data.push(status.p1_bar ?? null);
+  datasets[1].data.push(status.p2_bar ?? null);
+  datasets[2].data.push(status.dp_bar ?? null);
+  datasets[3].data.push(status.flow_l_min ?? null);
+  datasets[4].data.push(status.r_eff ?? null);
+  datasets[5].data.push(remMin);
+  if (combinedChart.data.labels.length > MAX_CHART_POINTS) {
+    combinedChart.data.labels.shift();
+    datasets.forEach(ds => ds.data.shift());
   }
-  chart.update("none");
+  combinedChart.update("none");
+}
+
+function resetChartZoom() {
+  if (combinedChart) combinedChart.resetZoom();
+}
+
+function updateChartDpLimit(dpLimitBar) {
+  if (!combinedChart) return;
+  const ann = combinedChart.options.plugins.annotation.annotations.dpLimitLine;
+  ann.value = dpLimitBar;
+  ann.label.content = `dp-Limit (${Number(dpLimitBar).toFixed(2)} bar)`;
+  combinedChart.update("none");
 }
 
 // ============================================================
@@ -562,12 +742,10 @@ function updateRemainingMode(mode, learnedCycles, requiredCycles) {
 }
 
 function clearCharts() {
-  Object.values(charts).forEach(c => {
-    if (!c) return;
-    c.data.labels = [];
-    c.data.datasets[0].data = [];
-    c.update("none");
-  });
+  if (!combinedChart) return;
+  combinedChart.data.labels = [];
+  combinedChart.data.datasets.forEach(ds => { ds.data = []; });
+  combinedChart.update("none");
 }
 
 async function apiFetch(path, method = "GET", body = null) {
@@ -587,7 +765,7 @@ async function apiFetch(path, method = "GET", body = null) {
 // ---------------------------------------------------------------------------
 
 async function updateFromGit() {
-  const token = sessionStorage.getItem("settingsToken");
+  const token = sessionStorage.getItem(TOKEN_KEY);
   if (!token) return;
 
   const btn = document.getElementById("btn-git-update");

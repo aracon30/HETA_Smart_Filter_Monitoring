@@ -249,27 +249,37 @@ input[type="text"]:focus { border-color: var(--heta-accent); }
 .charts {
   margin-bottom: 1.5rem;
 }
-.charts h2 { color: var(--heta-blue); margin-bottom: .8rem; }
-.chart-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
+.charts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-bottom: .75rem;
 }
-.chart-card {
+.charts-header h2 { color: var(--heta-blue); }
+.chart-controls {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+.chart-hint {
+  font-size: .78rem;
+  color: var(--text-muted);
+}
+.btn.btn-sm {
+  padding: .28rem .7rem;
+  font-size: .8rem;
+}
+.chart-container {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
-  padding: 1rem;
+  padding: 1rem 1rem .5rem;
+  height: 380px;
+  position: relative;
 }
-.chart-card h3 {
-  font-size: .82rem;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  color: var(--text-muted);
-  margin-bottom: .6rem;
-}
-.chart-card canvas { max-height: 180px; }
 
 /* ===== SYSTEMINFO ===== */
 .sysinfo {
@@ -512,7 +522,7 @@ footer {
 }
 
 .update-section .settings-hint code {
-  background: var(--bg-secondary);
+  background: var(--bg);
   padding: .1em .35em;
   border-radius: 3px;
   font-family: monospace;
@@ -542,7 +552,7 @@ footer {
   .cards-grid { grid-template-columns: 1fr 1fr; }
   .card-service { grid-column: span 2; }
   .controls { flex-direction: column; }
-  .chart-grid { grid-template-columns: 1fr; }
+  .chart-container { height: 300px; }
   .mode-cards { flex-direction: column; }
   .wizard { max-height: 95vh; overflow-y: auto; }
   .modal  { max-height: 95vh; }

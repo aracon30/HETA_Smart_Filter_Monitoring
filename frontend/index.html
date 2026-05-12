@@ -412,24 +412,15 @@
 
     <!-- ===== Charts ===== -->
     <section class="charts">
-      <h2>Verlaufsdiagramme</h2>
-      <div class="chart-grid">
-        <div class="chart-card">
-          <h3>Differenzdruck Δp [bar]</h3>
-          <canvas id="chart-dp"></canvas>
+      <div class="charts-header">
+        <h2>Verlaufsdiagramm</h2>
+        <div class="chart-controls">
+          <span class="chart-hint">Mausrad&nbsp;=&nbsp;Zoom &nbsp;·&nbsp; Ziehen&nbsp;=&nbsp;Verschieben</span>
+          <button class="btn btn-ghost btn-sm" onclick="resetChartZoom()">Zoom zurücksetzen</button>
         </div>
-        <div class="chart-card">
-          <h3>Durchfluss Q [l/min]</h3>
-          <canvas id="chart-flow"></canvas>
-        </div>
-        <div class="chart-card">
-          <h3>Filterwiderstand R<sub>eff</sub></h3>
-          <canvas id="chart-reff"></canvas>
-        </div>
-        <div class="chart-card">
-          <h3>Reststandzeit [min]</h3>
-          <canvas id="chart-remaining"></canvas>
-        </div>
+      </div>
+      <div class="chart-container">
+        <canvas id="chart-combined"></canvas>
       </div>
     </section>
 
@@ -452,6 +443,9 @@
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
