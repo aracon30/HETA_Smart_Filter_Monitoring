@@ -1094,17 +1094,20 @@ def api_update_pull():
         def _restart():
             time.sleep(1.5)
             logger.info("Neustart nach Git-Update.")
-            # Erst systemd versuchen, dann direkten Prozess-Neustart
             try:
                 r = subprocess.run(
                     ["sudo", "systemctl", "restart", "heta-monitor"],
-                    timeout=5, capture_output=True,
+                    timeout=10, capture_output=True,
                 )
                 if r.returncode == 0:
                     return
             except Exception:
                 pass
-            os.execv(sys.executable, [sys.executable] + sys.argv)
+            # Fallback: Prozess sauber beenden, systemd (Restart=always) startet neu.
+            # os.execv() wird NICHT verwendet, da es den offenen Flask-Socket
+            # an den neuen Prozess vererbt, der dann den Port nicht binden kann.
+            logger.info("Fallback: Prozess wird beendet, systemd übernimmt den Neustart.")
+            os._exit(0)
 
         threading.Thread(target=_restart, daemon=True).start()
 

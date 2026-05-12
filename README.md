@@ -599,6 +599,16 @@ sudo systemctl status heta-monitor
 
 # Port belegt?
 ss -tlnp | grep 8080
+
+# Port noch belegt nach Update/Neustart:
+sudo fuser -k 8080/tcp          # Prozess auf Port 8080 sofort beenden
+sudo systemctl start heta-monitor
+```
+
+**Nach Service-Update (`install.sh` erneut ausführen) muss die Unit neu geladen werden:**
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart heta-monitor
 ```
 
 **Onboarding erscheint nach jedem Start:**

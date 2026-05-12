@@ -96,7 +96,8 @@ User=pi
 WorkingDirectory=${PROJECT_DIR}
 ExecStart=${VENV_PYTHON} ${PROJECT_DIR}/backend/app.py
 Restart=always
-RestartSec=5
+RestartSec=3
+TimeoutStopSec=10
 StandardOutput=journal
 StandardError=journal
 Environment=PYTHONUNBUFFERED=1
