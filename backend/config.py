@@ -40,6 +40,21 @@ _DEFAULTS = {
     "max_increase_percent_per_update": 2,
     "max_decrease_percent_per_update": 8,
     "min_slope": 0.001,
+    # MQTT
+    "mqtt_broker": "localhost",
+    "mqtt_port": 1883,
+    "mqtt_client_id": "heta_monitor",
+    # OLED-Display (Waveshare 2.42" SSD1309)
+    "display_enabled": True,
+    "display_use_spi": True,
+    "display_spi_port": 0,
+    "display_spi_device": 0,
+    "display_gpio_dc": 25,
+    "display_gpio_rst": 27,
+    "display_i2c_address": 60,
+    # ANO-Rotary-Encoder (Adafruit Seesaw)
+    "navigation_enabled": True,
+    "encoder_i2c_address": 73,
 }
 
 

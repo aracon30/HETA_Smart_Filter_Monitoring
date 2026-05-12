@@ -198,25 +198,40 @@ predictor = PredictionEngine(
 _mqtt = None
 if settings.get("mqtt_enabled", False):
     from mqtt_client import MQTTClient
-    _mqtt = MQTTClient()
+    _mqtt = MQTTClient(
+        broker=settings.get("mqtt_broker", "localhost"),
+        port=settings.get("mqtt_port", 1883),
+        client_id=settings.get("mqtt_client_id", "heta_monitor"),
+    )
     _mqtt.connect()
 
 # Display optional
 _display = None
-try:
-    from display import OLEDDisplay
-    _display = OLEDDisplay()
-except Exception as e:
-    logger.warning("Display-Init übersprungen: %s", e)
+if settings.get("display_enabled", True):
+    try:
+        from display import OLEDDisplay
+        _display = OLEDDisplay(
+            use_spi=settings.get("display_use_spi", True),
+            spi_port=settings.get("display_spi_port", 0),
+            spi_device=settings.get("display_spi_device", 0),
+            gpio_dc=settings.get("display_gpio_dc", 25),
+            gpio_rst=settings.get("display_gpio_rst", 27),
+            i2c_address=settings.get("display_i2c_address", 60),
+        )
+    except Exception as e:
+        logger.warning("Display-Init übersprungen: %s", e)
 
 # Navigation optional
 _navigation = None
-try:
-    from navigation import NavigationController
-    _navigation = NavigationController()
-    _navigation.start()
-except Exception as e:
-    logger.warning("Navigation-Init übersprungen: %s", e)
+if settings.get("navigation_enabled", True):
+    try:
+        from navigation import NavigationController
+        _navigation = NavigationController(
+            i2c_address=settings.get("encoder_i2c_address", 73),
+        )
+        _navigation.start()
+    except Exception as e:
+        logger.warning("Navigation-Init übersprungen: %s", e)
 
 
 # ---------------------------------------------------------------------------

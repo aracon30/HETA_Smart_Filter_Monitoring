@@ -2,26 +2,45 @@
   "onboarding_complete": false,
   "settings_password_hash": "",
   "session_timeout_minutes": 30,
+
   "dp_limit_bar": 2.5,
   "dp_clean_bar": 0.2,
   "pressure_range_bar": 10,
   "temperature_min_c": -50,
   "temperature_max_c": 150,
   "flow_max_l_min": 150,
+
   "sampling_interval_seconds": 1,
   "simulation_mode": true,
-  "mqtt_enabled": false,
-  "webserver_port": 8080,
-  "webserver_host": "0.0.0.0",
-  "log_level": "INFO",
-  "db_path": "data/heta_monitor.db",
-  "export_path": "exports/",
-  "log_path": "logs/",
+
   "anomaly_threshold_percent": 25,
   "clean_resistance_tolerance": 0.25,
   "required_cycles_for_profile": 3,
   "smoothing_factor": 0.15,
   "max_increase_percent_per_update": 2,
   "max_decrease_percent_per_update": 8,
-  "min_slope": 0.001
+  "min_slope": 0.001,
+
+  "mqtt_enabled": false,
+  "mqtt_broker": "localhost",
+  "mqtt_port": 1883,
+  "mqtt_client_id": "heta_monitor",
+
+  "display_enabled": true,
+  "display_use_spi": true,
+  "display_spi_port": 0,
+  "display_spi_device": 0,
+  "display_gpio_dc": 25,
+  "display_gpio_rst": 27,
+  "display_i2c_address": 60,
+
+  "navigation_enabled": true,
+  "encoder_i2c_address": 73,
+
+  "webserver_port": 8080,
+  "webserver_host": "0.0.0.0",
+  "log_level": "INFO",
+  "db_path": "data/heta_monitor.db",
+  "export_path": "exports/",
+  "log_path": "logs/"
 }
