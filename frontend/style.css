@@ -218,6 +218,33 @@ input[type="text"] {
 }
 input[type="text"]:focus { border-color: var(--heta-accent); }
 
+.heta-code-input-wrap {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color .2s;
+}
+.heta-code-input-wrap:focus-within { border-color: var(--heta-accent); }
+.heta-code-prefix {
+  padding: .4rem .55rem .4rem .75rem;
+  background: var(--heta-blue-light);
+  color: var(--heta-blue);
+  font-size: .88rem;
+  font-weight: 700;
+  letter-spacing: .03em;
+  white-space: nowrap;
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+.heta-code-input-wrap input[type="text"] {
+  border: none;
+  border-radius: 0;
+  flex: 1;
+  min-width: 0;
+}
+
 .msg {
   font-size: .82rem;
   min-height: 1.2em;

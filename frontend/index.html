@@ -401,7 +401,11 @@
 
       <div class="controls-group">
         <h3>HETA-Code aktivieren</h3>
-        <input type="text" id="input-heta-code" placeholder="HETA-12345" maxlength="20" />
+        <div class="heta-code-input-wrap">
+          <span class="heta-code-prefix">HETA-</span>
+          <input type="text" id="input-heta-code" placeholder="12345" maxlength="15"
+                 inputmode="numeric" pattern="[0-9]*" />
+        </div>
         <input type="text" id="input-pin" placeholder="PIN (6-stellig)" maxlength="6" />
         <button class="btn btn-primary" onclick="activateHetaCode()">Aktivieren</button>
         <button class="btn btn-ghost" onclick="showDemo()">Demo-PIN anzeigen</button>

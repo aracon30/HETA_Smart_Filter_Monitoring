@@ -593,8 +593,13 @@ async function resetSystem() {
   showMsg("heta-msg", "System zurückgesetzt.", false);
 }
 
+function _getHetaCode() {
+  const num = document.getElementById("input-heta-code").value.trim();
+  return num ? "HETA-" + num : "";
+}
+
 async function activateHetaCode() {
-  const code = document.getElementById("input-heta-code").value.trim();
+  const code = _getHetaCode();
   const pin  = document.getElementById("input-pin").value.trim();
   if (!code || !pin) { showMsg("heta-msg", "HETA-Code und PIN eingeben.", true); return; }
   const result = await apiFetch("/api/heta/activate", "POST", { heta_code: code, pin });
@@ -603,7 +608,7 @@ async function activateHetaCode() {
 }
 
 async function showDemo() {
-  const code = document.getElementById("input-heta-code").value.trim();
+  const code = _getHetaCode();
   if (!code) { showMsg("heta-msg", "Zuerst HETA-Code eingeben.", true); return; }
   const result = await apiFetch(`/api/heta/demo?heta_code=${encodeURIComponent(code)}`, "GET");
   if (result?.valid) {
