@@ -846,6 +846,51 @@ function handleSensorFault(d) {
   }
 }
 
+function toggleSimLogin() {
+  const panel = document.getElementById("sensor-fault-sim-login");
+  const btn   = document.getElementById("btn-sim-toggle");
+  const open  = panel.classList.toggle("hidden");
+  btn.textContent = open
+    ? "▶ Im Simulationsmodus fortfahren (Passwort erforderlich)"
+    : "▼ Im Simulationsmodus fortfahren (Passwort erforderlich)";
+  if (!open) setTimeout(() => document.getElementById("sensor-fault-pw")?.focus(), 50);
+}
+
+async function activateSimMode() {
+  const pw  = document.getElementById("sensor-fault-pw").value;
+  const btn = document.getElementById("btn-sim-confirm");
+  if (!pw) { showMsg("sensor-fault-sim-msg", "Bitte Passwort eingeben.", true); return; }
+
+  btn.disabled = true;
+  btn.textContent = "…";
+  showMsg("sensor-fault-sim-msg", "", false);
+
+  // 1. Einstellungen-Login
+  const loginRes = await apiFetch("/api/settings/login", "POST", { password: pw });
+  if (!loginRes?.success) {
+    showMsg("sensor-fault-sim-msg", loginRes?.message ?? "Falsches Passwort.", true);
+    btn.disabled = false; btn.textContent = "Aktivieren";
+    return;
+  }
+  const token = loginRes.token;
+  sessionStorage.setItem(TOKEN_KEY, token);
+
+  // 2. simulation_mode in Einstellungen speichern
+  const saveRes = await apiFetchAuth("/api/settings", "POST", { simulation_mode: true }, token);
+  if (!saveRes?.success) {
+    showMsg("sensor-fault-sim-msg", saveRes?.message ?? "Fehler beim Speichern.", true);
+    btn.disabled = false; btn.textContent = "Aktivieren";
+    return;
+  }
+
+  // 3. Messung im Simulationsmodus starten (löscht sensor_fault, startet Thread)
+  await apiFetch("/api/simulation/start", "POST");
+  document.getElementById("sensor-fault-pw").value = "";
+  btn.disabled = false; btn.textContent = "Aktivieren";
+  showMsg("sensor-fault-sim-msg", "Simulationsmodus aktiviert.", false);
+  // Overlay schließt sich beim nächsten Poll-Zyklus automatisch
+}
+
 async function recheckSensors() {
   const btn    = document.getElementById("btn-sensor-recheck");
   const result = document.getElementById("sensor-fault-result");

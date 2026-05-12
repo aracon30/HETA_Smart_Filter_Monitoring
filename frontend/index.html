@@ -32,6 +32,26 @@
           Alle Sensoren angeschlossen – System prüfen
         </button>
       </div>
+
+      <div class="sensor-fault-sim-section">
+        <button class="sensor-fault-sim-toggle" id="btn-sim-toggle" onclick="toggleSimLogin()">
+          &#9654; Im Simulationsmodus fortfahren (Passwort erforderlich)
+        </button>
+        <div id="sensor-fault-sim-login" class="hidden">
+          <p class="sensor-fault-sim-note">
+            Der Simulationsmodus erzeugt künstliche Messwerte – ausschließlich für Tests und Entwicklung.
+            Bitte Einstellungspasswort eingeben:
+          </p>
+          <div class="sensor-fault-sim-row">
+            <input type="password" id="sensor-fault-pw" placeholder="Einstellungspasswort"
+                   onkeydown="if(event.key==='Enter') activateSimMode()" />
+            <button class="btn btn-warning" id="btn-sim-confirm" onclick="activateSimMode()">
+              Aktivieren
+            </button>
+          </div>
+          <div id="sensor-fault-sim-msg" class="msg"></div>
+        </div>
+      </div>
     </div>
   </div>
 

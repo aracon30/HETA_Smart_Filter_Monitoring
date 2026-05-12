@@ -1289,6 +1289,10 @@ def api_simulation_start():
     """Startet den Simulationsmodus und den Messzyklus."""
     with _state_lock:
         _state["simulation_mode"] = True
+        _state["sensor_fault"] = False
+        _state["sensor_fault_channels"] = []
+        _state["sensor_fault_message"] = ""
+        _state["sensor_error"] = False
     reset_simulation()
     if not _state["running"]:
         _start_measurement_thread()

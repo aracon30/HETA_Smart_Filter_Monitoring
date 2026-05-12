@@ -719,13 +719,60 @@ footer {
 .sensor-fault-result.ok       { background: #d4edda; color: #155724; }
 .sensor-fault-result.error    { background: #f8d7da; color: #721c24; }
 .sensor-fault-footer {
-  padding: 1rem 1.6rem 1.4rem;
+  padding: 1rem 1.6rem;
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: flex-end;
 }
 .sensor-fault-footer .btn {
   min-width: 240px;
+}
+
+/* Simulationsmodus-Abschnitt im Sensorfehler-Overlay */
+.sensor-fault-sim-section {
+  border-top: 1px solid var(--border);
+  padding: .85rem 1.6rem 1.2rem;
+  background: #fafbfc;
+}
+.sensor-fault-sim-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: .83rem;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.sensor-fault-sim-toggle:hover { color: var(--heta-blue); }
+#sensor-fault-sim-login {
+  margin-top: .75rem;
+  display: flex;
+  flex-direction: column;
+  gap: .55rem;
+}
+.sensor-fault-sim-note {
+  font-size: .82rem;
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+.sensor-fault-sim-row {
+  display: flex;
+  gap: .5rem;
+  align-items: center;
+}
+.sensor-fault-sim-row input[type="password"] {
+  flex: 1;
+  padding: .4rem .75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: .88rem;
+  outline: none;
+}
+.sensor-fault-sim-row input[type="password"]:focus {
+  border-color: var(--warn-yellow);
 }
 
 /* ===== SIMULATIONSMODUS-WARNUNG (Einstellungen) ===== */
