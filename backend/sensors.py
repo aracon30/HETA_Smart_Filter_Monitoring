@@ -12,7 +12,6 @@ Alle Sensoren liefern 4–20 mA Signale.
 
 import time
 import math
-import random
 import logging
 from dataclasses import dataclass, field
 from typing import Optional
@@ -139,46 +138,34 @@ class FilterSimulator:
         self.cycle_seconds = cycle_seconds
         self.flow_max = flow_max
         self._start_time = time.time()
-        self._noise_seed = random.random()
 
     def reset(self):
         self._start_time = time.time()
-        self._noise_seed = random.random()
 
     def _elapsed(self) -> float:
         return time.time() - self._start_time
 
     def get_ma_values(self) -> dict:
-        """Gibt simulierte mA-Werte für alle vier Kanäle zurück."""
+        """Gibt simulierte mA-Werte für alle vier Kanäle zurück (rauschfrei, gleichmäßig)."""
         elapsed = self._elapsed()
         progress = min(elapsed / self.cycle_seconds, 1.0)
 
-        # Differenzdruck steigt S-förmig.
-        # Die Schwingung wird über die ersten 60 s eingeblendet, damit
-        # der Prädiktor am Zyklusanfang keinen falschen Slope-Spike bekommt.
-        osc_ramp = min(elapsed / 60.0, 1.0)
-        dp = self.dp_clean + (self.dp_limit - self.dp_clean) * (
-            progress ** 1.5 + osc_ramp * 0.04 * math.sin(elapsed * 0.25)
-        )
-        dp += random.gauss(0, 0.008)
-        dp = max(self.dp_clean * 0.9, min(dp, self.dp_limit * 1.02))
+        # Differenzdruck steigt gleichmäßig S-förmig – kein Rauschen, keine Schwingung
+        dp = self.dp_clean + (self.dp_limit - self.dp_clean) * progress ** 1.5
+        dp = max(self.dp_clean, min(dp, self.dp_limit))
 
-        # p1 schwankt leicht um 3.5 bar
-        p1 = 3.5 + random.gauss(0, 0.03)
+        # p1 konstant, p2 = p1 - dp
+        p1 = 3.5
         p2 = max(0.0, p1 - dp)
 
-        # Durchfluss sinkt mit steigendem Differenzdruck (physikalisches Modell:
-        # zusetzendes Filter = höherer Widerstand = reduzierter Volumenstrom).
-        # Bei dp_clean: ~53 % von flow_max; bei dp_limit: ~50 % davon (≈ Halbierung).
+        # Durchfluss sinkt proportional mit steigendem Differenzdruck
         flow_nominal = self.flow_max * 0.53
         dp_fraction = max(0.0, min(1.0,
             (dp - self.dp_clean) / max(self.dp_limit - self.dp_clean, 1e-6)))
-        flow_base = flow_nominal * (1.0 - 0.50 * dp_fraction)
-        flow = flow_base + random.gauss(0, 1.0)
-        flow = max(0.0, min(self.flow_max, flow))
+        flow = flow_nominal * (1.0 - 0.50 * dp_fraction)
 
-        # Temperatur steigt langsam von 20 auf 35 °C
-        temp = 20.0 + progress * 15.0 + random.gauss(0, 0.2)
+        # Temperatur steigt gleichmäßig von 20 auf 35 °C
+        temp = 20.0 + progress * 15.0
 
         def to_ma(value, v_min, v_max):
             ratio = (value - v_min) / (v_max - v_min)
