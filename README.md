@@ -47,7 +47,7 @@ fordert den Bediener zur Prüfung auf.
 | 4–20-mA-Sensorik (AnoPi Shield)    | ⏳ ausstehend    | –                               |
 
 > Das System läuft auf einem **realen Raspberry Pi 5 Testsystem**. Echtbetrieb mit Sensoren hat Vorrang.
-> Der Simulationsmodus dient nur als Fallback oder für Entwicklung ohne Hardware.
+> Der Simulationsmodus ist kein automatischer Fallback – er muss bewusst aktiviert werden (Onboarding oder Einstellungen).
 
 ---
 
