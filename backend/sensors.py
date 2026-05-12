@@ -127,56 +127,48 @@ def probe_hardware() -> bool:
 
 class FilterSimulator:
     """
-    Simuliert einen realistischen Filterbeladungszyklus.
-    Startet mit sauberem Filter und belädt ihn bis dp_limit.
+    Simuliert einen Filterbeladungszyklus – deterministisch und rauschfrei.
+
+    Verwendet einen Schrittzähler statt Echtzeit, damit NTP-Sprünge oder
+    Systemlast keine Schwankungen verursachen können.
+    Jeder Aufruf von get_readings() erhöht den Zähler um 1 (= 1 Sekunde).
     """
 
     def __init__(self, dp_clean: float = 0.2, dp_limit: float = 2.5,
                  cycle_seconds: float = 300.0, flow_max: float = 150.0):
         self.dp_clean = dp_clean
         self.dp_limit = dp_limit
-        self.cycle_seconds = cycle_seconds
+        self.cycle_steps = max(1, int(cycle_seconds))
         self.flow_max = flow_max
-        self._start_time = time.time()
+        self._step = 0
 
     def reset(self):
-        self._start_time = time.time()
+        self._step = 0
 
-    def _elapsed(self) -> float:
-        return time.time() - self._start_time
+    def get_readings(self) -> dict:
+        """
+        Gibt exakte physikalische Simulationswerte zurück – ohne mA-Konversion,
+        ohne Rauschen, ohne Schwankungen.
+        """
+        progress = min(self._step / self.cycle_steps, 1.0)
+        self._step += 1
 
-    def get_ma_values(self) -> dict:
-        """Gibt simulierte mA-Werte für alle vier Kanäle zurück (rauschfrei, gleichmäßig)."""
-        elapsed = self._elapsed()
-        progress = min(elapsed / self.cycle_seconds, 1.0)
-
-        # Differenzdruck steigt gleichmäßig S-förmig – kein Rauschen, keine Schwingung
+        # Differenzdruck: S-förmig, streng monoton steigend
         dp = self.dp_clean + (self.dp_limit - self.dp_clean) * progress ** 1.5
         dp = max(self.dp_clean, min(dp, self.dp_limit))
 
-        # p1 konstant, p2 = p1 - dp
         p1 = 3.5
         p2 = max(0.0, p1 - dp)
 
-        # Durchfluss sinkt proportional mit steigendem Differenzdruck
-        flow_nominal = self.flow_max * 0.53
-        dp_fraction = max(0.0, min(1.0,
-            (dp - self.dp_clean) / max(self.dp_limit - self.dp_clean, 1e-6)))
-        flow = flow_nominal * (1.0 - 0.50 * dp_fraction)
+        # Durchfluss sinkt proportional mit Differenzdruck
+        dp_fraction = (dp - self.dp_clean) / max(self.dp_limit - self.dp_clean, 1e-9)
+        dp_fraction = max(0.0, min(1.0, dp_fraction))
+        flow = self.flow_max * 0.53 * (1.0 - 0.50 * dp_fraction)
 
-        # Temperatur steigt gleichmäßig von 20 auf 35 °C
+        # Temperatur steigt gleichmäßig
         temp = 20.0 + progress * 15.0
 
-        def to_ma(value, v_min, v_max):
-            ratio = (value - v_min) / (v_max - v_min)
-            return MA_MIN + ratio * (MA_MAX - MA_MIN)
-
-        return {
-            1: to_ma(p1, 0.0, 10.0),
-            2: to_ma(p2, 0.0, 10.0),
-            3: to_ma(temp, -50.0, 150.0),
-            4: to_ma(flow, 0.0, self.flow_max),
-        }
+        return {"p1": p1, "p2": p2, "dp": dp, "flow": flow, "temp": temp}
 
 
 # Modulweit geteilte Simulatorinstanz
@@ -195,7 +187,7 @@ def update_simulation_params(dp_clean: float, dp_limit: float, flow_max: float,
     _simulator.dp_clean = dp_clean
     _simulator.dp_limit = dp_limit
     _simulator.flow_max = flow_max
-    _simulator.cycle_seconds = cycle_seconds
+    _simulator.cycle_steps = max(1, int(cycle_seconds))
 
 
 # ---------------------------------------------------------------------------
@@ -221,20 +213,33 @@ def read_sensors(simulation: bool = True,
         }
     """
     if simulation:
-        ma_values = _simulator.get_ma_values()
-        mode = "simulation"
-    else:
-        ma_values = {}
-        for ch in range(1, 5):
-            val = _read_anopi_channel(ch)
-            if val is None:
-                logger.warning("Kanal %d nicht lesbar – wechsle zu Simulation.", ch)
-                ma_values = _simulator.get_ma_values()
-                mode = "simulation_fallback"
-                break
-            ma_values[ch] = val
-        else:
-            mode = "hardware"
+        # Im Simulationsmodus: exakte physikalische Werte direkt verwenden.
+        # Keine mA-Konversion → keine Gleitkomma-Artefakte, keine Schwankungen.
+        phys = _simulator.get_readings()
+        return {
+            "p1":          SensorReading(1, 0.0, phys["p1"],   "bar"),
+            "p2":          SensorReading(2, 0.0, phys["p2"],   "bar"),
+            "temperature": SensorReading(3, 0.0, phys["temp"], "°C"),
+            "flow":        SensorReading(4, 0.0, phys["flow"], "l/min"),
+            "mode": "simulation",
+        }
+
+    # Realbetrieb: echte SPI-Kanäle lesen, bei Fehler Simulations-Fallback
+    ma_values: dict = {}
+    mode = "hardware"
+    for ch in range(1, 5):
+        val = _read_anopi_channel(ch)
+        if val is None:
+            logger.warning("Kanal %d nicht lesbar – Simulations-Fallback aktiv.", ch)
+            phys = _simulator.get_readings()
+            return {
+                "p1":          SensorReading(1, 0.0, phys["p1"],   "bar"),
+                "p2":          SensorReading(2, 0.0, phys["p2"],   "bar"),
+                "temperature": SensorReading(3, 0.0, phys["temp"], "°C"),
+                "flow":        SensorReading(4, 0.0, phys["flow"], "l/min"),
+                "mode": "simulation_fallback",
+            }
+        ma_values[ch] = val
 
     def make_reading(channel, ma, scale_fn, unit):
         status = _check_status(ma)
@@ -252,5 +257,5 @@ def read_sensors(simulation: bool = True,
                                     "°C"),
         "flow": make_reading(4, ma_values[4],
                              lambda m: _scale_flow(m, flow_max), "l/min"),
-        "mode": mode,
+        "mode": "hardware",
     }
