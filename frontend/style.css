@@ -787,6 +787,142 @@ footer {
   margin-bottom: 1rem;
 }
 
+/* ===== SIMULATIONS-DEMO-PANEL ===== */
+.sim-demo-panel {
+  background: #f0f7ff;
+  border: 1px solid #b8d4f5;
+  border-left: 4px solid var(--heta-blue);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin: 1rem 1rem 0;
+}
+
+.sim-demo-header {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+
+.sim-demo-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--heta-blue);
+}
+
+.sim-demo-badge {
+  font-size: .75rem;
+  background: var(--heta-blue);
+  color: #fff;
+  border-radius: 20px;
+  padding: .15rem .6rem;
+  letter-spacing: .03em;
+}
+
+.sim-demo-hint {
+  font-size: .88rem;
+  color: #555;
+  margin: 0 0 .75rem;
+}
+
+/* Lernzyklus-Punkte */
+.sim-learn-dots {
+  display: flex;
+  gap: .5rem;
+  margin-bottom: .75rem;
+}
+
+.sim-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #c8d8eb;
+  border: 2px solid #aabfd8;
+  display: inline-block;
+  transition: background .3s;
+}
+
+.sim-dot.done {
+  background: var(--heta-blue);
+  border-color: var(--heta-blue);
+}
+
+/* Manuelle Steuerung */
+.sim-manual-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: .93rem;
+  color: var(--heta-blue);
+  margin-bottom: .5rem;
+}
+
+.toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  cursor: pointer;
+  font-weight: 400;
+  font-size: .88rem;
+}
+
+.toggle-wrap input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--heta-blue);
+  cursor: pointer;
+}
+
+.sim-sliders {
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  margin-top: .5rem;
+}
+
+.sim-slider-row {
+  display: grid;
+  grid-template-columns: 160px 1fr 80px;
+  align-items: center;
+  gap: .75rem;
+}
+
+.sim-slider-label {
+  font-size: .85rem;
+  color: #444;
+  white-space: nowrap;
+}
+
+.sim-slider {
+  width: 100%;
+  accent-color: var(--heta-blue);
+  cursor: pointer;
+}
+
+.sim-slider-val {
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--heta-blue);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sim-slider-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: .25rem;
+}
+
+.btn-accent {
+  background: var(--heta-blue);
+  color: #fff;
+  border: none;
+}
+
+.btn-accent:hover { background: #1a5db8; }
+.btn-accent:disabled { background: #9ab5d8; cursor: not-allowed; }
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
   .cards-grid { grid-template-columns: 1fr 1fr; }
@@ -796,4 +932,6 @@ footer {
   .mode-cards { flex-direction: column; }
   .wizard { max-height: 95vh; overflow-y: auto; }
   .modal  { max-height: 95vh; }
+  .sim-slider-row { grid-template-columns: 1fr; }
+  .sim-slider-val { text-align: left; }
 }

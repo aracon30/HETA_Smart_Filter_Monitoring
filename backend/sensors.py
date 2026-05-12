@@ -165,18 +165,43 @@ class FilterSimulator:
         self.flow_max = flow_max
         self._step = 0
         self._lock = threading.Lock()
+        self._manual: Optional[dict] = None
 
     def reset(self):
         with self._lock:
             self._step = 0
+            self._manual = None
+
+    def set_manual(self, p1: float, dp: float, temperature: float, flow: float):
+        """Setzt manuelle Prozesswerte – überschreibt die automatische Simulation."""
+        dp = round(max(0.0, min(dp, p1)), 4)
+        with self._lock:
+            self._manual = {
+                "p1":   round(p1, 4),
+                "p2":   round(max(0.0, p1 - dp), 4),
+                "dp":   dp,
+                "flow": round(max(0.0, flow), 2),
+                "temp": round(temperature, 2),
+            }
+
+    def clear_manual(self):
+        with self._lock:
+            self._manual = None
+
+    @property
+    def manual_active(self) -> bool:
+        with self._lock:
+            return self._manual is not None
 
     def get_readings(self) -> dict:
         """
         Gibt physikalische Simulationswerte zurück.
-        dp ist der Primärwert – p2 wird nur zur Anzeige aus p1-dp abgeleitet,
-        aber dp selbst wird als eigener Schlüssel zurückgegeben.
+        Wenn _manual gesetzt ist, werden diese Werte direkt zurückgegeben.
+        dp ist stets der Primärwert – nie aus p1-p2 zurückberechnet.
         """
         with self._lock:
+            if self._manual is not None:
+                return dict(self._manual)
             step = self._step
             self._step += 1
 
@@ -217,6 +242,26 @@ def update_simulation_params(dp_clean: float, dp_limit: float, flow_max: float,
         _simulator.flow_max = flow_max
         _simulator.cycle_steps = max(1, int(cycle_seconds))
         _simulator._step = 0
+
+
+def set_simulation_manual(p1: float, dp: float, temperature: float, flow: float):
+    """Aktiviert manuelle Prozesswerte (überschreibt automatische Simulation)."""
+    _simulator.set_manual(p1, dp, temperature, flow)
+
+
+def clear_simulation_manual():
+    """Deaktiviert die manuelle Prozesssteuerung."""
+    _simulator.clear_manual()
+
+
+def get_simulation_manual_active() -> bool:
+    """Gibt zurück ob die manuelle Prozesssteuerung aktiv ist."""
+    return _simulator.manual_active
+
+
+def get_simulation_cycle_steps() -> int:
+    """Gibt die konfigurierte Zyklus-Schrittanzahl zurück."""
+    return _simulator.cycle_steps
 
 
 # ---------------------------------------------------------------------------

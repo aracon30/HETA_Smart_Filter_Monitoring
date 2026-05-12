@@ -234,6 +234,15 @@ async function loadSettingsIntoForm() {
     }
     setText("dp-limit-hint", `Limit: ${Number(s.dp_limit_bar).toFixed(2)} bar`);
     updateChartDpLimit(s.dp_limit_bar ?? 2.5);
+    // Slider-Grenzen synchronisieren
+    const slDp = document.getElementById("sl-dp");
+    if (slDp) slDp.max = s.dp_limit_bar ?? 2.5;
+    const slP1 = document.getElementById("sl-p1");
+    if (slP1) slP1.max = s.pressure_range_bar ?? 10;
+    const slFlow = document.getElementById("sl-flow");
+    if (slFlow) slFlow.max = s.flow_max_l_min ?? 150;
+    const slTemp = document.getElementById("sl-temp");
+    if (slTemp) { slTemp.min = s.temperature_min_c ?? -50; slTemp.max = s.temperature_max_c ?? 150; }
   } catch (e) { console.warn("Einstellungen konnten nicht geladen werden.", e); }
 }
 
@@ -361,6 +370,7 @@ function updateDashboard(d) {
   setText("dp-limit-hint", `Limit: ${Number(dpLimit).toFixed(2)} bar`);
   styleCardByStatus("card-dp", d.filter_status);
   pushChartData(d);
+  updateSimDemoPanel(d);
 }
 
 // ============================================================
@@ -915,6 +925,191 @@ async function recheckSensors() {
   } else {
     if (result) { result.className = "sensor-fault-result error"; result.textContent = data.message; }
   }
+}
+
+// ============================================================
+// Simulations-Demo-Panel
+// ============================================================
+
+let _sliderDebounce = null;
+let _sliderValues   = { p1: 3.5, dp: 0.2, flow: 79, temp: 20.0 };
+
+function updateSimDemoPanel(d) {
+  const panel = document.getElementById("sim-demo-panel");
+  if (!panel) return;
+
+  const simMode = !!d.simulation_mode;
+  panel.classList.toggle("hidden", !simMode);
+  if (!simMode) return;
+
+  const profileValid = d.profile_status === "VALIDIERT" && d.heta_activated;
+  const learnArea    = document.getElementById("sim-learn-area");
+  const manualArea   = document.getElementById("sim-manual-area");
+
+  // Lernbereich
+  const needed   = (d.required_cycles ?? 3) - Math.min(d.learned_cycles ?? 0, d.required_cycles ?? 3);
+  const totalReq = d.required_cycles ?? 3;
+  setText("sim-learn-needed", needed > 0 ? needed : totalReq);
+
+  // Zyklen-Punkte
+  const dotsEl = document.getElementById("sim-learn-dots");
+  if (dotsEl) {
+    const done  = Math.min(d.learned_cycles ?? 0, totalReq);
+    dotsEl.innerHTML = Array.from({length: totalReq}, (_, i) =>
+      `<span class="sim-dot ${i < done ? "done" : ""}"></span>`
+    ).join("");
+  }
+
+  const learnBtn = document.getElementById("btn-quick-learn");
+  if (learnBtn) learnBtn.disabled = profileValid;
+
+  if (profileValid) {
+    if (learnArea)  learnArea.classList.add("hidden");
+    if (manualArea) manualArea.classList.remove("hidden");
+    // Sync manual-toggle checkbox state
+    const toggle = document.getElementById("sim-manual-toggle");
+    if (toggle && !toggle.dataset.userSet) toggle.checked = !!d.sim_manual_active;
+  } else {
+    if (learnArea)  learnArea.classList.remove("hidden");
+    if (manualArea) manualArea.classList.add("hidden");
+  }
+}
+
+async function quickLearn() {
+  const btn = document.getElementById("btn-quick-learn");
+  btn.disabled = true;
+  btn.textContent = "… Lernzyklen werden simuliert";
+  showMsg("sim-learn-msg", "", false);
+
+  const res = await apiFetch("/api/simulation/quick-learn", "POST");
+  btn.textContent = "▶ Lernzyklen simulieren";
+
+  if (!res) {
+    showMsg("sim-learn-msg", "Verbindungsfehler.", true);
+    btn.disabled = false;
+    return;
+  }
+  if (res.success) {
+    showMsg("sim-learn-msg", res.message, false);
+    // Panel wechselt beim nächsten Poll-Zyklus in den Manual-Bereich
+  } else {
+    showMsg("sim-learn-msg", res.message, true);
+    btn.disabled = false;
+  }
+}
+
+// Regler-Logik mit gegenseitiger Synchronisation dp ↔ Beladung%
+function onSliderInput(which, rawVal) {
+  const s     = window._settings || {};
+  const dp_clean = s.dp_clean_bar ?? 0.2;
+  const dp_limit = s.dp_limit_bar ?? 2.5;
+
+  const p1Slider      = document.getElementById("sl-p1");
+  const dpSlider      = document.getElementById("sl-dp");
+  const loadSlider    = document.getElementById("sl-loading");
+
+  const p1    = parseFloat(p1Slider.value);
+  let   dp    = parseFloat(dpSlider.value);
+  let   load  = parseFloat(loadSlider.value);
+
+  if (which === "p1") {
+    // p1 geändert → dp cap an p1
+    const newP1 = parseFloat(rawVal);
+    if (dp > newP1) { dp = newP1; dpSlider.value = dp; }
+    // Beladung aus dp ableiten
+    load = dpToLoading(dp, dp_clean, dp_limit);
+    loadSlider.value = load;
+  } else if (which === "dp") {
+    dp   = parseFloat(rawVal);
+    load = dpToLoading(dp, dp_clean, dp_limit);
+    loadSlider.value = load;
+  } else if (which === "loading") {
+    load = parseFloat(rawVal);
+    dp   = loadingToDp(load, dp_clean, dp_limit);
+    // dp darf p1 nicht überschreiten
+    dp = Math.min(dp, p1);
+    dpSlider.value = dp;
+  }
+
+  _sliderValues = {
+    p1:   parseFloat(p1Slider.value),
+    dp:   dp,
+    flow: parseFloat(document.getElementById("sl-flow").value),
+    temp: parseFloat(document.getElementById("sl-temp").value),
+  };
+
+  setText("sv-p1",      parseFloat(p1Slider.value).toFixed(1)   + " bar");
+  setText("sv-dp",      dp.toFixed(2)                            + " bar");
+  setText("sv-loading", Math.round(load)                         + " %");
+  setText("sv-flow",    _sliderValues.flow.toFixed(0)            + " l/min");
+  setText("sv-temp",    _sliderValues.temp.toFixed(1)            + " °C");
+
+  const toggle = document.getElementById("sim-manual-toggle");
+  if (toggle && toggle.checked) scheduleSendValues();
+}
+
+function dpToLoading(dp, dp_clean, dp_limit) {
+  const range = dp_limit - dp_clean;
+  if (range <= 0) return 0;
+  return Math.round(Math.max(0, Math.min(100, ((dp - dp_clean) / range) * 100)));
+}
+
+function loadingToDp(pct, dp_clean, dp_limit) {
+  return parseFloat((dp_clean + (dp_limit - dp_clean) * (pct / 100)).toFixed(3));
+}
+
+function scheduleSendValues() {
+  clearTimeout(_sliderDebounce);
+  _sliderDebounce = setTimeout(sendSliderValues, 150);
+}
+
+async function sendSliderValues() {
+  await apiFetch("/api/simulation/set-values", "POST", {
+    active:      true,
+    p1:          _sliderValues.p1,
+    dp:          _sliderValues.dp,
+    flow:        _sliderValues.flow,
+    temperature: _sliderValues.temp,
+  });
+}
+
+async function onManualToggle(checkbox) {
+  checkbox.dataset.userSet = "1";
+  if (checkbox.checked) {
+    await sendSliderValues();
+  } else {
+    clearTimeout(_sliderDebounce);
+    await apiFetch("/api/simulation/set-values", "POST", { active: false });
+  }
+}
+
+function resetSliders() {
+  const s        = window._settings || {};
+  const dp_clean = s.dp_clean_bar   ?? 0.2;
+  const dp_limit = s.dp_limit_bar   ?? 2.5;
+  const flow_max = s.flow_max_l_min ?? 150.0;
+
+  const p1  = 3.5;
+  const dp  = dp_clean;
+  const pct = dpToLoading(dp, dp_clean, dp_limit);
+  const fl  = Math.round(flow_max * 0.53);
+
+  document.getElementById("sl-p1").value      = p1;
+  document.getElementById("sl-dp").value      = dp;
+  document.getElementById("sl-loading").value = pct;
+  document.getElementById("sl-flow").value    = fl;
+  document.getElementById("sl-temp").value    = 20;
+
+  setText("sv-p1",      p1.toFixed(1)    + " bar");
+  setText("sv-dp",      dp.toFixed(2)    + " bar");
+  setText("sv-loading", pct              + " %");
+  setText("sv-flow",    fl               + " l/min");
+  setText("sv-temp",    "20.0 °C");
+
+  _sliderValues = { p1, dp, flow: fl, temp: 20.0 };
+
+  const toggle = document.getElementById("sim-manual-toggle");
+  if (toggle && toggle.checked) scheduleSendValues();
 }
 
 // ============================================================

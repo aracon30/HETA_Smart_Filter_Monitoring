@@ -25,7 +25,9 @@ from flask_cors import CORS
 
 from config import settings, save_settings, get_abs_path, hash_password, verify_password
 from sensors import (read_sensors, reset_simulation, update_simulation_params,
-                     probe_hardware, check_hardware_sensors)
+                     probe_hardware, check_hardware_sensors,
+                     set_simulation_manual, clear_simulation_manual,
+                     get_simulation_manual_active, get_simulation_cycle_steps)
 from calculations import calculate_filter_state, FilterState
 from heta_code import verify_activation, validate_heta_format, get_demo_info
 from database import Database
@@ -181,6 +183,9 @@ _state = {
     "sensor_fault_channels": [],
     "sensor_fault_message": "",
 
+    # Manuelle Simulations-Steuerung
+    "sim_manual_active": False,
+
     # Filterwechsel
     "awaiting_confirmation": False,
     "cycle_active": False,
@@ -193,6 +198,7 @@ _state = {
 
     # Lernmodul
     "learned_cycles": 0,
+    "required_cycles": settings.get("required_cycles_for_profile", 3),
     "profile_status": "LERNEND",
     "anomaly_active": False,
     "anomaly_percent": 0.0,
@@ -628,11 +634,13 @@ def _measurement_loop():
                 "remaining_seconds": pred_status["remaining_seconds"],
                 "prediction_mode": pred_status["prediction_mode"],
                 "learned_cycles": cycles_count,
+                "required_cycles": req_cycles,
                 "profile_status": "VALIDIERT" if profile_valid else "LERNEND",
                 "show_filter_health": heta_activated,
                 "service_message": rec["message"],
                 "service_priority": rec["priority"],
                 "last_update": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                "sim_manual_active": get_simulation_manual_active(),
             })
 
         elapsed = time.time() - t_start
@@ -1302,14 +1310,17 @@ def api_simulation_start():
 @app.route("/api/simulation/stop", methods=["POST"])
 def api_simulation_stop():
     """Stoppt den Messzyklus."""
+    clear_simulation_manual()
     with _state_lock:
         _state["running"] = False
+        _state["sim_manual_active"] = False
     return jsonify({"success": True, "message": "Simulation gestoppt."})
 
 
 @app.route("/api/simulation/reset", methods=["POST"])
 def api_simulation_reset():
     """Setzt Simulation und Prognose zurück."""
+    clear_simulation_manual()
     reset_simulation()
     predictor.reset()
     with _state_lock:
@@ -1320,7 +1331,109 @@ def api_simulation_reset():
         _state["heta_activated"] = False
         _state["heta_code"] = ""
         _state["heta_number"] = ""
+        _state["sim_manual_active"] = False
     return jsonify({"success": True, "message": "System zurückgesetzt."})
+
+
+@app.route("/api/simulation/quick-learn", methods=["POST"])
+def api_simulation_quick_learn():
+    """Simuliert die erforderlichen Lernzyklen für den aktuellen HETA-Code."""
+    with _state_lock:
+        sim_mode = _state["simulation_mode"]
+        heta_code = _state["heta_code"]
+        heta_activated = _state["heta_activated"]
+
+    if not sim_mode:
+        return jsonify({"success": False, "message": "Nur im Simulationsmodus verfügbar."})
+    if not heta_code or not heta_activated:
+        return jsonify({"success": False, "message": "Kein aktiver HETA-Code. Bitte zuerst HETA-Code aktivieren."})
+    if learning.is_profile_valid(heta_code):
+        return jsonify({"success": False, "message": "Profil ist bereits valide – Lernphase abgeschlossen."})
+
+    dp_clean = settings.get("dp_clean_bar", 0.2)
+    dp_limit = settings.get("dp_limit_bar", 2.5)
+    flow_max = settings.get("flow_max_l_min", 150.0)
+    sampling_interval = settings.get("sampling_interval_seconds", 1)
+    cycle_secs = float(get_simulation_cycle_steps()) * sampling_interval
+    required_cycles = settings.get("required_cycles_for_profile", 3)
+
+    avg_flow = round(flow_max * 0.53 * 0.75, 1)
+    avg_temp = 27.5
+    end_dp = round(dp_limit * 0.985, 3)
+    start_r_eff = round(dp_clean / max(avg_flow, 0.1), 5)
+    end_r_eff = round(end_dp / max(avg_flow * 0.75, 0.1), 5)
+    loading_rate = round((end_dp - dp_clean) / max(cycle_secs, 1.0), 6)
+
+    existing = db.count_confirmed_cycles(heta_code)
+    needed = max(0, required_cycles - existing)
+    now = time.time()
+    for i in range(needed):
+        t_start = now - (needed - i) * (cycle_secs + 60)
+        db.insert_cycle({
+            "heta_code": heta_code,
+            "start_time": t_start,
+            "end_time": t_start + cycle_secs,
+            "duration_seconds": round(cycle_secs, 1),
+            "start_r_eff": start_r_eff,
+            "end_r_eff": end_r_eff,
+            "start_dp": round(dp_clean, 3),
+            "end_dp": end_dp,
+            "average_flow": avg_flow,
+            "average_temperature": avg_temp,
+            "loading_rate": loading_rate,
+            "confirmed_filter_change": 1,
+        })
+
+    learning._update_profile(heta_code)
+    remaining_secs = (dp_limit - dp_clean) / max(loading_rate, 1e-9)
+    predictor.update_limits(dp_limit, dp_clean)
+    predictor.seed(remaining_secs)
+
+    with _state_lock:
+        _state["learned_cycles"] = required_cycles
+        _state["profile_status"] = "VALIDIERT"
+        _state["show_filter_health"] = True
+
+    db.insert_service_event("SIM_SCHNELLLERN", heta_code,
+                            json.dumps({"simulated_cycles": needed, "loading_rate": loading_rate}))
+    logger.info("Schnell-Lernphase: %d Zyklen für %s simuliert.", needed, heta_code)
+    return jsonify({
+        "success": True,
+        "message": f"{needed} Lernzyklus/-zyklen für «{heta_code}» simuliert. Profil ist jetzt valide.",
+        "loading_rate": loading_rate,
+    })
+
+
+@app.route("/api/simulation/set-values", methods=["POST"])
+def api_simulation_set_values():
+    """Setzt oder löscht manuelle Prozesswerte für den Simulationsmodus."""
+    with _state_lock:
+        sim_mode = _state["simulation_mode"]
+    if not sim_mode:
+        return jsonify({"success": False, "message": "Nur im Simulationsmodus verfügbar."})
+
+    data = request.get_json(force=True, silent=True) or {}
+    if not data.get("active", True):
+        clear_simulation_manual()
+        with _state_lock:
+            _state["sim_manual_active"] = False
+        return jsonify({"success": True, "active": False, "message": "Manuelle Steuerung deaktiviert."})
+
+    pressure_range = settings.get("pressure_range_bar", 10.0)
+    t_min = settings.get("temperature_min_c", -50.0)
+    t_max = settings.get("temperature_max_c", 150.0)
+    flow_max = settings.get("flow_max_l_min", 150.0)
+
+    p1   = max(0.0, min(float(data.get("p1", 3.5)), pressure_range))
+    dp   = max(0.0, min(float(data.get("dp", 0.2)), p1))
+    temp = max(t_min, min(float(data.get("temperature", 20.0)), t_max))
+    flow = max(0.0, min(float(data.get("flow", 79.5)), flow_max))
+
+    set_simulation_manual(p1, dp, temp, flow)
+    with _state_lock:
+        _state["sim_manual_active"] = True
+
+    return jsonify({"success": True, "active": True, "p1": p1, "dp": dp, "temperature": temp, "flow": flow})
 
 
 @app.route("/api/service/request", methods=["POST"])

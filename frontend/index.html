@@ -445,6 +445,76 @@
       </button>
     </div>
 
+    <!-- ===== Simulations-Demo-Steuerung ===== -->
+    <section id="sim-demo-panel" class="sim-demo-panel hidden">
+      <div class="sim-demo-header">
+        <h3>&#127916; Simulations-Demo</h3>
+        <span class="sim-demo-badge">Nur im Simulationsmodus</span>
+      </div>
+
+      <!-- Lernphase -->
+      <div id="sim-learn-area">
+        <p class="sim-demo-hint">
+          Simuliert <strong id="sim-learn-needed">3</strong> Lernzyklen, damit Prognose und Beladungsgrad berechnet werden können.
+        </p>
+        <div class="sim-learn-dots" id="sim-learn-dots"></div>
+        <button class="btn btn-accent" id="btn-quick-learn" onclick="quickLearn()">
+          &#9654; Lernzyklen simulieren
+        </button>
+        <div id="sim-learn-msg" class="msg"></div>
+      </div>
+
+      <!-- Manuelle Prozesswerte (nach Lernphase) -->
+      <div id="sim-manual-area" class="hidden">
+        <div class="sim-manual-header">
+          <span>Manuelle Prozesswerte</span>
+          <label class="toggle-wrap">
+            <input type="checkbox" id="sim-manual-toggle" onchange="onManualToggle(this)">
+            <span class="toggle-label">Aktiv</span>
+          </label>
+        </div>
+        <p class="sim-demo-hint">
+          Regler zur Darstellung von Prozessabweichungen. Beladungsgrad und Reststandzeit reagieren in Echtzeit.
+        </p>
+
+        <div class="sim-sliders" id="sim-sliders">
+          <div class="sim-slider-row">
+            <label class="sim-slider-label">Eintrittsdruck p1</label>
+            <input type="range" id="sl-p1" class="sim-slider" min="0" max="10" step="0.1" value="3.5"
+                   oninput="onSliderInput('p1', this.value)">
+            <span class="sim-slider-val" id="sv-p1">3.5 bar</span>
+          </div>
+          <div class="sim-slider-row">
+            <label class="sim-slider-label">Beladungsgrad %</label>
+            <input type="range" id="sl-loading" class="sim-slider" min="0" max="100" step="1" value="10"
+                   oninput="onSliderInput('loading', this.value)">
+            <span class="sim-slider-val" id="sv-loading">10 %</span>
+          </div>
+          <div class="sim-slider-row">
+            <label class="sim-slider-label">Differenzdruck Δp</label>
+            <input type="range" id="sl-dp" class="sim-slider" min="0" max="5" step="0.01" value="0.2"
+                   oninput="onSliderInput('dp', this.value)">
+            <span class="sim-slider-val" id="sv-dp">0.20 bar</span>
+          </div>
+          <div class="sim-slider-row">
+            <label class="sim-slider-label">Durchfluss Q</label>
+            <input type="range" id="sl-flow" class="sim-slider" min="0" max="150" step="1" value="79"
+                   oninput="onSliderInput('flow', this.value)">
+            <span class="sim-slider-val" id="sv-flow">79 l/min</span>
+          </div>
+          <div class="sim-slider-row">
+            <label class="sim-slider-label">Temperatur T</label>
+            <input type="range" id="sl-temp" class="sim-slider" min="-50" max="150" step="0.5" value="20"
+                   oninput="onSliderInput('temp', this.value)">
+            <span class="sim-slider-val" id="sv-temp">20.0 °C</span>
+          </div>
+          <div class="sim-slider-actions">
+            <button class="btn btn-ghost btn-sm" onclick="resetSliders()">Zurücksetzen</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ===== Steuerung ===== -->
     <section class="controls">
       <div class="controls-group">
