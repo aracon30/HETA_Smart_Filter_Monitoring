@@ -23,6 +23,25 @@ und stellt eine lokale Weboberfläche sowie ein OLED-Display mit Encoder-Navigat
 
 ---
 
+## Teststatus
+
+| Komponente / Funktion              | Status           | Umgebung                        |
+|------------------------------------|------------------|---------------------------------|
+| Backend-Start                      | ✅ getestet      | Debian 13 VM (VirtualBox)       |
+| Weboberfläche                      | ✅ getestet      | Debian 13 VM (VirtualBox)       |
+| Simulierte Messwerte               | ✅ getestet      | Debian 13 VM (VirtualBox)       |
+| Filterüberwachungs-Grundlogik      | ✅ getestet      | Debian 13 VM (VirtualBox)       |
+| Datenhaltung / Statusanzeige       | ✅ getestet      | Debian 13 VM (VirtualBox)       |
+| Raspberry Pi 5 (Echtbetrieb)       | ⏳ ausstehend    | –                               |
+| OLED-Display (SSD1309 via SPI)     | ⏳ ausstehend    | –                               |
+| ANO-Rotary-Encoder (I2C)           | ⏳ ausstehend    | –                               |
+| 4–20-mA-Sensorik (AnoPi Shield)    | ⏳ ausstehend    | –                               |
+| Autostart via systemd              | ⏳ ausstehend    | –                               |
+
+> Alle bisherigen Tests liefen im **Simulationsmodus** ohne angeschlossene Raspberry-Pi-Hardware.
+
+---
+
 ## Installation (Schritt für Schritt)
 
 ### Voraussetzungen
