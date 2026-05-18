@@ -195,14 +195,19 @@ _state = {
 
     # Modusneutrale Prozessanalyse (Sensor- UND Simulationsmodus)
     "analysis_active":             False,  # True wenn Profil valide + läuft
-    "analysis_ready":              False,  # True wenn Puffer gefüllt (≥10 Messwerte)
-    "analysis_dp_rate_ref":        0.0,    # Referenz-Beladungsrate (bar/s)
-    "analysis_dp_rate_current":    0.0,    # Aktuelle Beladungsrate (bar/s)
+    "analysis_ready":              False,  # True wenn Kurvenvergleich verfügbar
+    "analysis_dp_rate_ref":        0.0,    # Referenz-Beladungsrate (bar/s) – Legacy
+    "analysis_dp_rate_current":    0.0,    # Aktuelle Beladungsrate (bar/s) – Legacy
     "analysis_dp_deviation_pct":   0.0,    # Abweichung in %
     "analysis_flow_ref":           0.0,    # Referenz-Durchfluss (l/min)
     "analysis_flow_deviation_pct": 0.0,    # Abweichung in %
     "analysis_temp_ref":           0.0,    # Referenz-Temperatur (°C)
     "analysis_temp_deviation":     0.0,    # Abweichung in °C
+    "analysis_cycle_progress_pct": 0.0,
+    "analysis_dp_ref":             0.0,
+    "analysis_reff_ref":           0.0,
+    "analysis_reff_cur":           0.0,
+    "analysis_reff_deviation_pct": 0.0,
 
     # Filterwechsel
     "awaiting_confirmation": False,
@@ -563,8 +568,10 @@ def _measurement_loop():
 
         # Lernwert erfassen
         if cycle_active and not sensor_error:
-            learning.record_sample(fs.flow_l_min, fs.temperature_c,
-                                   fs.dp_bar, fs.r_eff)
+            learning.record_sample(
+                fs.flow_l_min, fs.temperature_c, fs.dp_bar, fs.r_eff,
+                p1=fs.p1_bar, p2=fs.p2_bar, timestamp=time.time(),
+            )
 
         # Startverhalten prüfen (nur am Zyklusanfang, erste 10 Sekunden)
         if (cycle_active and heta_activated
@@ -620,48 +627,46 @@ def _measurement_loop():
             "sensor_mode": sensor_mode,
         })
 
-        # Profilvergleich (modusneutral – Sensor- und Simulationsmodus)
+        # Profilvergleich – zeitbasierter Kurvenvergleich (Sensor- UND Simulationsmodus)
         _dp_rate_buffer.append((time.time(), fs.dp_bar))
-        an_active  = profile_valid and heta_activated and not sensor_error
-        an_ready   = False
-        dp_rate_r  = 0.0
-        dp_rate_c  = 0.0
-        dp_dev_pct = 0.0
-        flow_ref   = 0.0
-        flow_dev   = 0.0
-        temp_ref   = 0.0
-        temp_dev   = 0.0
+        an_active = profile_valid and heta_activated and not sensor_error
+        an_ready  = False
+        cycle_progress_pct = 0.0
+        dp_ref = dp_dev = 0.0
+        reff_ref = reff_dev = 0.0
+        flow_ref = flow_dev = 0.0
+        temp_ref = temp_dev = 0.0
 
-        if an_active:
-            profile = learning.get_profile(heta_code)
-            if profile:
-                dp_rate_r = profile.get("reference_loading_rate", 0.0)
-                flow_ref  = profile.get("reference_avg_flow",     0.0)
-                temp_ref  = profile.get("reference_avg_temp",     0.0)
-
-                # dp-Anstieg aus rollendem Puffer schätzen (min. 10 Werte, ≥5 s)
-                if len(_dp_rate_buffer) >= 10:
-                    t0, d0 = _dp_rate_buffer[0]
-                    t1, d1 = _dp_rate_buffer[-1]
-                    dt = t1 - t0
-                    if dt >= 5.0:
-                        dp_rate_c = max(0.0, round((d1 - d0) / dt, 7))
-                        an_ready  = True
-
-                if an_ready and dp_rate_r > 0:
-                    dp_dev_pct = round((dp_rate_c / dp_rate_r - 1.0) * 100.0, 1)
-                if flow_ref > 0:
-                    flow_dev = round((fs.flow_l_min / flow_ref - 1.0) * 100.0, 1)
-                if temp_ref != 0:
-                    temp_dev = round(fs.temperature_c - temp_ref, 1)
+        if an_active and cycle_active:
+            with _state_lock:
+                cycle_start = _state.get("cycle_start_time")
+            elapsed = (time.time() - cycle_start) if cycle_start else 0.0
+            analysis = learning.get_curve_analysis(
+                heta_code, elapsed,
+                fs.dp_bar, fs.r_eff, fs.flow_l_min, fs.temperature_c,
+            )
+            if analysis:
+                an_ready           = True
+                cycle_progress_pct = analysis["cycle_progress_pct"]
+                dp_ref             = analysis["ref_dp"]
+                dp_dev             = analysis["dp_deviation_pct"]
+                reff_ref           = analysis["ref_r_eff"]
+                reff_dev           = analysis["r_eff_deviation_pct"]
+                flow_ref           = analysis["ref_flow"]
+                flow_dev           = analysis["flow_deviation_pct"]
+                temp_ref           = analysis["ref_temp"]
+                temp_dev           = analysis["temp_deviation"]
 
         with _state_lock:
             _state.update({
                 "analysis_active":             an_active,
                 "analysis_ready":              an_ready,
-                "analysis_dp_rate_ref":        dp_rate_r,
-                "analysis_dp_rate_current":    dp_rate_c,
-                "analysis_dp_deviation_pct":   dp_dev_pct,
+                "analysis_cycle_progress_pct": cycle_progress_pct,
+                "analysis_dp_ref":             dp_ref,
+                "analysis_dp_deviation_pct":   dp_dev,
+                "analysis_reff_ref":           reff_ref,
+                "analysis_reff_cur":           fs.r_eff,
+                "analysis_reff_deviation_pct": reff_dev,
                 "analysis_flow_ref":           flow_ref,
                 "analysis_flow_deviation_pct": flow_dev,
                 "analysis_temp_ref":           temp_ref,
@@ -1661,6 +1666,31 @@ def api_profile():
     if not heta_code:
         return jsonify(None)
     return jsonify(db.get_profile(heta_code))
+
+
+@app.route("/api/reference-curve")
+def api_reference_curve():
+    """Gibt die zeitbasierte Referenzkurve für einen HETA-Code zurück."""
+    heta_code = request.args.get("heta_code", _state.get("heta_code", ""))
+    if not heta_code:
+        return jsonify(None)
+    profile = learning.get_profile(heta_code)
+    if not profile:
+        return jsonify(None)
+    curve_json = profile.get("reference_curve_json")
+    curve = []
+    if curve_json:
+        try:
+            curve = json.loads(curve_json)
+        except Exception:
+            pass
+    return jsonify({
+        "heta_code":                 heta_code,
+        "curve":                     curve,
+        "reference_duration_seconds": profile.get("reference_duration_seconds", 0),
+        "cycles_count":              profile.get("cycles_count", 0),
+        "profile_valid":             bool(profile.get("profile_valid")),
+    })
 
 
 @app.route("/api/navigation/event", methods=["POST"])

@@ -92,19 +92,37 @@ class Database:
                     key     TEXT PRIMARY KEY,
                     value   TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS cycle_samples (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cycle_id      INTEGER NOT NULL,
+                    heta_code     TEXT    NOT NULL,
+                    timestamp     REAL    NOT NULL,
+                    cycle_second  REAL    NOT NULL,
+                    p1_bar        REAL,
+                    p2_bar        REAL,
+                    dp_bar        REAL,
+                    flow_l_min    REAL,
+                    temp_c        REAL,
+                    r_eff         REAL
+                );
+                CREATE INDEX IF NOT EXISTS idx_cs_cycle ON cycle_samples(cycle_id);
+                CREATE INDEX IF NOT EXISTS idx_cs_heta  ON cycle_samples(heta_code);
             """)
         logger.info("Datenbank initialisiert: %s", self.db_path)
 
-        # Schema-Migration: Referenz-Durchschnittswerte für modusneutrale Analyse
+        # Schema-Migration: neue heta_profiles-Spalten
         with self._conn() as conn:
-            for col, default in [("reference_avg_flow", "0.0"),
-                                  ("reference_avg_temp", "20.0")]:
-                try:
-                    conn.execute(
-                        f"ALTER TABLE heta_profiles ADD COLUMN {col} REAL DEFAULT {default}"
-                    )
-                except Exception:
-                    pass  # Spalte existiert bereits
+            existing = {r[1] for r in conn.execute("PRAGMA table_info(heta_profiles)").fetchall()}
+            for col, typ, default in [
+                ("reference_avg_flow",         "REAL", "0.0"),
+                ("reference_avg_temp",         "REAL", "20.0"),
+                ("reference_curve_json",       "TEXT", "NULL"),
+                ("reference_duration_seconds", "REAL", "0.0"),
+                ("reference_r_eff_start",      "REAL", "0.0"),
+            ]:
+                if col not in existing:
+                    conn.execute(f"ALTER TABLE heta_profiles ADD COLUMN {col} {typ} DEFAULT {default}")
 
     # ------------------------------------------------------------------
     # Messwerte
@@ -161,6 +179,30 @@ class Database:
             cur = conn.execute(sql, data)
             return cur.lastrowid
 
+    def insert_cycle_samples(self, samples: list) -> None:
+        """Speichert die Zeitreihen-Messwerte eines Filterzyklus (Bulk-Insert)."""
+        if not samples:
+            return
+        with self._conn() as conn:
+            conn.executemany(
+                """INSERT INTO cycle_samples
+                   (cycle_id, heta_code, timestamp, cycle_second,
+                    p1_bar, p2_bar, dp_bar, flow_l_min, temp_c, r_eff)
+                   VALUES
+                   (:cycle_id, :heta_code, :timestamp, :cycle_second,
+                    :p1_bar, :p2_bar, :dp_bar, :flow_l_min, :temp_c, :r_eff)""",
+                samples,
+            )
+
+    def get_cycle_samples(self, cycle_id: int) -> list:
+        """Gibt alle Messwerte eines bestimmten Filterzyklus zurück."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM cycle_samples WHERE cycle_id = ? ORDER BY cycle_second ASC",
+                (cycle_id,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def get_cycles_for_heta(self, heta_code: str) -> list:
         """Gibt alle Filterzyklen für einen HETA-Code zurück."""
         with self._conn() as conn:
@@ -196,24 +238,32 @@ class Database:
         """Erstellt oder aktualisiert ein HETA-Profil."""
         data["heta_code"] = heta_code
         data.setdefault("last_updated", time.time())
+        data.setdefault("reference_curve_json", None)
+        data.setdefault("reference_duration_seconds", 0.0)
+        data.setdefault("reference_r_eff_start", 0.0)
         with self._conn() as conn:
             conn.execute("""
                 INSERT INTO heta_profiles
                     (heta_code, reference_r_eff, reference_loading_rate,
                      reference_avg_flow, reference_avg_temp,
+                     reference_curve_json, reference_duration_seconds, reference_r_eff_start,
                      cycles_count, profile_valid, last_updated)
                 VALUES
                     (:heta_code, :reference_r_eff, :reference_loading_rate,
                      :reference_avg_flow, :reference_avg_temp,
+                     :reference_curve_json, :reference_duration_seconds, :reference_r_eff_start,
                      :cycles_count, :profile_valid, :last_updated)
                 ON CONFLICT(heta_code) DO UPDATE SET
-                    reference_r_eff         = excluded.reference_r_eff,
-                    reference_loading_rate  = excluded.reference_loading_rate,
-                    reference_avg_flow      = excluded.reference_avg_flow,
-                    reference_avg_temp      = excluded.reference_avg_temp,
-                    cycles_count            = excluded.cycles_count,
-                    profile_valid           = excluded.profile_valid,
-                    last_updated            = excluded.last_updated
+                    reference_r_eff              = excluded.reference_r_eff,
+                    reference_loading_rate       = excluded.reference_loading_rate,
+                    reference_avg_flow           = excluded.reference_avg_flow,
+                    reference_avg_temp           = excluded.reference_avg_temp,
+                    reference_curve_json         = excluded.reference_curve_json,
+                    reference_duration_seconds   = excluded.reference_duration_seconds,
+                    reference_r_eff_start        = excluded.reference_r_eff_start,
+                    cycles_count                 = excluded.cycles_count,
+                    profile_valid                = excluded.profile_valid,
+                    last_updated                 = excluded.last_updated
             """, data)
 
     def get_profile(self, heta_code: str) -> Optional[dict]:
@@ -225,22 +275,24 @@ class Database:
         return dict(row) if row else None
 
     def reset_cycles_for_heta(self, heta_code: str):
-        """Löscht alle Zyklen und das Profil für einen einzelnen HETA-Code."""
+        """Löscht alle Zyklen, Sample-Zeitreihen und das Profil für einen einzelnen HETA-Code."""
         with self._conn() as conn:
+            conn.execute("DELETE FROM cycle_samples WHERE heta_code = ?", (heta_code,))
             conn.execute("DELETE FROM filter_cycles   WHERE heta_code = ?", (heta_code,))
             conn.execute("DELETE FROM heta_profiles   WHERE heta_code = ?", (heta_code,))
-        logger.info("Lernzyklen und Profil für %s zurückgesetzt.", heta_code)
+        logger.info("Lernzyklen, Sample-Zeitreihen und Profil für %s zurückgesetzt.", heta_code)
 
     def reset_all_learning_data(self):
         """
-        Löscht alle Lernzyklen und Profile.
+        Löscht alle Lernzyklen, Sample-Zeitreihen und Profile.
         Wird aufgerufen wenn kritische Konfigurationsparameter geändert werden,
         damit die 3 Lernphasen sauber neu durchlaufen werden.
         """
         with self._conn() as conn:
+            conn.execute("DELETE FROM cycle_samples")
             conn.execute("DELETE FROM filter_cycles")
             conn.execute("DELETE FROM heta_profiles")
-        logger.info("Alle Lerndaten und Profile gelöscht (Neukonfiguration).")
+        logger.info("Alle Lerndaten, Sample-Zeitreihen und Profile gelöscht (Neukonfiguration).")
 
     # ------------------------------------------------------------------
     # Serviceereignisse

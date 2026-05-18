@@ -984,25 +984,42 @@ function updateAnalysisSection(d) {
   if (contentEl) contentEl.classList.toggle("hidden", !ready);
   if (!ready) return;
 
-  const dpRef = d.analysis_dp_rate_ref    ?? 0;
-  const dpCur = d.analysis_dp_rate_current ?? 0;
+  // Zyklusfortschritt
+  const progressPct = d.analysis_cycle_progress_pct ?? 0;
+  const progressBar = document.getElementById("analysis-progress-bar");
+  if (progressBar) progressBar.style.width = Math.min(100, progressPct) + "%";
+  setText("analysis-progress-pct", Math.round(progressPct) + " %");
+
+  // Δp vs. Referenzkurve
+  const dpRef = d.analysis_dp_ref ?? 0;
+  const dpCur = d.dp_bar          ?? 0;
   const dpDev = d.analysis_dp_deviation_pct ?? 0;
-  setText("an-dp-ref", (dpRef * 1000).toFixed(2) + " mbar/s");
-  setText("an-dp-cur", (dpCur * 1000).toFixed(2) + " mbar/s");
+  setText("an-dp-ref", fmt(dpRef, 3) + " bar");
+  setText("an-dp-cur", fmt(dpCur, 3) + " bar");
   setAnalysisDev("an-dp-dev", dpDev, "%", 15, 40);
 
+  // R_eff vs. Referenzkurve
+  const reffRef = d.analysis_reff_ref ?? 0;
+  const reffCur = d.analysis_reff_cur ?? d.r_eff ?? 0;
+  const reffDev = d.analysis_reff_deviation_pct ?? 0;
+  setText("an-reff-ref", fmt(reffRef, 5) + " bar·min/l");
+  setText("an-reff-cur", fmt(reffCur, 5) + " bar·min/l");
+  setAnalysisDev("an-reff-dev", reffDev, "%", 15, 40);
+
+  // Durchfluss Q vs. Referenzkurve
   const flRef = d.analysis_flow_ref ?? 0;
   const flCur = d.flow_l_min        ?? 0;
   const flDev = d.analysis_flow_deviation_pct ?? 0;
-  setText("an-fl-ref", flRef.toFixed(0) + " l/min");
-  setText("an-fl-cur", flCur.toFixed(1) + " l/min");
+  setText("an-fl-ref", fmt(flRef, 1) + " l/min");
+  setText("an-fl-cur", fmt(flCur, 1) + " l/min");
   setAnalysisDev("an-fl-dev", flDev, "%", 15, 30);
 
+  // Temperatur T vs. Referenzkurve
   const tRef = d.analysis_temp_ref      ?? 0;
   const tCur = d.temperature_c          ?? 0;
   const tDev = d.analysis_temp_deviation ?? 0;
-  setText("an-tmp-ref", tRef.toFixed(1) + " °C");
-  setText("an-tmp-cur", tCur.toFixed(1) + " °C");
+  setText("an-tmp-ref", fmt(tRef, 1) + " °C");
+  setText("an-tmp-cur", fmt(tCur, 1) + " °C");
   setAnalysisDev("an-tmp-dev", tDev, "°C", 8, 20, true);
 
   setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev));

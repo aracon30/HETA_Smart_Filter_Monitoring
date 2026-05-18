@@ -425,6 +425,45 @@ main {
   line-height: 1.55;
 }
 
+.analysis-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: .85rem;
+  padding: .5rem .65rem;
+  background: #f0f6ff;
+  border-radius: 6px;
+}
+.analysis-progress-label {
+  font-size: .75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.analysis-progress-bar-outer {
+  flex: 1;
+  background: #d8e6f8;
+  border-radius: 6px;
+  height: 8px;
+  overflow: hidden;
+}
+.analysis-progress-bar-inner {
+  height: 100%;
+  border-radius: 6px;
+  background: var(--heta-accent);
+  width: 0;
+  transition: width .6s ease;
+}
+.analysis-progress-pct {
+  font-size: .82rem;
+  font-weight: 700;
+  color: var(--heta-accent);
+  min-width: 36px;
+  text-align: right;
+}
+
 /* ================================================================
    SIMULATIONS-DEMO-PANEL
    ================================================================ */
