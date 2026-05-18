@@ -579,9 +579,12 @@ def _measurement_loop():
         if profile_valid and profile:
             r_eff_clean_ref = (profile.get("reference_r_eff_start")
                                or profile.get("reference_r_eff"))
-            ref_flow = profile.get("reference_avg_flow") or 0.0
-            if ref_flow > 0.1:
-                r_eff_limit_ref = dp_limit / ref_flow
+            r_eff_limit_ref = profile.get("reference_r_eff_end") or 0.0
+            if not r_eff_limit_ref:
+                # Fallback für alte Profile ohne reference_r_eff_end
+                ref_flow = profile.get("reference_avg_flow") or 0.0
+                if ref_flow > 0.1:
+                    r_eff_limit_ref = dp_limit / ref_flow
 
         if r_eff_clean_ref and r_eff_limit_ref and fs.r_eff > 0:
             raw_health, _ = calculate_filter_health_from_r_eff(
@@ -1311,6 +1314,8 @@ def api_settings_post():
 
     # Lerndaten zurücksetzen wenn nötig
     if learning_reset_needed:
+        global _smoothed_health_pct
+        _smoothed_health_pct = None
         db.reset_all_learning_data()
         predictor.reset()
         reset_simulation()
@@ -1597,6 +1602,12 @@ def api_simulation_quick_learn():
         _state["learned_cycles"]  = required_cycles
         _state["profile_status"]  = "VALIDIERT"
         _state["show_filter_health"] = True
+
+    # Simulation auf Schritt 0 zurücksetzen damit der nächste Zyklus
+    # mit sauberem Startwert beginnt (kein dp-Offset aus alten Schritten).
+    global _smoothed_health_pct
+    _smoothed_health_pct = None
+    reset_simulation()
 
     db.insert_service_event("SIM_SCHNELLLERN", heta_code,
                             json.dumps({"simulated_cycles": needed, "loading_rate": loading_rate}))

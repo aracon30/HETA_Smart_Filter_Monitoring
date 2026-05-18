@@ -175,6 +175,7 @@ class LearningManager:
             return
 
         ref_r_eff        = sum(c["start_r_eff"]                  for c in confirmed) / count
+        ref_r_eff_end    = sum(c["end_r_eff"]                    for c in confirmed) / count
         ref_loading_rate = sum(c["loading_rate"]                  for c in confirmed) / count
         ref_avg_flow     = sum(c.get("average_flow",       0.0)   for c in confirmed) / count
         ref_avg_temp     = sum(c.get("average_temperature", 20.0) for c in confirmed) / count
@@ -185,12 +186,13 @@ class LearningManager:
         curve = self._compute_reference_curve(confirmed)
 
         self.db.upsert_profile(heta_code, {
-            "reference_r_eff":              round(ref_r_eff, 5),
+            "reference_r_eff":              round(ref_r_eff, 6),
+            "reference_r_eff_end":          round(ref_r_eff_end, 6),
             "reference_loading_rate":       round(ref_loading_rate, 6),
             "reference_avg_flow":           round(ref_avg_flow, 1),
             "reference_avg_temp":           round(ref_avg_temp, 2),
             "reference_duration_seconds":   round(ref_duration, 1),
-            "reference_r_eff_start":        round(ref_r_eff, 5),
+            "reference_r_eff_start":        round(ref_r_eff, 6),
             "reference_curve_json":         json.dumps(curve),
             "cycles_count":                 count,
             "profile_valid":                profile_valid,
@@ -306,7 +308,7 @@ class LearningManager:
             return None
 
         # Aktueller Fortschritt in % der Referenzdauer
-        t_pct = min(100.0, elapsed_seconds / ref_dur * 100.0)
+        t_pct = max(0.0, min(100.0, elapsed_seconds / ref_dur * 100.0))
         ref   = self._interpolate_curve(curve, t_pct)
         if not ref:
             return None

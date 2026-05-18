@@ -122,6 +122,7 @@ class Database:
                 ("reference_curve_json",       "TEXT", "NULL"),
                 ("reference_duration_seconds", "REAL", "0.0"),
                 ("reference_r_eff_start",      "REAL", "0.0"),
+                ("reference_r_eff_end",        "REAL", "0.0"),
             ]:
                 if col not in existing:
                     conn.execute(f"ALTER TABLE heta_profiles ADD COLUMN {col} {typ} DEFAULT {default}")
@@ -255,17 +256,20 @@ class Database:
         data.setdefault("reference_curve_json", None)
         data.setdefault("reference_duration_seconds", 0.0)
         data.setdefault("reference_r_eff_start", 0.0)
+        data.setdefault("reference_r_eff_end", 0.0)
         with self._conn() as conn:
             conn.execute("""
                 INSERT INTO heta_profiles
                     (heta_code, reference_r_eff, reference_loading_rate,
                      reference_avg_flow, reference_avg_temp,
-                     reference_curve_json, reference_duration_seconds, reference_r_eff_start,
+                     reference_curve_json, reference_duration_seconds,
+                     reference_r_eff_start, reference_r_eff_end,
                      cycles_count, profile_valid, last_updated)
                 VALUES
                     (:heta_code, :reference_r_eff, :reference_loading_rate,
                      :reference_avg_flow, :reference_avg_temp,
-                     :reference_curve_json, :reference_duration_seconds, :reference_r_eff_start,
+                     :reference_curve_json, :reference_duration_seconds,
+                     :reference_r_eff_start, :reference_r_eff_end,
                      :cycles_count, :profile_valid, :last_updated)
                 ON CONFLICT(heta_code) DO UPDATE SET
                     reference_r_eff              = excluded.reference_r_eff,
@@ -275,6 +279,7 @@ class Database:
                     reference_curve_json         = excluded.reference_curve_json,
                     reference_duration_seconds   = excluded.reference_duration_seconds,
                     reference_r_eff_start        = excluded.reference_r_eff_start,
+                    reference_r_eff_end          = excluded.reference_r_eff_end,
                     cycles_count                 = excluded.cycles_count,
                     profile_valid                = excluded.profile_valid,
                     last_updated                 = excluded.last_updated
