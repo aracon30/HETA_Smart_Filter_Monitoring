@@ -644,7 +644,12 @@
             <h2 class="section-title">Lernprofil</h2>
             <span id="profile-validity-badge" class="badge badge-warn">–</span>
           </div>
-          <button class="btn btn-ghost btn-sm" onclick="loadCyclesOverview()">&#8635; Aktualisieren</button>
+          <div class="section-header-actions">
+            <button class="btn btn-ghost btn-sm" onclick="loadCyclesOverview()">&#8635; Aktualisieren</button>
+            <button class="btn btn-danger btn-sm" id="btn-reset-cycles" onclick="resetHetaCycles()">
+              &#128465; Lernzyklen zurücksetzen
+            </button>
+          </div>
         </div>
 
         <div id="cycles-no-code" class="empty-state">

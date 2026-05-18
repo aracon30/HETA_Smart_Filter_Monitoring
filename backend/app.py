@@ -793,6 +793,53 @@ def api_heta_demo():
     return jsonify(get_demo_info(heta_code))
 
 
+@app.route("/api/heta/reset-cycles", methods=["POST"])
+def api_heta_reset_cycles():
+    """
+    Setzt alle Lernzyklen und das Profil für den aktuell aktiven HETA-Code zurück.
+    Erfordert einen gültigen Auth-Token.
+    """
+    ok, err = _require_auth()
+    if not ok:
+        return err
+
+    with _state_lock:
+        heta_code = _state.get("heta_code", "")
+
+    if not heta_code:
+        return jsonify({"success": False, "message": "Kein HETA-Code aktiv."}), 400
+
+    # Aktiven Lernzyklus abbrechen (ohne Speichern)
+    learning._active_cycle = None
+
+    # DB bereinigen
+    db.reset_cycles_for_heta(heta_code)
+
+    # Prognose-Modell zurücksetzen
+    predictor.reset()
+    _dp_rate_buffer.clear()
+
+    # Zustandsvariablen zurücksetzen
+    with _state_lock:
+        _state["cycle_active"]      = False
+        _state["cycle_start_time"]  = None
+        _state["awaiting_confirmation"] = False
+        _state["anomaly_active"]    = False
+        _state["anomaly_percent"]   = 0.0
+        _state["analysis_active"]   = False
+        _state["analysis_ready"]    = False
+
+    db.insert_service_event("LERNZYKLEN_RESET", heta_code,
+                            json.dumps({"timestamp": time.time()}))
+    logger.info("Lernzyklen für %s zurückgesetzt.", heta_code)
+
+    return jsonify({
+        "success": True,
+        "message": f"Lernzyklen für {heta_code} wurden zurückgesetzt. "
+                   f"Das System startet die Lernphase neu.",
+    })
+
+
 def _do_confirm_filter_change():
     """Führt die Filterwechsel-Bestätigung durch (REST-API und Display-Controller)."""
     with _state_lock:

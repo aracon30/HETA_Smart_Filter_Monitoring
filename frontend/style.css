@@ -211,6 +211,13 @@ main {
   gap: .65rem;
 }
 
+.section-header-actions {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+}
+
 /* ================================================================
    BADGES
    ================================================================ */

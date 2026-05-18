@@ -1356,6 +1356,50 @@ async function apiFetchAuth(path, method, body, token) {
 // Zyklen & Profil – Tab
 // ============================================================
 
+async function resetHetaCycles() {
+  const d = window._lastStatus;
+  const hetaCode = d?.heta_code;
+
+  if (!hetaCode || !d?.heta_activated) {
+    alert("Kein HETA-Code aktiv. Bitte zuerst einen HETA-Code aktivieren.");
+    return;
+  }
+
+  const confirmed = confirm(
+    `Alle Lernzyklen und das Profil für "${hetaCode}" wirklich zurücksetzen?\n\n` +
+    `Das System muss danach erneut 3 Filterzyklen lernen.\n` +
+    `Diese Aktion kann nicht rückgängig gemacht werden.`
+  );
+  if (!confirmed) return;
+
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    alert("Sitzung abgelaufen. Bitte zuerst in den Einstellungen anmelden.");
+    openSettings();
+    return;
+  }
+
+  const btn = document.getElementById("btn-reset-cycles");
+  if (btn) { btn.disabled = true; btn.textContent = "… wird zurückgesetzt"; }
+
+  const result = await apiFetchAuth("/api/heta/reset-cycles", "POST", {}, token);
+
+  if (btn) { btn.disabled = false; btn.textContent = "🗑 Lernzyklen zurücksetzen"; }
+
+  if (result === null) {
+    alert("Sitzung abgelaufen. Bitte erneut anmelden.");
+    openSettings();
+    return;
+  }
+
+  if (result?.success) {
+    await loadCyclesOverview();
+    alert(result.message);
+  } else {
+    alert("Fehler: " + (result?.message ?? "Unbekannter Fehler."));
+  }
+}
+
 async function loadCyclesOverview() {
   const d = window._lastStatus;
   const hetaCode = d?.heta_code;

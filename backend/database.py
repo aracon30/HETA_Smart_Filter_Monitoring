@@ -224,6 +224,13 @@ class Database:
             ).fetchone()
         return dict(row) if row else None
 
+    def reset_cycles_for_heta(self, heta_code: str):
+        """Löscht alle Zyklen und das Profil für einen einzelnen HETA-Code."""
+        with self._conn() as conn:
+            conn.execute("DELETE FROM filter_cycles   WHERE heta_code = ?", (heta_code,))
+            conn.execute("DELETE FROM heta_profiles   WHERE heta_code = ?", (heta_code,))
+        logger.info("Lernzyklen und Profil für %s zurückgesetzt.", heta_code)
+
     def reset_all_learning_data(self):
         """
         Löscht alle Lernzyklen und Profile.
