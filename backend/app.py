@@ -572,8 +572,11 @@ def _measurement_loop():
         # Bevorzugt R_eff-basiert (reagiert auf Δp UND Durchflussänderungen).
         # Ratchet: schnell steigen (Filter beladen), langsam fallen.
         global _smoothed_health_pct
+        # R_eff-basierter Beladungsgrad nur wenn Profil VALIDE ist –
+        # während der Lernphase bleibt die dp-Formel aktiv, damit
+        # kein Methodenwechsel mitten im Lernzyklus auftritt.
         r_eff_clean_ref = r_eff_limit_ref = None
-        if profile and heta_activated:
+        if profile_valid and profile:
             r_eff_clean_ref = (profile.get("reference_r_eff_start")
                                or profile.get("reference_r_eff"))
             ref_flow = profile.get("reference_avg_flow") or 0.0
@@ -1508,39 +1511,82 @@ def api_simulation_quick_learn():
     if learning.is_profile_valid(heta_code):
         return jsonify({"success": False, "message": "Profil ist bereits valide – Lernphase abgeschlossen."})
 
-    dp_clean = settings.get("dp_clean_bar", 0.2)
-    dp_limit = settings.get("dp_limit_bar", 2.5)
-    flow_max = settings.get("flow_max_l_min", 150.0)
+    dp_clean          = settings.get("dp_clean_bar", 0.2)
+    dp_limit          = settings.get("dp_limit_bar", 2.5)
+    flow_max          = settings.get("flow_max_l_min", 150.0)
     sampling_interval = settings.get("sampling_interval_seconds", 1)
-    cycle_secs = float(get_simulation_cycle_steps()) * sampling_interval
-    required_cycles = settings.get("required_cycles_for_profile", 3)
+    cycle_steps       = get_simulation_cycle_steps()        # Schritte pro Zyklus
+    cycle_secs        = float(cycle_steps) * sampling_interval
+    required_cycles   = settings.get("required_cycles_for_profile", 3)
 
-    avg_flow = round(flow_max * 0.53 * 0.75, 1)
-    avg_temp = 27.5
-    end_dp = round(dp_limit * 0.985, 3)
-    start_r_eff = round(dp_clean / max(avg_flow, 0.1), 5)
-    end_r_eff = round(end_dp / max(avg_flow * 0.75, 0.1), 5)
-    loading_rate = round((end_dp - dp_clean) / max(cycle_secs, 1.0), 6)
+    # ── Physikalische Werte exakt nach FilterSimulator.get_readings() ────────
+    # dp(s) = dp_clean + (dp_limit - dp_clean) * (s/cycle_steps)^1.5
+    # flow(s) = flow_max * 0.53 * (1 - 0.5 * dp_fraction(s))
+    # temp(s) = 20.0 + (s/cycle_steps) * 15.0
+    def _sim_step(s: int) -> dict:
+        """Gibt Simulatorwerte für Schritt s zurück (identisch mit FilterSimulator)."""
+        eff = min(s / max(cycle_steps, 1), 1.0)
+        dp  = dp_clean + (dp_limit - dp_clean) * eff ** 1.5
+        dp  = round(max(dp_clean, min(dp, dp_limit)), 5)
+        dp_frac = (dp - dp_clean) / max(dp_limit - dp_clean, 1e-9)
+        fl  = flow_max * 0.53 * (1.0 - 0.50 * dp_frac)
+        tmp = 20.0 + eff * 15.0
+        return {"dp": dp, "flow": fl, "temp": tmp,
+                "r_eff": dp / max(fl, 0.01)}
+
+    start_vals = _sim_step(0)
+    end_vals   = _sim_step(cycle_steps)
+
+    # Zeitgemittelte Werte über den gesamten Zyklus (analytisch integriert)
+    # ∫₀¹ flow(t) dt = flow_max*0.53 * (1 - 0.5 * ∫₀¹ dp_fraction(t) dt)
+    # ∫₀¹ t^1.5 dt = 2/5 → avg_dp_fraction ≈ 0.4
+    avg_flow    = round(flow_max * 0.53 * (1.0 - 0.50 * 0.4), 2)   # ≈ 63.6 l/min
+    avg_temp    = round(20.0 + 0.5 * 15.0, 1)                       # = 27.5 °C
+    loading_rate = round((end_vals["dp"] - dp_clean) / max(cycle_secs, 1.0), 6)
 
     existing = db.count_confirmed_cycles(heta_code)
-    needed = max(0, required_cycles - existing)
-    now = time.time()
+    needed   = max(0, required_cycles - existing)
+    now      = time.time()
+
     for i in range(needed):
-        t_start = now - (needed - i) * (cycle_secs + 60)
-        db.insert_cycle({
-            "heta_code": heta_code,
-            "start_time": t_start,
-            "end_time": t_start + cycle_secs,
-            "duration_seconds": round(cycle_secs, 1),
-            "start_r_eff": start_r_eff,
-            "end_r_eff": end_r_eff,
-            "start_dp": round(dp_clean, 3),
-            "end_dp": end_dp,
-            "average_flow": avg_flow,
-            "average_temperature": avg_temp,
-            "loading_rate": loading_rate,
+        t_start  = now - (needed - i) * (cycle_secs + 60)
+        cycle_id = db.insert_cycle({
+            "heta_code":              heta_code,
+            "start_time":             t_start,
+            "end_time":               t_start + cycle_secs,
+            "duration_seconds":       round(cycle_secs, 1),
+            "start_r_eff":            round(start_vals["r_eff"], 6),
+            "end_r_eff":              round(end_vals["r_eff"],   6),
+            "start_dp":               round(dp_clean, 3),
+            "end_dp":                 round(end_vals["dp"], 3),
+            "average_flow":           avg_flow,
+            "average_temperature":    avg_temp,
+            "loading_rate":           loading_rate,
             "confirmed_filter_change": 1,
         })
+
+        # Zeitreihe exakt nach Simulator-Formel generieren.
+        # Stride damit maximal ~100 Samples pro Zyklus gespeichert werden.
+        stride  = max(1, cycle_steps // 100)
+        samples = []
+        for s in range(0, cycle_steps + 1, stride):
+            sv = _sim_step(s)
+            t  = t_start + s * sampling_interval
+            samples.append({
+                "cycle_id":             cycle_id,
+                "heta_code":            heta_code,
+                "timestamp":            t,
+                "cycle_second":         round(s * sampling_interval, 1),
+                "p1_bar":               3.5,
+                "p2_bar":               round(max(0.0, 3.5 - sv["dp"]), 4),
+                "dp_bar":               sv["dp"],
+                "flow_l_min":           round(sv["flow"], 2),
+                "temp_c":               round(sv["temp"], 1),
+                "r_eff":                round(sv["r_eff"], 6),
+                "filter_health_percent": None,
+                "remaining_seconds":    None,
+            })
+        db.insert_cycle_samples(samples)
 
     learning._update_profile(heta_code)
     remaining_secs = (dp_limit - dp_clean) / max(loading_rate, 1e-9)
@@ -1548,13 +1594,14 @@ def api_simulation_quick_learn():
     predictor.seed(remaining_secs)
 
     with _state_lock:
-        _state["learned_cycles"] = required_cycles
-        _state["profile_status"] = "VALIDIERT"
+        _state["learned_cycles"]  = required_cycles
+        _state["profile_status"]  = "VALIDIERT"
         _state["show_filter_health"] = True
 
     db.insert_service_event("SIM_SCHNELLLERN", heta_code,
                             json.dumps({"simulated_cycles": needed, "loading_rate": loading_rate}))
-    logger.info("Schnell-Lernphase: %d Zyklen für %s simuliert.", needed, heta_code)
+    logger.info("Schnell-Lernphase: %d Zyklen für %s simuliert (je %d Samples).",
+                needed, heta_code, len(samples) if needed else 0)
     return jsonify({
         "success": True,
         "message": f"{needed} Lernzyklus/-zyklen für «{heta_code}» simuliert. Profil ist jetzt valide.",
