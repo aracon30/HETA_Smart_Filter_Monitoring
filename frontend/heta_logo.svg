@@ -1,19 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 52" fill="none">
-  <!-- Filter housing -->
-  <rect x="4" y="4" width="36" height="44" rx="6"
-        stroke="white" stroke-width="2"
-        fill="rgba(255,255,255,0.08)"/>
-  <!-- Filter media layers (decreasing width) -->
-  <line x1="10" y1="15" x2="34" y2="15" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
-  <line x1="13" y1="23" x2="31" y2="23" stroke="white" stroke-width="2"   stroke-linecap="round"/>
-  <line x1="17" y1="31" x2="27" y2="31" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
-  <!-- Outlet dot -->
-  <circle cx="22" cy="41" r="2.8" fill="rgba(255,255,255,0.85)"/>
-  <!-- HETA wordmark -->
-  <text x="50" y="34"
-        font-family="'Segoe UI','Arial',sans-serif"
-        font-weight="800"
-        font-size="28"
-        letter-spacing="2"
-        fill="white">HETA</text>
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN"
+ "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg"
+ width="1181.000000pt" height="1181.000000pt" viewBox="0 0 1181.000000 1181.000000"
+ preserveAspectRatio="xMidYMid meet">
+<g transform="translate(0.000000,1181.000000) scale(0.100000,-0.100000)"
+fill="#000000" stroke="none">
+<path d="M0 5905 l0 -5905 5905 0 5905 0 0 5905 0 5905 -5905 0 -5905 0 0
+-5905z m3220 4075 l0 -1540 1440 0 1440 0 0 1540 0 1540 1275 0 1275 0 0
+-3975 0 -3975 -1275 0 -1275 0 -2 1542 -3 1543 -2590 0 c-1424 0 -2624 -2
+-2665 -5 -64 -4 -70 -6 -40 -12 47 -10 2394 -378 2408 -378 9 0 12 -223 11
+-892 l0 -893 -1254 -949 c-690 -522 -1263 -955 -1275 -963 l-20 -14 0 4485 0
+4486 1275 0 1275 0 0 -1540z m-1208 -8127 l3 -358 338 -3 337 -2 0 360 0 360
+260 0 260 0 0 -985 0 -985 -260 0 -260 0 0 405 0 405 -340 0 -340 0 0 -405 0
+-405 -255 0 -255 0 0 985 0 985 255 0 255 0 2 -357z m3718 152 l0 -205 -530 0
+-530 0 0 -175 0 -175 485 0 485 0 0 -195 0 -195 -485 0 -485 0 0 -190 0 -190
+545 0 545 0 0 -220 0 -220 -800 0 -800 0 0 985 0 985 785 0 785 0 0 -205z
+m2495 -15 l0 -215 -292 -3 -293 -2 0 -765 0 -765 -260 0 -260 0 0 765 0 765
+-295 0 -295 0 0 220 0 220 848 -2 847 -3 0 -215z m2051 -730 c195 -520 361
+-962 369 -982 l15 -38 -269 0 -268 0 -59 172 -59 173 -347 3 -346 2 -20 -52
+c-10 -29 -38 -108 -62 -175 l-43 -123 -263 0 -263 0 28 78 c33 87 683 1822
+700 1865 l11 27 261 -2 261 -3 354 -945z"/>
+<path d="M9546 1328 c-59 -182 -110 -338 -113 -345 -4 -10 38 -13 222 -13 211
+0 226 1 221 18 -129 410 -209 659 -215 665 -4 4 -56 -142 -115 -325z"/>
+</g>
 </svg>
