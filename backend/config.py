@@ -52,9 +52,15 @@ _DEFAULTS = {
     "display_gpio_dc": 25,
     "display_gpio_rst": 27,
     "display_i2c_address": 60,
-    # ANO-Rotary-Encoder (Adafruit Seesaw)
+    # ANO-Rotary-Encoder (direktes GPIO, kein I2C)
     "navigation_enabled": True,
-    "encoder_i2c_address": 73,
+    "encoder_pin_enca": 16,
+    "encoder_pin_encb": 20,
+    "encoder_pin_sw1":  21,   # Mitte / OK
+    "encoder_pin_sw2":  12,   # Unten
+    "encoder_pin_sw3":  13,   # Rechts
+    "encoder_pin_sw4":  19,   # Oben
+    "encoder_pin_sw5":  26,   # Links
 }
 
 

@@ -115,24 +115,51 @@ Kanalbezeichnungen (aus `_CHANNEL_NAMES` in `sensors.py`):
 
 ---
 
-## Adafruit ANO Rotary Encoder (I2C)
+## Adafruit ANO Rotary Navigation Encoder Breakout (direktes GPIO)
 
-| Parameter     | Wert                        |
-|---------------|-----------------------------|
-| Interface     | I2C                         |
-| I2C-Adresse   | 0x49 / 73 dez. (konfigurierbar: `encoder_i2c_address`) |
-| Bibliothek    | adafruit-circuitpython-seesaw + adafruit-blinka |
+| Parameter     | Wert                                                         |
+|---------------|--------------------------------------------------------------|
+| Modell        | Adafruit ANO Rotary Navigation Encoder Breakout – Pre-Soldered |
+| Interface     | Direktes GPIO (kein I2C/Seesaw)                              |
+| Bibliothek    | gpiozero ≥ 2.0 + lgpio (Pi 5) / RPi.GPIO (Pi 4)             |
 
-> Zum Deaktivieren des Encoders: `navigation_enabled: false` in `config/settings.json`.
+> Zum Deaktivieren: `navigation_enabled: false` in `config/settings.json`.  
+> GPIO-Pins sind über `encoder_pin_enca` … `encoder_pin_sw5` konfigurierbar.
 
-### I2C-Anschluss
+### Pinbeschreibung (Breakout)
 
-| Encoder-Pin | Raspberry Pi GPIO | Funktion |
-|------------|-------------------|----------|
-| VCC        | 3V3 (Pin 1)       | Stromversorgung |
-| GND        | GND (Pin 6)       | Masse |
-| SCL        | GPIO 3 (Pin 5)    | I2C Clock |
-| SDA        | GPIO 2 (Pin 3)    | I2C Data |
+| Breakout-Pin | Bedeutung                                    |
+|-------------|----------------------------------------------|
+| ENCA        | Drehgeber Signal A                           |
+| ENCB        | Drehgeber Signal B                           |
+| SW1         | Mitteltaste (Drücken / OK)                   |
+| SW2         | Taste Unten                                  |
+| SW3         | Taste Rechts                                 |
+| SW4         | Taste Oben                                   |
+| SW5         | Taste Links                                  |
+| COMA        | Common für ENCA, ENCB, SW1 → **an GND**      |
+| COMB        | Common für SW2–SW5 → **an GND**              |
+
+> **Wichtig:** COMA und COMB **an GND anschließen** (nicht an VCC). Die internen  
+> Pull-ups des Raspberry Pi übernehmen dann die Signalpegel.
+
+### GPIO-Anschluss (Raspberry Pi, BCM-Nummerierung, Standardwerte)
+
+| Breakout-Pin | Raspberry Pi GPIO  | Board-Pin | settings.json-Schlüssel   |
+|-------------|-------------------|-----------|---------------------------|
+| VCC         | 3V3               | Pin 1     | –                         |
+| GND         | GND               | Pin 6     | –                         |
+| COMA        | GND               | Pin 6/14  | –  (an GND, kein GPIO)    |
+| COMB        | GND               | Pin 6/14  | –  (an GND, kein GPIO)    |
+| ENCA        | **GPIO 16**       | Pin 36    | `encoder_pin_enca`        |
+| ENCB        | **GPIO 20**       | Pin 38    | `encoder_pin_encb`        |
+| SW1 (OK)    | **GPIO 21**       | Pin 40    | `encoder_pin_sw1`         |
+| SW2 (Unten) | **GPIO 12**       | Pin 32    | `encoder_pin_sw2`         |
+| SW3 (Rechts)| **GPIO 13**       | Pin 33    | `encoder_pin_sw3`         |
+| SW4 (Oben)  | **GPIO 19**       | Pin 35    | `encoder_pin_sw4`         |
+| SW5 (Links) | **GPIO 26**       | Pin 37    | `encoder_pin_sw5`         |
+
+> GPIO-Pins können in `config/settings.json` angepasst werden, falls andere Pins belegt sind.
 
 ### Tastenzuordnung (Display-Navigation)
 

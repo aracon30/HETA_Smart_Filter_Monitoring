@@ -1,85 +1,105 @@
 """
-Navigationsmodul – Adafruit ANO Rotary Encoder I2C Adapter.
+Navigationsmodul – Adafruit ANO Rotary Navigation Encoder Breakout.
 
-Steuert Menünavigation, Werteeingabe und Bestätigungen am Feldgerät.
-Fällt bei fehlender Hardware auf Tastatur-Simulation zurück.
+Direkte GPIO-Anbindung via gpiozero (kein I2C/Seesaw erforderlich).
+
+Verdrahtung:
+  COMA und COMB an GND anschließen – die internen Pull-ups des Raspberry Pi
+  werden dann für alle Signalleitungen verwendet.
+
+Pinbelegung (BCM-Nummerierung, konfigurierbar in config/settings.json):
+  ENCA → encoder_pin_enca  (Standard: 16)
+  ENCB → encoder_pin_encb  (Standard: 20)
+  SW1  → encoder_pin_sw1   (Standard: 21) – Drücken / OK (Mitte)
+  SW2  → encoder_pin_sw2   (Standard: 12) – Unten
+  SW3  → encoder_pin_sw3   (Standard: 13) – Rechts
+  SW4  → encoder_pin_sw4   (Standard: 19) – Oben
+  SW5  → encoder_pin_sw5   (Standard: 26) – Links
+  COMA → GND  (kein GPIO erforderlich)
+  COMB → GND  (kein GPIO erforderlich)
 """
 
-import time
 import logging
 import threading
 from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
-# Adafruit ANO Seesaw I2C Adresse (Standard)
-ANO_I2C_ADDRESS = 0x49
-
-# Tastenbelegung (Seesaw Pin-Nummern)
-BTN_SELECT = 0   # Drücken / OK
-BTN_LEFT   = 3
-BTN_RIGHT  = 4
-BTN_UP     = 2
-BTN_DOWN   = 1
-
-# Encoder-Schrittzähler-Delta
-ENCODER_THRESHOLD = 1
-
 
 class NavigationEvent:
     """Repräsentiert ein einzelnes Navigationsereignis."""
     ROTATE_LEFT  = "ROTATE_LEFT"
     ROTATE_RIGHT = "ROTATE_RIGHT"
-    PRESS        = "PRESS"
-    LEFT         = "LEFT"
-    RIGHT        = "RIGHT"
-    UP           = "UP"
-    DOWN         = "DOWN"
+    PRESS        = "PRESS"   # SW1 – Mitte / OK
+    LEFT         = "LEFT"    # SW5
+    RIGHT        = "RIGHT"   # SW3
+    UP           = "UP"      # SW4
+    DOWN         = "DOWN"    # SW2
 
 
 class NavigationController:
     """
-    Liest den ANO Rotary Encoder und gibt Ereignisse an registrierte Handler weiter.
+    Liest den ANO Rotary Encoder via direkter GPIO-Verbindung (gpiozero).
+
+    gpiozero verwendet unter Raspberry Pi OS automatisch den lgpio-Backend
+    (Pi 5) oder pigpio/RPi.GPIO (Pi 4 und älter) – kein manuelles Backend-
+    Setup erforderlich.
+
     Fällt bei fehlender Hardware auf Dummy-Modus zurück.
     """
 
-    def __init__(self, i2c_address: int = ANO_I2C_ADDRESS):
-        self._seesaw = None
+    def __init__(self,
+                 pin_enca: int = 16, pin_encb: int = 20,
+                 pin_sw1:  int = 21, pin_sw2:  int = 12,
+                 pin_sw3:  int = 13, pin_sw4:  int = 19,
+                 pin_sw5:  int = 26):
+        self._hw: Optional[dict] = None
         self._simulated = False
-        self._encoder_pos = 0
-        self._button_states: dict[int, bool] = {
-            BTN_SELECT: False,
-            BTN_LEFT: False,
-            BTN_RIGHT: False,
-            BTN_UP: False,
-            BTN_DOWN: False,
-        }
         self._handlers: list[Callable] = []
-        self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._running   = False
 
         try:
-            self._init_hardware(i2c_address)
+            self._init_hardware(pin_enca, pin_encb,
+                                pin_sw1, pin_sw2, pin_sw3, pin_sw4, pin_sw5)
         except Exception as e:
-            logger.warning("ANO Encoder nicht verfügbar: %s – Simulationsmodus.", e)
+            logger.warning("ANO Encoder GPIO nicht verfügbar: %s – Simulationsmodus.", e)
             self._simulated = True
 
-    def _init_hardware(self, address: int):
-        """Initialisiert den Adafruit Seesaw."""
-        import board  # type: ignore
-        import busio  # type: ignore
-        from adafruit_seesaw.seesaw import Seesaw  # type: ignore
-        from adafruit_seesaw.encoderbase import EncoderBase  # type: ignore
+    # ------------------------------------------------------------------
+    # Hardware-Initialisierung
+    # ------------------------------------------------------------------
 
-        i2c = busio.I2C(board.SCL, board.SDA)
-        self._seesaw = Seesaw(i2c, addr=address)
-        self._seesaw.pin_mode_bulk(
-            (1 << BTN_SELECT) | (1 << BTN_LEFT) | (1 << BTN_RIGHT) |
-            (1 << BTN_UP) | (1 << BTN_DOWN),
-            self._seesaw.INPUT_PULLUP
+    def _init_hardware(self, enca: int, encb: int,
+                       sw1: int, sw2: int, sw3: int, sw4: int, sw5: int):
+        from gpiozero import Button, RotaryEncoder  # type: ignore
+
+        encoder = RotaryEncoder(a=enca, b=encb, max_steps=None, bounce_time=0.002)
+        encoder.when_rotated_clockwise         = lambda: self._dispatch(NavigationEvent.ROTATE_RIGHT)
+        encoder.when_rotated_counter_clockwise = lambda: self._dispatch(NavigationEvent.ROTATE_LEFT)
+
+        pin_event_map = [
+            (sw1, NavigationEvent.PRESS),
+            (sw2, NavigationEvent.DOWN),
+            (sw3, NavigationEvent.RIGHT),
+            (sw4, NavigationEvent.UP),
+            (sw5, NavigationEvent.LEFT),
+        ]
+        buttons = []
+        for pin, event in pin_event_map:
+            btn = Button(pin, pull_up=True, bounce_time=0.05)
+            btn.when_pressed = lambda ev=event: self._dispatch(ev)
+            buttons.append(btn)
+
+        self._hw = {"encoder": encoder, "buttons": buttons}
+        logger.info(
+            "ANO Encoder initialisiert – ENCA=GPIO%d ENCB=GPIO%d "
+            "SW1=GPIO%d SW2=GPIO%d SW3=GPIO%d SW4=GPIO%d SW5=GPIO%d.",
+            enca, encb, sw1, sw2, sw3, sw4, sw5,
         )
-        self._encoder_pos = self._seesaw.encoder_position()
-        logger.info("ANO Rotary Encoder initialisiert (I2C 0x%02X).", address)
+
+    # ------------------------------------------------------------------
+    # Handler-Verwaltung
+    # ------------------------------------------------------------------
 
     def register_handler(self, handler: Callable):
         """Registriert eine Callback-Funktion für Navigationsereignisse."""
@@ -93,65 +113,31 @@ class NavigationController:
             except Exception as e:
                 logger.error("Fehler im Navigations-Handler: %s", e)
 
+    # ------------------------------------------------------------------
+    # Lifecycle
+    # ------------------------------------------------------------------
+
     def start(self, poll_interval: float = 0.05):
-        """Startet den Hintergrund-Poll-Thread."""
-        if self._running:
-            return
+        """
+        Startet den Navigations-Controller.
+
+        Im GPIO-Modus werden Ereignisse über Interrupts ausgelöst (gpiozero),
+        kein aktiver Poll-Thread erforderlich.
+        """
         self._running = True
-        self._thread = threading.Thread(target=self._poll_loop,
-                                        args=(poll_interval,), daemon=True)
-        self._thread.start()
-        logger.info("Navigations-Poll gestartet.")
+        mode = "Simulationsmodus" if self._simulated else "GPIO-Interrupt-Modus"
+        logger.info("Navigations-Controller gestartet (%s).", mode)
 
     def stop(self):
-        """Stoppt den Poll-Thread."""
+        """Gibt alle GPIO-Ressourcen frei."""
         self._running = False
-        if self._thread:
-            self._thread.join(timeout=2.0)
-
-    def _poll_loop(self, interval: float):
-        """Liest Encoder und Tasten im Intervall."""
-        while self._running:
+        if self._hw:
             try:
-                if not self._simulated:
-                    self._poll_hardware()
-            except Exception as e:
-                logger.debug("Encoder-Lesefehler: %s", e)
-            time.sleep(interval)
-
-    def _poll_hardware(self):
-        """Liest Encoder-Position und Tastenzustände vom Seesaw."""
-        if self._seesaw is None:
-            return
-
-        # Encoder
-        new_pos = self._seesaw.encoder_position()
-        delta = new_pos - self._encoder_pos
-        if delta >= ENCODER_THRESHOLD:
-            self._encoder_pos = new_pos
-            self._dispatch(NavigationEvent.ROTATE_RIGHT)
-        elif delta <= -ENCODER_THRESHOLD:
-            self._encoder_pos = new_pos
-            self._dispatch(NavigationEvent.ROTATE_LEFT)
-
-        # Tasten (LOW = gedrückt wegen PULLUP)
-        buttons_raw = self._seesaw.digital_read_bulk(
-            (1 << BTN_SELECT) | (1 << BTN_LEFT) | (1 << BTN_RIGHT) |
-            (1 << BTN_UP) | (1 << BTN_DOWN)
-        )
-        mapping = {
-            BTN_SELECT: NavigationEvent.PRESS,
-            BTN_LEFT:   NavigationEvent.LEFT,
-            BTN_RIGHT:  NavigationEvent.RIGHT,
-            BTN_UP:     NavigationEvent.UP,
-            BTN_DOWN:   NavigationEvent.DOWN,
-        }
-        for pin, event in mapping.items():
-            pressed = not bool(buttons_raw & (1 << pin))
-            was_pressed = self._button_states[pin]
-            if pressed and not was_pressed:
-                self._dispatch(event)
-            self._button_states[pin] = pressed
+                self._hw["encoder"].close()
+                for btn in self._hw["buttons"]:
+                    btn.close()
+            except Exception as exc:
+                logger.debug("Encoder cleanup: %s", exc)
 
     # ------------------------------------------------------------------
     # Simulations-API (für Weboberfläche und Tests)
@@ -162,13 +148,28 @@ class NavigationController:
         Simuliert ein Navigationsereignis programmatisch.
         Wird von der REST-API genutzt um Hardware zu simulieren.
         """
-        valid = {NavigationEvent.ROTATE_LEFT, NavigationEvent.ROTATE_RIGHT,
-                 NavigationEvent.PRESS, NavigationEvent.LEFT,
-                 NavigationEvent.RIGHT, NavigationEvent.UP, NavigationEvent.DOWN}
+        valid = {
+            NavigationEvent.ROTATE_LEFT, NavigationEvent.ROTATE_RIGHT,
+            NavigationEvent.PRESS, NavigationEvent.LEFT,
+            NavigationEvent.RIGHT, NavigationEvent.UP, NavigationEvent.DOWN,
+        }
         if event in valid:
             self._dispatch(event)
         else:
             logger.warning("Unbekanntes Navigationsereignis: %s", event)
+
+    # ------------------------------------------------------------------
+    # Diagnose
+    # ------------------------------------------------------------------
+
+    def get_encoder_steps(self) -> Optional[int]:
+        """Gibt die aktuelle Encoder-Schrittposition zurück (für Diagnose)."""
+        if self._hw:
+            try:
+                return self._hw["encoder"].steps
+            except Exception:
+                return None
+        return None
 
     @property
     def is_simulated(self) -> bool:

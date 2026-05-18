@@ -269,7 +269,13 @@ if settings.get("navigation_enabled", True):
     try:
         from navigation import NavigationController
         _navigation = NavigationController(
-            i2c_address=settings.get("encoder_i2c_address", 73),
+            pin_enca=settings.get("encoder_pin_enca", 16),
+            pin_encb=settings.get("encoder_pin_encb", 20),
+            pin_sw1 =settings.get("encoder_pin_sw1",  21),
+            pin_sw2 =settings.get("encoder_pin_sw2",  12),
+            pin_sw3 =settings.get("encoder_pin_sw3",  13),
+            pin_sw4 =settings.get("encoder_pin_sw4",  19),
+            pin_sw5 =settings.get("encoder_pin_sw5",  26),
         )
         _navigation.start()
     except Exception as e:
@@ -831,55 +837,32 @@ def api_diagnostics():
         ],
     })
 
-    # ── I2C-Scan (Encoder-Adresse 0x49) ──────────────────────────────────────
-    enc_addr     = settings.get("encoder_i2c_address", 73)
-    enc_addr_hex = f"0x{enc_addr:02x}"
-    if i2c_exists:
-        try:
-            ires = subprocess.run(
-                ["i2cdetect", "-y", "1"],
-                capture_output=True, text=True, timeout=5,
-            )
-            found_addrs = _parse_i2cdetect(ires.stdout)
-            enc_found   = enc_addr in found_addrs
-            addr_list   = ", ".join(f"0x{a:02x}" for a in sorted(found_addrs)) or "–"
-            checks.append({
-                "id": "i2c_scan",
-                "label": f"I2C-Scan (Encoder erwartet bei {enc_addr_hex})",
-                "status": "ok" if enc_found else "error",
-                "detail": (f"Encoder bei {enc_addr_hex} erkannt  ·  Alle Geräte: {addr_list}"
-                           if enc_found else
-                           f"Encoder NICHT gefunden  ·  Gefundene Adressen: {addr_list}"),
-                "hints": [] if enc_found else [
-                    f"Kabel prüfen: SDA→Pin 3 (GPIO2), SCL→Pin 5 (GPIO3), VCC→3,3V, GND→Pin 6",
-                    f"I2C-Adresse in settings.json: encoder_i2c_address={enc_addr} (={enc_addr_hex})",
-                    "Direkttest: sudo i2cdetect -y 1",
-                ],
-            })
-        except FileNotFoundError:
-            checks.append({
-                "id": "i2c_scan",
-                "label": f"I2C-Scan (Encoder {enc_addr_hex})",
-                "status": "warning",
-                "detail": "i2cdetect nicht installiert",
-                "hints": ["sudo apt install i2c-tools"],
-            })
-        except Exception as exc:
-            checks.append({
-                "id": "i2c_scan",
-                "label": f"I2C-Scan (Encoder {enc_addr_hex})",
-                "status": "error",
-                "detail": f"Scan fehlgeschlagen: {exc}",
-                "hints": [],
-            })
-    else:
-        checks.append({
-            "id": "i2c_scan",
-            "label": f"I2C-Scan (Encoder {enc_addr_hex})",
-            "status": "error",
-            "detail": "I2C-Bus nicht verfügbar – Scan übersprungen",
-            "hints": [],
-        })
+    # ── GPIO-Encoder-Pins prüfen ──────────────────────────────────────────────
+    enc_pins = {
+        "ENCA": settings.get("encoder_pin_enca", 16),
+        "ENCB": settings.get("encoder_pin_encb", 20),
+        "SW1 (OK)":   settings.get("encoder_pin_sw1", 21),
+        "SW2 (Unten)":settings.get("encoder_pin_sw2", 12),
+        "SW3 (Rechts)":settings.get("encoder_pin_sw3", 13),
+        "SW4 (Oben)": settings.get("encoder_pin_sw4", 19),
+        "SW5 (Links)":settings.get("encoder_pin_sw5", 26),
+    }
+    pin_summary = "  ·  ".join(f"{n}=GPIO{p}" for n, p in enc_pins.items())
+    try:
+        import gpiozero  # type: ignore  # noqa: F401
+        gpiozero_ok = True
+    except ImportError:
+        gpiozero_ok = False
+    checks.append({
+        "id": "encoder_gpio",
+        "label": "ANO-Encoder GPIO-Konfiguration",
+        "status": "ok" if gpiozero_ok else "warning",
+        "detail": pin_summary if gpiozero_ok else "gpiozero nicht installiert",
+        "hints": [] if gpiozero_ok else [
+            "pip install gpiozero lgpio",
+            "COMA und COMB an GND anschließen",
+        ],
+    })
 
     # ── OLED-Display ─────────────────────────────────────────────────────────
     if not settings.get("display_enabled", True):
@@ -928,7 +911,7 @@ def api_diagnostics():
     if not settings.get("navigation_enabled", True):
         checks.append({
             "id": "encoder",
-            "label": "ANO-Encoder (Adafruit Seesaw I2C)",
+            "label": "ANO-Encoder (GPIO)",
             "status": "info",
             "detail": "Encoder deaktiviert (navigation_enabled=false in settings.json)",
             "hints": [],
@@ -936,44 +919,36 @@ def api_diagnostics():
     elif _navigation is None:
         checks.append({
             "id": "encoder",
-            "label": "ANO-Encoder (Adafruit Seesaw I2C)",
+            "label": "ANO-Encoder (GPIO)",
             "status": "error",
             "detail": "Encoder konnte beim Start nicht initialisiert werden",
             "hints": [
-                f"I2C-Adresse {enc_addr_hex} mit i2cdetect prüfen",
-                "Kabel: SDA→Pin 3, SCL→Pin 5, VCC→3,3V, GND→Pin 6",
-                "Bibliothek: pip show adafruit-circuitpython-seesaw adafruit-blinka",
+                "pip install gpiozero lgpio",
+                "COMA → GND, COMB → GND anschließen",
+                "GPIO-Pins in settings.json prüfen (encoder_pin_enca, …)",
             ],
         })
     elif _navigation.is_simulated:
         checks.append({
             "id": "encoder",
-            "label": "ANO-Encoder (Adafruit Seesaw I2C)",
+            "label": "ANO-Encoder (GPIO)",
             "status": "warning",
-            "detail": "Encoder läuft im Simulationsmodus – keine Hardware erkannt",
+            "detail": "Encoder läuft im Simulationsmodus – keine GPIO-Hardware erkannt",
             "hints": [
-                "Encoder anschließen (SDA/SCL/VCC/GND)",
-                f"I2C-Adresse {enc_addr_hex} mit i2cdetect -y 1 prüfen",
+                "Encoder anschließen: ENCA, ENCB, SW1–SW5, COMA→GND, COMB→GND",
+                "GPIO-Pins in settings.json prüfen (encoder_pin_enca, …)",
+                "pip install gpiozero lgpio",
             ],
         })
     else:
-        try:
-            pos = _navigation._seesaw.encoder_position()
-            checks.append({
-                "id": "encoder",
-                "label": "ANO-Encoder (Adafruit Seesaw I2C)",
-                "status": "ok",
-                "detail": f"Encoder antwortet – aktuelle Position: {pos}",
-                "hints": [],
-            })
-        except Exception as exc:
-            checks.append({
-                "id": "encoder",
-                "label": "ANO-Encoder (Adafruit Seesaw I2C)",
-                "status": "error",
-                "detail": f"Lesefehler: {exc}",
-                "hints": ["I2C-Verbindung und Kabel prüfen", "Encoder neu anschließen"],
-            })
+        steps = _navigation.get_encoder_steps()
+        checks.append({
+            "id": "encoder",
+            "label": "ANO-Encoder (GPIO)",
+            "status": "ok",
+            "detail": f"Encoder aktiv – aktuelle Schrittposition: {steps}",
+            "hints": [],
+        })
 
     # ── Sensoren / AnoPi Shield ───────────────────────────────────────────────
     sim_mode = settings.get("simulation_mode", True)
