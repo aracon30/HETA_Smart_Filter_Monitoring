@@ -1083,7 +1083,7 @@ function buildDiagnosis(dpDevPct, flowDevPct, tempDev) {
 // ============================================================
 
 let _sliderDebounce = null;
-let _rateValues = { dp_factor: 1.0, flow_factor: 1.0, temp_offset: 0.0, p1_bar: 3.5 };
+let _rateValues = { dp_factor: 1.0, p1_bar: 3.5 };
 
 function updateSimDemoPanel(d) {
   const panel = document.getElementById("sim-demo-panel");
@@ -1133,34 +1133,20 @@ function updateComparison(d) {
   if (!active) return;
 
   const s = window._settings || {};
-  const dp_clean  = s.dp_clean_bar            ?? 0.2;
-  const dp_limit  = s.dp_limit_bar            ?? 2.5;
+  const dp_clean  = s.dp_clean_bar ?? 0.2;
+  const dp_limit  = s.dp_limit_bar ?? 2.5;
   const samp      = parseFloat(s.sampling_interval_seconds ?? 1);
-  const cyc_steps = s.cycle_steps             ?? 300;
+  const cyc_steps = s.cycle_steps  ?? 300;
   const ref_rate  = (dp_limit - dp_clean) / Math.max(samp * cyc_steps, 1);
-  const ref_flow  = (s.flow_max_l_min ?? 150) * 0.53;
-  const ref_temp  = 27.5;
 
-  const dp_factor   = d.sim_dp_factor    ?? 1.0;
-  const flow_factor = d.sim_flow_factor  ?? 1.0;
-  const temp_offset = d.sim_temp_offset  ?? 0.0;
-  const dp_dev      = d.sim_dp_deviation_pct   ?? 0.0;
-  const flow_dev    = d.sim_flow_deviation_pct ?? 0.0;
-  const temp_dev    = d.sim_temp_deviation     ?? 0.0;
+  const dp_factor = d.sim_dp_factor        ?? 1.0;
+  const dp_dev    = d.sim_dp_deviation_pct ?? 0.0;
 
-  setText("cmp-dp-ref",   `${(ref_rate * 1000).toFixed(2)} mbar/s`);
-  setText("cmp-dp-cur",   `${(ref_rate * dp_factor * 1000).toFixed(2)} mbar/s`);
-  setDev("cmp-dp-dev",    dp_dev,   "%");
+  setText("cmp-dp-ref", `${(ref_rate * 1000).toFixed(2)} mbar/s`);
+  setText("cmp-dp-cur", `${(ref_rate * dp_factor * 1000).toFixed(2)} mbar/s`);
+  setDev("cmp-dp-dev",  dp_dev, "%");
 
-  setText("cmp-flow-ref", `${ref_flow.toFixed(0)} l/min`);
-  setText("cmp-flow-cur", `${(ref_flow * flow_factor).toFixed(0)} l/min`);
-  setDev("cmp-flow-dev",  flow_dev, "%");
-
-  setText("cmp-temp-ref", `${ref_temp.toFixed(1)} °C`);
-  setText("cmp-temp-cur", `${(ref_temp + temp_offset).toFixed(1)} °C`);
-  setDev("cmp-temp-dev",  temp_dev, "°C", true);
-
-  setText("sim-diagnosis", buildSimDiagnosis(dp_factor, flow_factor, temp_offset));
+  setText("sim-diagnosis", buildSimDiagnosis(dp_factor));
 }
 
 function setDev(id, val, unit, isAbsolute = false) {
@@ -1174,32 +1160,17 @@ function setDev(id, val, unit, isAbsolute = false) {
   );
 }
 
-function buildSimDiagnosis(dpF, flowF, tempOff) {
-  const hints = [];
-  if (dpF > 1.5 && flowF < 0.8) {
-    hints.push("💡 Schnelle Beladung + reduzierter Durchfluss → Verdacht auf Filterverstopfung oder erhöhten Verschmutzungseintrag.");
-  } else if (dpF > 1.5) {
-    hints.push("💡 Δp steigt deutlich schneller als gelernt → erhöhte Partikelkonzentration im Medium oder beschädigtes Filterelement möglich.");
-  } else if (dpF < 0.6) {
-    hints.push("💡 Sehr langsame Beladung → Prozess läuft mit deutlich reduzierter Last. Filterwechselintervall verlängert sich.");
+function buildSimDiagnosis(dpF) {
+  if (dpF > 1.5) {
+    return "💡 Verschmutzungsrate deutlich erhöht → Filterwechselintervall verkürzt sich spürbar. Erhöhte Partikelkonzentration oder beschädigtes Filterelement möglich.";
   }
-  if (flowF < 0.7) {
-    hints.push("💡 Durchfluss stark reduziert → mögliche Ursache: Pumpenproblem, Leckage im Bypass oder Vorverstopfung.");
-  } else if (flowF > 1.2) {
-    hints.push("💡 Erhöhter Durchfluss → kürzere Filterstandzeit zu erwarten, Filterwechselintervall verkürzt sich.");
+  if (dpF < 0.6) {
+    return "💡 Sehr geringe Verschmutzungsrate → Prozess läuft mit deutlich reduzierter Last. Filterwechselintervall verlängert sich.";
   }
-  if (tempOff > 20) {
-    hints.push("💡 Deutlich erhöhte Prozesstemperatur → Filterkapazität kann reduziert sein, Materialbeständigkeit prüfen.");
-  } else if (tempOff < -15) {
-    hints.push("💡 Deutlich niedrigere Temperatur → Viskositätsänderung kann den Differenzdruck beeinflussen.");
+  if (Math.abs(dpF - 1.0) < 0.1) {
+    return "✔ Verschmutzungsrate im gelernten Normalbereich – kein Handlungsbedarf.";
   }
-  if (hints.length === 0) {
-    if (Math.abs(dpF - 1.0) < 0.1 && Math.abs(flowF - 1.0) < 0.1 && Math.abs(tempOff) < 5) {
-      return "✔ Alle Parameter im gelernten Normalbereich – kein Handlungsbedarf.";
-    }
-    hints.push("💡 Leichte Abweichungen vom gelernten Profil – Prozess und Filter im Auge behalten.");
-  }
-  return hints.join(" ");
+  return "💡 Leichte Abweichung der Verschmutzungsrate vom gelernten Profil – Prozess beobachten.";
 }
 
 async function quickLearn() {
@@ -1232,13 +1203,6 @@ function onSliderInput(which, rawVal) {
   } else if (which === "dp_rate") {
     _rateValues.dp_factor = v / 100.0;
     setText("sv-dp-rate", Math.round(v) + " %");
-  } else if (which === "flow_rate") {
-    _rateValues.flow_factor = v / 100.0;
-    setText("sv-flow-rate", Math.round(v) + " %");
-  } else if (which === "temp_off") {
-    _rateValues.temp_offset = v;
-    const sign = v > 0 ? "+" : "";
-    setText("sv-temp-off", sign + v.toFixed(0) + " °C");
   }
   const toggle = document.getElementById("sim-manual-toggle");
   if (toggle && toggle.checked) scheduleSendValues();
@@ -1253,8 +1217,8 @@ async function sendSliderValues() {
   await apiFetch("/api/simulation/set-rates", "POST", {
     active:      true,
     dp_factor:   _rateValues.dp_factor,
-    flow_factor: _rateValues.flow_factor,
-    temp_offset: _rateValues.temp_offset,
+    flow_factor: 1.0,
+    temp_offset: 0.0,
     p1_bar:      _rateValues.p1_bar,
   });
 }
@@ -1271,15 +1235,11 @@ async function onManualToggle(checkbox) {
 }
 
 function resetSliders() {
-  _rateValues = { dp_factor: 1.0, flow_factor: 1.0, temp_offset: 0.0, p1_bar: 3.5 };
-  document.getElementById("sl-p1").value        = 3.5;
-  document.getElementById("sl-dp-rate").value   = 100;
-  document.getElementById("sl-flow-rate").value = 100;
-  document.getElementById("sl-temp-off").value  = 0;
-  setText("sv-p1",        "3.5 bar");
-  setText("sv-dp-rate",   "100 %");
-  setText("sv-flow-rate", "100 %");
-  setText("sv-temp-off",  "0 °C");
+  _rateValues = { dp_factor: 1.0, p1_bar: 3.5 };
+  document.getElementById("sl-p1").value      = 3.5;
+  document.getElementById("sl-dp-rate").value = 100;
+  setText("sv-p1",      "3.5 bar");
+  setText("sv-dp-rate", "100 %");
   const toggle = document.getElementById("sim-manual-toggle");
   if (toggle && toggle.checked) scheduleSendValues();
 }

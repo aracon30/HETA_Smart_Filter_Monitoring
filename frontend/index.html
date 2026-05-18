@@ -580,35 +580,13 @@
 
             <div class="sim-slider-row">
               <label class="sim-slider-label">
-                &#916;p-Beladungsrate
+                Verschmutzungsrate
                 <span class="sim-slider-note">% der gelernten Rate</span>
               </label>
               <input type="range" id="sl-dp-rate" class="sim-slider"
                      min="30" max="300" step="5" value="100"
                      oninput="onSliderInput('dp_rate', this.value)">
               <span class="sim-slider-val" id="sv-dp-rate">100 %</span>
-            </div>
-
-            <div class="sim-slider-row">
-              <label class="sim-slider-label">
-                Durchfluss Q
-                <span class="sim-slider-note">% des Solldurchflusses</span>
-              </label>
-              <input type="range" id="sl-flow-rate" class="sim-slider"
-                     min="30" max="150" step="5" value="100"
-                     oninput="onSliderInput('flow_rate', this.value)">
-              <span class="sim-slider-val" id="sv-flow-rate">100 %</span>
-            </div>
-
-            <div class="sim-slider-row">
-              <label class="sim-slider-label">
-                Temperaturabweichung
-                <span class="sim-slider-note">&#916;&#176;C zum gelernten Mittel</span>
-              </label>
-              <input type="range" id="sl-temp-off" class="sim-slider"
-                     min="-30" max="50" step="1" value="0"
-                     oninput="onSliderInput('temp_off', this.value)">
-              <span class="sim-slider-val" id="sv-temp-off">0 &#176;C</span>
             </div>
 
             <div class="sim-slider-actions">
@@ -628,16 +606,6 @@
               <div id="cmp-dp-ref" class="sim-cmp-val">–</div>
               <div id="cmp-dp-cur" class="sim-cmp-val">–</div>
               <div id="cmp-dp-dev" class="sim-cmp-dev">–</div>
-
-              <div class="sim-cmp-label">Durchfluss</div>
-              <div id="cmp-flow-ref" class="sim-cmp-val">–</div>
-              <div id="cmp-flow-cur" class="sim-cmp-val">–</div>
-              <div id="cmp-flow-dev" class="sim-cmp-dev">–</div>
-
-              <div class="sim-cmp-label">Temperatur</div>
-              <div id="cmp-temp-ref" class="sim-cmp-val">–</div>
-              <div id="cmp-temp-cur" class="sim-cmp-val">–</div>
-              <div id="cmp-temp-dev" class="sim-cmp-dev">–</div>
             </div>
             <div id="sim-diagnosis" class="sim-diagnosis"></div>
           </div>
