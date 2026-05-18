@@ -445,6 +445,43 @@
       </button>
     </div>
 
+    <!-- ===== Prozessanalyse (Sensor- UND Simulationsmodus) ===== -->
+    <section id="analysis-section" class="analysis-section hidden">
+      <div class="analysis-header">
+        <h3>Prozessanalyse</h3>
+        <span id="analysis-mode-badge" class="analysis-mode-badge">–</span>
+      </div>
+
+      <div id="analysis-loading" class="analysis-loading hidden">
+        &#9203; Messwerte werden gesammelt &ndash; Analyse startet in wenigen Sekunden&hellip;
+      </div>
+
+      <div id="analysis-content" class="hidden">
+        <div class="analysis-grid">
+          <div class="analysis-head">Kenngröße</div>
+          <div class="analysis-head">Referenz (gelernt)</div>
+          <div class="analysis-head">Aktuell</div>
+          <div class="analysis-head">Abweichung</div>
+
+          <div class="analysis-label">&#916;p-Anstieg</div>
+          <div id="an-dp-ref"  class="analysis-val">–</div>
+          <div id="an-dp-cur"  class="analysis-val">–</div>
+          <div id="an-dp-dev"  class="analysis-dev">–</div>
+
+          <div class="analysis-label">Durchfluss Q</div>
+          <div id="an-fl-ref"  class="analysis-val">–</div>
+          <div id="an-fl-cur"  class="analysis-val">–</div>
+          <div id="an-fl-dev"  class="analysis-dev">–</div>
+
+          <div class="analysis-label">Temperatur T</div>
+          <div id="an-tmp-ref" class="analysis-val">–</div>
+          <div id="an-tmp-cur" class="analysis-val">–</div>
+          <div id="an-tmp-dev" class="analysis-dev">–</div>
+        </div>
+        <div id="analysis-diagnosis" class="analysis-diagnosis"></div>
+      </div>
+    </section>
+
     <!-- ===== Simulations-Demo-Steuerung ===== -->
     <section id="sim-demo-panel" class="sim-demo-panel hidden">
       <div class="sim-demo-header">

@@ -95,6 +95,17 @@ class Database:
             """)
         logger.info("Datenbank initialisiert: %s", self.db_path)
 
+        # Schema-Migration: Referenz-Durchschnittswerte für modusneutrale Analyse
+        with self._conn() as conn:
+            for col, default in [("reference_avg_flow", "0.0"),
+                                  ("reference_avg_temp", "20.0")]:
+                try:
+                    conn.execute(
+                        f"ALTER TABLE heta_profiles ADD COLUMN {col} REAL DEFAULT {default}"
+                    )
+                except Exception:
+                    pass  # Spalte existiert bereits
+
     # ------------------------------------------------------------------
     # Messwerte
     # ------------------------------------------------------------------
@@ -189,13 +200,17 @@ class Database:
             conn.execute("""
                 INSERT INTO heta_profiles
                     (heta_code, reference_r_eff, reference_loading_rate,
+                     reference_avg_flow, reference_avg_temp,
                      cycles_count, profile_valid, last_updated)
                 VALUES
                     (:heta_code, :reference_r_eff, :reference_loading_rate,
+                     :reference_avg_flow, :reference_avg_temp,
                      :cycles_count, :profile_valid, :last_updated)
                 ON CONFLICT(heta_code) DO UPDATE SET
                     reference_r_eff         = excluded.reference_r_eff,
                     reference_loading_rate  = excluded.reference_loading_rate,
+                    reference_avg_flow      = excluded.reference_avg_flow,
+                    reference_avg_temp      = excluded.reference_avg_temp,
                     cycles_count            = excluded.cycles_count,
                     profile_valid           = excluded.profile_valid,
                     last_updated            = excluded.last_updated

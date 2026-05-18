@@ -14,6 +14,7 @@ import socket
 import secrets
 import logging
 import threading
+from collections import deque
 from datetime import datetime
 
 # Projektverzeichnis in sys.path eintragen damit relative Imports funktionieren
@@ -155,6 +156,9 @@ _hw_available: bool = probe_hardware()
 # ---------------------------------------------------------------------------
 _state_lock = threading.Lock()
 
+# Rollierender Puffer für dp-Anstiegsschätzung: (timestamp, dp_bar)
+_dp_rate_buffer: deque = deque(maxlen=60)
+
 _state = {
     # Betriebsmodus
     "simulation_mode": settings.get("simulation_mode", True),
@@ -184,13 +188,21 @@ _state = {
     "sensor_fault_message": "",
 
     # Simulations-Raten-Steuerung
-    "sim_rates_active":      False,
-    "sim_dp_factor":         1.0,
-    "sim_flow_factor":       1.0,
-    "sim_temp_offset":       0.0,
-    "sim_dp_deviation_pct":  0.0,
-    "sim_flow_deviation_pct": 0.0,
-    "sim_temp_deviation":    0.0,
+    "sim_rates_active": False,
+    "sim_dp_factor":    1.0,
+    "sim_flow_factor":  1.0,
+    "sim_temp_offset":  0.0,
+
+    # Modusneutrale Prozessanalyse (Sensor- UND Simulationsmodus)
+    "analysis_active":             False,  # True wenn Profil valide + läuft
+    "analysis_ready":              False,  # True wenn Puffer gefüllt (≥10 Messwerte)
+    "analysis_dp_rate_ref":        0.0,    # Referenz-Beladungsrate (bar/s)
+    "analysis_dp_rate_current":    0.0,    # Aktuelle Beladungsrate (bar/s)
+    "analysis_dp_deviation_pct":   0.0,    # Abweichung in %
+    "analysis_flow_ref":           0.0,    # Referenz-Durchfluss (l/min)
+    "analysis_flow_deviation_pct": 0.0,    # Abweichung in %
+    "analysis_temp_ref":           0.0,    # Referenz-Temperatur (°C)
+    "analysis_temp_deviation":     0.0,    # Abweichung in °C
 
     # Filterwechsel
     "awaiting_confirmation": False,
@@ -464,6 +476,7 @@ def _measurement_loop():
     dp_clean = settings.get("dp_clean_bar", 0.2)
 
     logger.info("Messzyklus gestartet (Intervall: %ds).", interval)
+    _dp_rate_buffer.clear()
 
     while _state["running"]:
         t_start = time.time()
@@ -607,6 +620,54 @@ def _measurement_loop():
             "sensor_mode": sensor_mode,
         })
 
+        # Profilvergleich (modusneutral – Sensor- und Simulationsmodus)
+        _dp_rate_buffer.append((time.time(), fs.dp_bar))
+        an_active  = profile_valid and heta_activated and not sensor_error
+        an_ready   = False
+        dp_rate_r  = 0.0
+        dp_rate_c  = 0.0
+        dp_dev_pct = 0.0
+        flow_ref   = 0.0
+        flow_dev   = 0.0
+        temp_ref   = 0.0
+        temp_dev   = 0.0
+
+        if an_active:
+            profile = learning.get_profile(heta_code)
+            if profile:
+                dp_rate_r = profile.get("reference_loading_rate", 0.0)
+                flow_ref  = profile.get("reference_avg_flow",     0.0)
+                temp_ref  = profile.get("reference_avg_temp",     0.0)
+
+                # dp-Anstieg aus rollendem Puffer schätzen (min. 10 Werte, ≥5 s)
+                if len(_dp_rate_buffer) >= 10:
+                    t0, d0 = _dp_rate_buffer[0]
+                    t1, d1 = _dp_rate_buffer[-1]
+                    dt = t1 - t0
+                    if dt >= 5.0:
+                        dp_rate_c = max(0.0, round((d1 - d0) / dt, 7))
+                        an_ready  = True
+
+                if an_ready and dp_rate_r > 0:
+                    dp_dev_pct = round((dp_rate_c / dp_rate_r - 1.0) * 100.0, 1)
+                if flow_ref > 0:
+                    flow_dev = round((fs.flow_l_min / flow_ref - 1.0) * 100.0, 1)
+                if temp_ref != 0:
+                    temp_dev = round(fs.temperature_c - temp_ref, 1)
+
+        with _state_lock:
+            _state.update({
+                "analysis_active":             an_active,
+                "analysis_ready":              an_ready,
+                "analysis_dp_rate_ref":        dp_rate_r,
+                "analysis_dp_rate_current":    dp_rate_c,
+                "analysis_dp_deviation_pct":   dp_dev_pct,
+                "analysis_flow_ref":           flow_ref,
+                "analysis_flow_deviation_pct": flow_dev,
+                "analysis_temp_ref":           temp_ref,
+                "analysis_temp_deviation":     temp_dev,
+            })
+
         # MQTT
         if _mqtt and _mqtt.is_connected:
             _mqtt.publish_measurements(fs, heta_code)
@@ -747,6 +808,7 @@ def _do_confirm_filter_change():
                            end_dp=current_dp)
 
     predictor.reset()
+    _dp_rate_buffer.clear()
     reset_simulation()
 
     # Startwert aus dem validierten Lernprofil setzen, damit die Reststandzeit
@@ -1304,6 +1366,7 @@ def api_simulation_reset():
     clear_simulation_rates()
     reset_simulation()
     predictor.reset()
+    _dp_rate_buffer.clear()
     with _state_lock:
         _state["awaiting_confirmation"] = False
         _state["cycle_active"] = False

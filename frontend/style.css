@@ -986,6 +986,87 @@ footer {
   line-height: 1.5;
 }
 
+/* ===== PROZESSANALYSE ===== */
+.analysis-section {
+  background: #f8faff;
+  border: 1px solid #c5d9f0;
+  border-left: 4px solid #2d6bb5;
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  margin: 1rem 1rem 0;
+}
+
+.analysis-header {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+
+.analysis-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #2d6bb5;
+}
+
+.analysis-mode-badge {
+  font-size: .75rem;
+  border-radius: 20px;
+  padding: .15rem .65rem;
+  font-weight: 600;
+  letter-spacing: .03em;
+}
+
+.analysis-mode-badge.badge-sim { background: #e8f0fe; color: #1a4d9e; border: 1px solid #aac4ec; }
+.analysis-mode-badge.badge-hw  { background: #e6f4ea; color: #1a5c2a; border: 1px solid #a8d5b0; }
+
+.analysis-loading {
+  font-size: .88rem;
+  color: #666;
+  padding: .4rem 0;
+}
+
+.analysis-grid {
+  display: grid;
+  grid-template-columns: 130px 1fr 1fr 100px;
+  gap: .3rem .6rem;
+  font-size: .83rem;
+  margin-bottom: .9rem;
+}
+
+.analysis-head {
+  font-weight: 600;
+  color: #555;
+  border-bottom: 1px solid #dde8f5;
+  padding-bottom: .25rem;
+}
+
+.analysis-label { color: #444; align-self: center; font-weight: 500; }
+.analysis-val   { color: #222; align-self: center; }
+
+.analysis-dev {
+  font-weight: 700;
+  text-align: right;
+  align-self: center;
+  border-radius: 4px;
+  padding: .1rem .35rem;
+  white-space: nowrap;
+}
+
+.analysis-dev.dev-ok   { background: #d4edda; color: #155724; }
+.analysis-dev.dev-warn { background: #fff3cd; color: #7d4e00; }
+.analysis-dev.dev-crit { background: #f8d7da; color: #721c24; }
+
+.analysis-diagnosis {
+  background: #eaf4ff;
+  border-left: 3px solid #2d6bb5;
+  border-radius: 0 6px 6px 0;
+  padding: .65rem .9rem;
+  font-size: .85rem;
+  color: #1e3d6e;
+  line-height: 1.55;
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 600px) {
   .cards-grid { grid-template-columns: 1fr 1fr; }
@@ -997,6 +1078,9 @@ footer {
   .modal  { max-height: 95vh; }
   .sim-slider-row { grid-template-columns: 1fr; }
   .sim-slider-val { text-align: left; }
+  .analysis-grid { grid-template-columns: 1fr 1fr; }
+  .analysis-head:nth-child(n+3), .analysis-val:nth-child(4n),
+  .analysis-dev { display: none; }
   .sim-cmp-grid { grid-template-columns: 1fr 1fr; }
   .sim-cmp-head:nth-child(n+3),
   .sim-cmp-val:nth-child(3n),

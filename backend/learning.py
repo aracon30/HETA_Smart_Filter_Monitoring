@@ -120,15 +120,19 @@ class LearningManager:
         if count == 0:
             return
 
-        ref_r_eff = sum(c["start_r_eff"] for c in confirmed) / count
-        ref_loading_rate = sum(c["loading_rate"] for c in confirmed) / count
-        profile_valid = 1 if count >= self.required_cycles else 0
+        ref_r_eff        = sum(c["start_r_eff"]                  for c in confirmed) / count
+        ref_loading_rate = sum(c["loading_rate"]                  for c in confirmed) / count
+        ref_avg_flow     = sum(c.get("average_flow",       0.0)   for c in confirmed) / count
+        ref_avg_temp     = sum(c.get("average_temperature", 20.0) for c in confirmed) / count
+        profile_valid    = 1 if count >= self.required_cycles else 0
 
         self.db.upsert_profile(heta_code, {
-            "reference_r_eff": round(ref_r_eff, 5),
+            "reference_r_eff":        round(ref_r_eff, 5),
             "reference_loading_rate": round(ref_loading_rate, 6),
-            "cycles_count": count,
-            "profile_valid": profile_valid,
+            "reference_avg_flow":     round(ref_avg_flow, 1),
+            "reference_avg_temp":     round(ref_avg_temp, 2),
+            "cycles_count":           count,
+            "profile_valid":          profile_valid,
         })
         logger.info("Profil aktualisiert für %s: %d Zyklen, valide=%s",
                     heta_code, count, bool(profile_valid))

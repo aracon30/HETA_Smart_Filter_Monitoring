@@ -365,6 +365,7 @@ function updateDashboard(d) {
   styleCardByStatus("card-dp", d.filter_status);
   pushChartData(d);
   updateSimDemoPanel(d);
+  updateAnalysisSection(d);
 }
 
 // ============================================================
@@ -919,6 +920,111 @@ async function recheckSensors() {
   } else {
     if (result) { result.className = "sensor-fault-result error"; result.textContent = data.message; }
   }
+}
+
+// ============================================================
+// ============================================================
+// Prozessanalyse (Sensor- UND Simulationsmodus)
+// ============================================================
+
+function updateAnalysisSection(d) {
+  const section = document.getElementById("analysis-section");
+  if (!section) return;
+
+  const active = !!d.analysis_active;
+  section.classList.toggle("hidden", !active);
+  if (!active) return;
+
+  // Modus-Badge
+  const badge = document.getElementById("analysis-mode-badge");
+  if (badge) {
+    const isSim = d.simulation_mode || d.sensor_mode === "simulation";
+    badge.textContent = isSim ? "Simulationswerte" : "Sensorwerte";
+    badge.className   = "analysis-mode-badge " + (isSim ? "badge-sim" : "badge-hw");
+  }
+
+  const loadingEl = document.getElementById("analysis-loading");
+  const contentEl = document.getElementById("analysis-content");
+  const ready     = !!d.analysis_ready;
+  if (loadingEl) loadingEl.classList.toggle("hidden", ready);
+  if (contentEl) contentEl.classList.toggle("hidden", !ready);
+  if (!ready) return;
+
+  const dpRef = d.analysis_dp_rate_ref    ?? 0;
+  const dpCur = d.analysis_dp_rate_current ?? 0;
+  const dpDev = d.analysis_dp_deviation_pct ?? 0;
+  setText("an-dp-ref", (dpRef * 1000).toFixed(2) + " mbar/s");
+  setText("an-dp-cur", (dpCur * 1000).toFixed(2) + " mbar/s");
+  setAnalysisDev("an-dp-dev", dpDev, "%", 15, 40);
+
+  const flRef = d.analysis_flow_ref ?? 0;
+  const flCur = d.flow_l_min        ?? 0;
+  const flDev = d.analysis_flow_deviation_pct ?? 0;
+  setText("an-fl-ref", flRef.toFixed(0) + " l/min");
+  setText("an-fl-cur", flCur.toFixed(1) + " l/min");
+  setAnalysisDev("an-fl-dev", flDev, "%", 15, 30);
+
+  const tRef = d.analysis_temp_ref      ?? 0;
+  const tCur = d.temperature_c          ?? 0;
+  const tDev = d.analysis_temp_deviation ?? 0;
+  setText("an-tmp-ref", tRef.toFixed(1) + " °C");
+  setText("an-tmp-cur", tCur.toFixed(1) + " °C");
+  setAnalysisDev("an-tmp-dev", tDev, "°C", 8, 20, true);
+
+  setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev));
+}
+
+function setAnalysisDev(id, val, unit, warnAt, critAt, isAbsolute = false) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const sign = val > 0 ? "+" : "";
+  const disp = isAbsolute ? Math.abs(val).toFixed(1) : Math.abs(Math.round(val));
+  const prefix = val >= 0 ? sign : "−";
+  el.textContent = `${prefix}${disp} ${unit}`;
+  const absVal = Math.abs(val);
+  el.className = "analysis-dev " + (
+    absVal < warnAt ? "dev-ok" :
+    absVal < critAt ? "dev-warn" : "dev-crit"
+  );
+}
+
+function buildDiagnosis(dpDevPct, flowDevPct, tempDev) {
+  const dpFast   = dpDevPct   >  40;
+  const dpSlow   = dpDevPct   < -30;
+  const flowLow  = flowDevPct < -20;
+  const flowHigh = flowDevPct >  15;
+  const tempHigh = tempDev    >  15;
+  const tempLow  = tempDev    < -10;
+
+  const hints = [];
+
+  if (dpFast && flowLow) {
+    hints.push("Schnelle Beladung + reduzierter Durchfluss → Verdacht auf Filterverstopfung oder erhöhten Verschmutzungseintrag.");
+  } else if (dpFast) {
+    hints.push("Δp steigt schneller als gelernt → erhöhte Partikelkonzentration oder beschädigtes Filterelement möglich.");
+  } else if (dpSlow) {
+    hints.push("Langsame Beladung → Prozess läuft mit reduzierter Last. Filterwechselintervall verlängert sich.");
+  }
+
+  if (flowLow && !dpFast) {
+    hints.push("Durchfluss unter Referenz → Pumpenproblem, Leckage im Bypass oder Vorverstopfung möglich.");
+  } else if (flowHigh) {
+    hints.push("Erhöhter Durchfluss → Filterwechselintervall verkürzt sich entsprechend.");
+  }
+
+  if (tempHigh) {
+    hints.push("Temperatur über Referenz → Filterkapazität kann reduziert sein, Materialbetändigkeit prüfen.");
+  } else if (tempLow) {
+    hints.push("Temperatur unter Referenz → Viskositätsänderung beeinflusst möglicherweise den Differenzdruck.");
+  }
+
+  if (hints.length === 0) {
+    if (Math.abs(dpDevPct) < 15 && Math.abs(flowDevPct) < 15 && Math.abs(tempDev) < 8) {
+      return "✔ Alle Parameter im gelernten Normalbereich – kein Handlungsbedarf.";
+    }
+    return "💡 Leichte Abweichungen vom gelernten Profil – Prozess beobachten.";
+  }
+  return "💡 " + hints.join(" ");
 }
 
 // ============================================================
