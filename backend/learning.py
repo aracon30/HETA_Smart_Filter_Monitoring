@@ -31,6 +31,8 @@ class ActiveCycle:
     temp_samples: list = field(default_factory=list)
     dp_samples: list = field(default_factory=list)
     r_eff_samples: list = field(default_factory=list)
+    health_samples: list = field(default_factory=list)
+    remaining_samples: list = field(default_factory=list)
 
 
 class LearningManager:
@@ -60,8 +62,9 @@ class LearningManager:
         logger.info("Filterzyklus gestartet für %s (r_eff=%.4f)", heta_code, r_eff)
 
     def record_sample(self, flow: float, temperature: float, dp: float, r_eff: float,
-                      p1: float = 0.0, p2: float = 0.0, timestamp: float = None):
-        """Fügt dem aktiven Zyklus einen Messwert inkl. Zeitstempel hinzu."""
+                      p1: float = 0.0, p2: float = 0.0, timestamp: float = None,
+                      filter_health_percent: float = None, remaining_seconds: float = None):
+        """Fügt dem aktiven Zyklus einen Messwert inkl. Zeitstempel und Beladungsgrad hinzu."""
         if self._active_cycle is None:
             return
         t = timestamp if timestamp is not None else time.time()
@@ -73,6 +76,8 @@ class LearningManager:
         c.temp_samples.append(temperature)
         c.dp_samples.append(dp)
         c.r_eff_samples.append(r_eff)
+        c.health_samples.append(filter_health_percent)
+        c.remaining_samples.append(remaining_seconds)
 
     def end_cycle(self, confirmed: bool, end_r_eff: float, end_dp: float) -> Optional[dict]:
         """
@@ -140,16 +145,18 @@ class LearningManager:
         samples = []
         for i in range(n):
             samples.append({
-                "cycle_id":    cycle_id,
-                "heta_code":   cycle.heta_code,
-                "timestamp":   cycle.timestamps[i],
-                "cycle_second": round(cycle.timestamps[i] - t0, 2),
-                "p1_bar":      cycle.p1_samples[i] if i < len(cycle.p1_samples) else None,
-                "p2_bar":      cycle.p2_samples[i] if i < len(cycle.p2_samples) else None,
-                "dp_bar":      cycle.dp_samples[i] if i < len(cycle.dp_samples) else None,
-                "flow_l_min":  cycle.flow_samples[i] if i < len(cycle.flow_samples) else None,
-                "temp_c":      cycle.temp_samples[i] if i < len(cycle.temp_samples) else None,
-                "r_eff":       cycle.r_eff_samples[i] if i < len(cycle.r_eff_samples) else None,
+                "cycle_id":             cycle_id,
+                "heta_code":            cycle.heta_code,
+                "timestamp":            cycle.timestamps[i],
+                "cycle_second":         round(cycle.timestamps[i] - t0, 2),
+                "p1_bar":               cycle.p1_samples[i]       if i < len(cycle.p1_samples)       else None,
+                "p2_bar":               cycle.p2_samples[i]       if i < len(cycle.p2_samples)       else None,
+                "dp_bar":               cycle.dp_samples[i]       if i < len(cycle.dp_samples)       else None,
+                "flow_l_min":           cycle.flow_samples[i]     if i < len(cycle.flow_samples)     else None,
+                "temp_c":               cycle.temp_samples[i]     if i < len(cycle.temp_samples)     else None,
+                "r_eff":                cycle.r_eff_samples[i]    if i < len(cycle.r_eff_samples)    else None,
+                "filter_health_percent":cycle.health_samples[i]   if i < len(cycle.health_samples)   else None,
+                "remaining_seconds":    cycle.remaining_samples[i] if i < len(cycle.remaining_samples) else None,
             })
         self.db.insert_cycle_samples(samples)
         logger.info("Zyklus %d: %d Samples gespeichert.", cycle_id, len(samples))

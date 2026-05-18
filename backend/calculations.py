@@ -66,6 +66,25 @@ def calculate_filter_health(usage: float) -> float:
     return 100.0 * (1.0 - clamp(usage, 0.0, 1.0))
 
 
+def calculate_filter_health_from_r_eff(
+    r_eff_current: float,
+    r_eff_clean: float,
+    r_eff_limit: float,
+) -> tuple:
+    """
+    R_eff-basierter Beladungsgrad:
+      Beladungsgrad = (R_eff_aktuell - R_eff_clean) / (R_eff_limit - R_eff_clean)
+
+    Reagiert direkt auf Prozessänderungen (Δp-Anstieg, Durchflussabfall).
+    Gibt (filter_health_percent, usage_ratio) zurück.
+    """
+    denom = r_eff_limit - r_eff_clean
+    if denom <= 0 or r_eff_limit <= 0 or r_eff_current <= 0:
+        return 100.0, 0.0
+    usage = clamp((r_eff_current - r_eff_clean) / denom, 0.0, 1.0)
+    return round(100.0 * (1.0 - usage), 1), round(usage, 4)
+
+
 def determine_status(dp_bar: float, dp_limit: float,
                      awaiting_confirmation: bool = False,
                      sensor_error: bool = False,

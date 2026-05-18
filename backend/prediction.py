@@ -17,6 +17,10 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+
+def clamp(value: float, low: float, high: float) -> float:
+    return max(low, min(high, value))
+
 # Anzeigemodi
 MODE_BASIS      = "BASIS"
 MODE_LERNEND    = "HETA_LERNEND"
@@ -99,6 +103,45 @@ class PredictionEngine:
         self._smoothed_remaining: Optional[float] = None
         self._dp_history: list[float] = []
         self._history_window: int = 30
+
+    def update_curve_based(
+        self,
+        elapsed_seconds: float,
+        ref_duration: float,
+        reff_deviation_pct: float = 0.0,
+    ) -> Optional[float]:
+        """
+        Berechnet die Reststandzeit anhand der gelernten Referenzkurve.
+
+        - Basiswert: verbleibender Anteil der Referenzdauer
+        - Korrektur: R_eff-Abweichung vom Referenzprofil (schnellere/langsamere Beladung)
+        - Asymmetrische Glättung: Sprünge nach oben stark gedämpft, Abfall schnell
+
+        Liefert geglättete Reststandzeit in Sekunden.
+        """
+        if ref_duration <= 0 or elapsed_seconds < 0:
+            return self._smoothed_remaining
+
+        t_pct = min(100.0, elapsed_seconds / ref_duration * 100.0)
+        remaining_fraction = 1.0 - t_pct / 100.0
+        base_remaining = ref_duration * remaining_fraction
+
+        # R_eff +15 % → Filter belädt schneller → Restzeit 13 % kürzer
+        if abs(reff_deviation_pct) > 0.5:
+            factor = clamp(1.0 / (1.0 + reff_deviation_pct / 100.0), 0.25, 4.0)
+            adjusted = base_remaining * factor
+        else:
+            adjusted = base_remaining
+
+        if self._smoothed_remaining is None:
+            if adjusted >= 0:
+                self._smoothed_remaining = adjusted
+        else:
+            self._smoothed_remaining = self._apply_smoothing(
+                self._smoothed_remaining, adjusted
+            )
+
+        return self._smoothed_remaining
 
     def update(self, dp_bar: float) -> Optional[float]:
         """

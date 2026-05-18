@@ -16,6 +16,7 @@ import logging
 import threading
 from collections import deque
 from datetime import datetime
+from typing import Optional
 
 # Projektverzeichnis in sys.path eintragen damit relative Imports funktionieren
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -29,7 +30,8 @@ from sensors import (read_sensors, reset_simulation, update_simulation_params,
                      probe_hardware, check_hardware_sensors,
                      set_simulation_rates, clear_simulation_rates,
                      get_simulation_rates_active, get_simulation_cycle_steps)
-from calculations import calculate_filter_state, FilterState
+from calculations import (calculate_filter_state, FilterState,
+                          calculate_filter_health_from_r_eff)
 from heta_code import verify_activation, validate_heta_format, get_demo_info
 from database import Database
 from learning import LearningManager
@@ -158,6 +160,9 @@ _state_lock = threading.Lock()
 
 # Rollierender Puffer für dp-Anstiegsschätzung: (timestamp, dp_bar)
 _dp_rate_buffer: deque = deque(maxlen=60)
+
+# Geglätteter Beladungsgrad mit Ratchet-Filter (in Prozent, None = nicht initialisiert)
+_smoothed_health_pct: Optional[float] = None
 
 _state = {
     # Betriebsmodus
@@ -558,7 +563,42 @@ def _measurement_loop():
             dp_override=dp_direct,
         )
 
-        # Zyklus starten falls nötig
+        # ── Profil laden (einmalig pro Loop-Iteration) ────────────────────
+        profile       = learning.get_profile(heta_code) if heta_code else None
+        profile_valid = bool(profile and profile.get("profile_valid")) and heta_activated
+        cycles_count  = (profile.get("cycles_count", 0) if profile else 0) if heta_code else 0
+
+        # ── Beladungsgrad via R_eff ──────────────────────────────────────
+        # Bevorzugt R_eff-basiert (reagiert auf Δp UND Durchflussänderungen).
+        # Ratchet: schnell steigen (Filter beladen), langsam fallen.
+        global _smoothed_health_pct
+        r_eff_clean_ref = r_eff_limit_ref = None
+        if profile and heta_activated:
+            r_eff_clean_ref = (profile.get("reference_r_eff_start")
+                               or profile.get("reference_r_eff"))
+            ref_flow = profile.get("reference_avg_flow") or 0.0
+            if ref_flow > 0.1:
+                r_eff_limit_ref = dp_limit / ref_flow
+
+        if r_eff_clean_ref and r_eff_limit_ref and fs.r_eff > 0:
+            raw_health, _ = calculate_filter_health_from_r_eff(
+                fs.r_eff, r_eff_clean_ref, r_eff_limit_ref
+            )
+        else:
+            raw_health = fs.filter_health_percent  # Fallback: dp-basiert
+
+        if _smoothed_health_pct is None:
+            _smoothed_health_pct = raw_health
+        elif raw_health < _smoothed_health_pct:
+            # Filter belädt sich → health sinkt → leicht geglättet (schnell)
+            _smoothed_health_pct += 0.35 * (raw_health - _smoothed_health_pct)
+        else:
+            # Filter könnte sich scheinbar verbessern → sehr langsam (max 0.3 %/s)
+            _smoothed_health_pct = min(raw_health, _smoothed_health_pct + 0.3)
+
+        smoothed_health = round(_smoothed_health_pct, 1)
+
+        # ── Zyklus starten falls nötig ────────────────────────────────────
         if not cycle_active and not sensor_error and heta_code:
             learning.start_cycle(heta_code, fs.r_eff, fs.dp_bar)
             with _state_lock:
@@ -566,71 +606,14 @@ def _measurement_loop():
                 _state["cycle_start_time"] = time.time()
             logger.info("Neuer Filterzyklus gestartet.")
 
-        # Lernwert erfassen
-        if cycle_active and not sensor_error:
-            learning.record_sample(
-                fs.flow_l_min, fs.temperature_c, fs.dp_bar, fs.r_eff,
-                p1=fs.p1_bar, p2=fs.p2_bar, timestamp=time.time(),
-            )
+        # ── Kurvenbasierter Profilvergleich ───────────────────────────────
+        with _state_lock:
+            cycle_start_ts = _state.get("cycle_start_time")
+        elapsed = (time.time() - cycle_start_ts) if cycle_start_ts else 0.0
 
-        # Startverhalten prüfen (nur am Zyklusanfang, erste 10 Sekunden)
-        if (cycle_active and heta_activated
-                and _state.get("cycle_start_time")
-                and (time.time() - _state["cycle_start_time"]) < 10):
-            anomaly, anom_pct = learning.check_start_behavior(heta_code, fs.r_eff)
-            with _state_lock:
-                _state["anomaly_active"] = anomaly
-                _state["anomaly_percent"] = anom_pct
-
-        # Prognose
-        remaining_s = predictor.update(fs.dp_bar)
-        profile_valid = learning.is_profile_valid(heta_code) and heta_activated
-        cycles_count  = learning.get_cycles_count(heta_code) if heta_code else 0
-        req_cycles    = settings.get("required_cycles_for_profile", 3)
-        pred_status = predictor.get_status(
-            remaining_seconds=remaining_s,
-            heta_activated=heta_activated,
-            profile_valid=profile_valid,
-            learned_cycles=cycles_count,
-            required_cycles=req_cycles,
-        )
-
-        # Filterwechsel erkennen
-        if fs.dp_bar >= dp_limit and not awaiting and cycle_active:
-            logger.warning("Filterwechsel-Grenzwert überschritten! dp=%.3f >= %.2f",
-                           fs.dp_bar, dp_limit)
-            with _state_lock:
-                _state["awaiting_confirmation"] = True
-            if _display_ctrl:
-                _display_ctrl.navigate_to_filter_change()
-                _display.show_filter_change(fs.dp_bar, dp_limit, armed=False, awaiting=True)
-            elif _display:
-                _display.show_filter_change(fs.dp_bar, dp_limit, armed=False, awaiting=True)
-            if _mqtt:
-                _mqtt.publish_alarm("WECHSEL", "Filterwechsel erforderlich!", heta_code)
-
-        # Serviceempfehlung
-        rec = generate_service_recommendation(fs, pred_status)
-
-        # Datenbank
-        db.insert_measurement({
-            "timestamp": time.time(),
-            "p1_bar": fs.p1_bar,
-            "p2_bar": fs.p2_bar,
-            "dp_bar": fs.dp_bar,
-            "flow_l_min": fs.flow_l_min,
-            "temperature_c": fs.temperature_c,
-            "r_eff": fs.r_eff,
-            "filter_health_percent": fs.filter_health_percent,
-            "status": fs.status,
-            "heta_code": heta_code,
-            "sensor_mode": sensor_mode,
-        })
-
-        # Profilvergleich – zeitbasierter Kurvenvergleich (Sensor- UND Simulationsmodus)
-        _dp_rate_buffer.append((time.time(), fs.dp_bar))
         an_active = profile_valid and heta_activated and not sensor_error
         an_ready  = False
+        analysis  = None
         cycle_progress_pct = 0.0
         dp_ref = dp_dev = 0.0
         reff_ref = reff_dev = 0.0
@@ -638,9 +621,6 @@ def _measurement_loop():
         temp_ref = temp_dev = 0.0
 
         if an_active and cycle_active:
-            with _state_lock:
-                cycle_start = _state.get("cycle_start_time")
-            elapsed = (time.time() - cycle_start) if cycle_start else 0.0
             analysis = learning.get_curve_analysis(
                 heta_code, elapsed,
                 fs.dp_bar, fs.r_eff, fs.flow_l_min, fs.temperature_c,
@@ -656,6 +636,76 @@ def _measurement_loop():
                 flow_dev           = analysis["flow_deviation_pct"]
                 temp_ref           = analysis["ref_temp"]
                 temp_dev           = analysis["temp_deviation"]
+
+        # ── Reststandzeit berechnen ───────────────────────────────────────
+        if profile_valid and heta_activated and cycle_active:
+            ref_dur = profile.get("reference_duration_seconds", 0) if profile else 0
+            reff_deviation = analysis["r_eff_deviation_pct"] if analysis else 0.0
+            remaining_s = predictor.update_curve_based(elapsed, ref_dur, reff_deviation)
+        else:
+            remaining_s = predictor.update(fs.dp_bar)
+
+        # ── Lernwert erfassen (mit Beladungsgrad und Reststandzeit) ───────
+        if cycle_active and not sensor_error:
+            learning.record_sample(
+                fs.flow_l_min, fs.temperature_c, fs.dp_bar, fs.r_eff,
+                p1=fs.p1_bar, p2=fs.p2_bar, timestamp=time.time(),
+                filter_health_percent=smoothed_health,
+                remaining_seconds=remaining_s,
+            )
+
+        # ── Startverhalten prüfen (erste 10 Sekunden) ────────────────────
+        if (cycle_active and heta_activated and cycle_start_ts
+                and (time.time() - cycle_start_ts) < 10):
+            anomaly, anom_pct = learning.check_start_behavior(heta_code, fs.r_eff)
+            with _state_lock:
+                _state["anomaly_active"] = anomaly
+                _state["anomaly_percent"] = anom_pct
+
+        # ── Prognosestatus ────────────────────────────────────────────────
+        req_cycles  = settings.get("required_cycles_for_profile", 3)
+        pred_status = predictor.get_status(
+            remaining_seconds=remaining_s,
+            heta_activated=heta_activated,
+            profile_valid=profile_valid,
+            learned_cycles=cycles_count,
+            required_cycles=req_cycles,
+        )
+
+        # ── Filterwechsel erkennen ────────────────────────────────────────
+        if fs.dp_bar >= dp_limit and not awaiting and cycle_active:
+            logger.warning("Filterwechsel-Grenzwert überschritten! dp=%.3f >= %.2f",
+                           fs.dp_bar, dp_limit)
+            with _state_lock:
+                _state["awaiting_confirmation"] = True
+            if _display_ctrl:
+                _display_ctrl.navigate_to_filter_change()
+                _display.show_filter_change(fs.dp_bar, dp_limit, armed=False, awaiting=True)
+            elif _display:
+                _display.show_filter_change(fs.dp_bar, dp_limit, armed=False, awaiting=True)
+            if _mqtt:
+                _mqtt.publish_alarm("WECHSEL", "Filterwechsel erforderlich!", heta_code)
+
+        # ── Serviceempfehlung ─────────────────────────────────────────────
+        rec = generate_service_recommendation(fs, pred_status)
+
+        # ── Datenbank ─────────────────────────────────────────────────────
+        db.insert_measurement({
+            "timestamp": time.time(),
+            "p1_bar": fs.p1_bar,
+            "p2_bar": fs.p2_bar,
+            "dp_bar": fs.dp_bar,
+            "flow_l_min": fs.flow_l_min,
+            "temperature_c": fs.temperature_c,
+            "r_eff": fs.r_eff,
+            "filter_health_percent": smoothed_health,
+            "status": fs.status,
+            "heta_code": heta_code,
+            "sensor_mode": sensor_mode,
+        })
+
+        # ── dp-Puffer aktualisieren (Fallback-Prognose) ───────────────────
+        _dp_rate_buffer.append((time.time(), fs.dp_bar))
 
         with _state_lock:
             _state.update({
@@ -705,7 +755,7 @@ def _measurement_loop():
                 "flow_l_min": fs.flow_l_min,
                 "temperature_c": fs.temperature_c,
                 "r_eff": fs.r_eff,
-                "filter_health_percent": fs.filter_health_percent,
+                "filter_health_percent": smoothed_health,
                 "filter_status": fs.status,
                 "sensor_error": fs.sensor_error,
                 "remaining_display": pred_status["remaining_display"],
@@ -721,8 +771,8 @@ def _measurement_loop():
                 "sim_rates_active": get_simulation_rates_active(),
             })
 
-        elapsed = time.time() - t_start
-        sleep_time = max(0.0, interval - elapsed)
+        loop_elapsed = time.time() - t_start
+        sleep_time = max(0.0, interval - loop_elapsed)
         time.sleep(sleep_time)
 
     logger.info("Messzyklus beendet.")
@@ -821,6 +871,8 @@ def api_heta_reset_cycles():
     db.reset_cycles_for_heta(heta_code)
 
     # Prognose-Modell zurücksetzen
+    global _smoothed_health_pct
+    _smoothed_health_pct = None
     predictor.reset()
     _dp_rate_buffer.clear()
 
@@ -859,6 +911,8 @@ def _do_confirm_filter_change():
                            end_r_eff=current_r,
                            end_dp=current_dp)
 
+    global _smoothed_health_pct
+    _smoothed_health_pct = None
     predictor.reset()
     _dp_rate_buffer.clear()
     reset_simulation()
@@ -1415,6 +1469,8 @@ def api_simulation_stop():
 @app.route("/api/simulation/reset", methods=["POST"])
 def api_simulation_reset():
     """Setzt Simulation und Prognose zurück."""
+    global _smoothed_health_pct
+    _smoothed_health_pct = None
     clear_simulation_rates()
     reset_simulation()
     predictor.reset()

@@ -94,17 +94,19 @@ class Database:
                 );
 
                 CREATE TABLE IF NOT EXISTS cycle_samples (
-                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-                    cycle_id      INTEGER NOT NULL,
-                    heta_code     TEXT    NOT NULL,
-                    timestamp     REAL    NOT NULL,
-                    cycle_second  REAL    NOT NULL,
-                    p1_bar        REAL,
-                    p2_bar        REAL,
-                    dp_bar        REAL,
-                    flow_l_min    REAL,
-                    temp_c        REAL,
-                    r_eff         REAL
+                    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cycle_id              INTEGER NOT NULL,
+                    heta_code             TEXT    NOT NULL,
+                    timestamp             REAL    NOT NULL,
+                    cycle_second          REAL    NOT NULL,
+                    p1_bar                REAL,
+                    p2_bar                REAL,
+                    dp_bar                REAL,
+                    flow_l_min            REAL,
+                    temp_c                REAL,
+                    r_eff                 REAL,
+                    filter_health_percent REAL,
+                    remaining_seconds     REAL
                 );
                 CREATE INDEX IF NOT EXISTS idx_cs_cycle ON cycle_samples(cycle_id);
                 CREATE INDEX IF NOT EXISTS idx_cs_heta  ON cycle_samples(heta_code);
@@ -123,6 +125,16 @@ class Database:
             ]:
                 if col not in existing:
                     conn.execute(f"ALTER TABLE heta_profiles ADD COLUMN {col} {typ} DEFAULT {default}")
+
+        # Schema-Migration: neue cycle_samples-Spalten
+        with self._conn() as conn:
+            existing = {r[1] for r in conn.execute("PRAGMA table_info(cycle_samples)").fetchall()}
+            for col, typ, default in [
+                ("filter_health_percent", "REAL", "NULL"),
+                ("remaining_seconds",     "REAL", "NULL"),
+            ]:
+                if col not in existing:
+                    conn.execute(f"ALTER TABLE cycle_samples ADD COLUMN {col} {typ} DEFAULT {default}")
 
     # ------------------------------------------------------------------
     # Messwerte
@@ -187,10 +199,12 @@ class Database:
             conn.executemany(
                 """INSERT INTO cycle_samples
                    (cycle_id, heta_code, timestamp, cycle_second,
-                    p1_bar, p2_bar, dp_bar, flow_l_min, temp_c, r_eff)
+                    p1_bar, p2_bar, dp_bar, flow_l_min, temp_c, r_eff,
+                    filter_health_percent, remaining_seconds)
                    VALUES
                    (:cycle_id, :heta_code, :timestamp, :cycle_second,
-                    :p1_bar, :p2_bar, :dp_bar, :flow_l_min, :temp_c, :r_eff)""",
+                    :p1_bar, :p2_bar, :dp_bar, :flow_l_min, :temp_c, :r_eff,
+                    :filter_health_percent, :remaining_seconds)""",
                 samples,
             )
 
