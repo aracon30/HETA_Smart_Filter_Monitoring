@@ -16,12 +16,17 @@ let combinedChart = null;
 // Session-Token für Einstellungsbereich (wird im sessionStorage gehalten)
 const TOKEN_KEY = "heta_settings_token";
 
+// Tab-Navigation
+let _activeTab = "dashboard";
+let _cyclesPollTick = 0;
+
 // ============================================================
 // Init
 // ============================================================
 
 document.addEventListener("DOMContentLoaded", async () => {
   initCharts();
+  initTabs();
   await checkOnboarding();
   startPolling();
   loadSettingsIntoForm();
@@ -38,6 +43,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   const preselected = document.querySelector(".mode-card input:checked")?.closest(".mode-card");
   if (preselected) preselected.classList.add("selected");
 });
+
+// ============================================================
+// Tab-Navigation
+// ============================================================
+
+function initTabs() {
+  switchTab("dashboard");
+}
+
+function switchTab(tabName) {
+  _activeTab = tabName;
+  document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.tab === tabName);
+  });
+  document.querySelectorAll(".tab-panel").forEach(panel => {
+    panel.classList.toggle("hidden", panel.id !== `tab-panel-${tabName}`);
+  });
+  if (tabName === "cycles") loadCyclesOverview();
+}
 
 // ============================================================
 // Onboarding
@@ -321,6 +345,16 @@ async function fetchStatus() {
 // ============================================================
 
 function updateDashboard(d) {
+  window._lastStatus = d;
+
+  // Zyklen-Tab alle ~15 s aktualisieren (alle 10 Poll-Zyklen)
+  if (_activeTab === "cycles") {
+    _cyclesPollTick++;
+    if (_cyclesPollTick % 10 === 1) loadCyclesOverview();
+  } else {
+    _cyclesPollTick = 0;
+  }
+
   // Sensorfehler-Overlay (Hardwaremodus) hat Vorrang
   handleSensorFault(d);
 
@@ -1109,7 +1143,7 @@ function updateComparison(d) {
   setText("cmp-temp-cur", `${(ref_temp + temp_offset).toFixed(1)} °C`);
   setDev("cmp-temp-dev",  temp_dev, "°C", true);
 
-  setText("sim-diagnosis", buildDiagnosis(dp_factor, flow_factor, temp_offset));
+  setText("sim-diagnosis", buildSimDiagnosis(dp_factor, flow_factor, temp_offset));
 }
 
 function setDev(id, val, unit, isAbsolute = false) {
@@ -1123,7 +1157,7 @@ function setDev(id, val, unit, isAbsolute = false) {
   );
 }
 
-function buildDiagnosis(dpF, flowF, tempOff) {
+function buildSimDiagnosis(dpF, flowF, tempOff) {
   const hints = [];
   if (dpF > 1.5 && flowF < 0.8) {
     hints.push("💡 Schnelle Beladung + reduzierter Durchfluss → Verdacht auf Filterverstopfung oder erhöhten Verschmutzungseintrag.");
@@ -1316,4 +1350,127 @@ async function apiFetchAuth(path, method, body, token) {
     console.error("Auth-API-Fehler:", e);
     return null;
   }
+}
+
+// ============================================================
+// Zyklen & Profil – Tab
+// ============================================================
+
+async function loadCyclesOverview() {
+  const d = window._lastStatus;
+  const hetaCode = d?.heta_code;
+  const activated = !!d?.heta_activated;
+
+  const noCodeEl      = document.getElementById("cycles-no-code");
+  const profileContent = document.getElementById("profile-content");
+  const tableWrap     = document.getElementById("cycles-table-wrap");
+  const emptyEl       = document.getElementById("cycles-empty");
+
+  if (!hetaCode || !activated) {
+    if (noCodeEl)      noCodeEl.classList.remove("hidden");
+    if (profileContent) profileContent.classList.add("hidden");
+    if (tableWrap)     tableWrap.classList.add("hidden");
+    if (emptyEl)       emptyEl.classList.add("hidden");
+    return;
+  }
+
+  if (noCodeEl) noCodeEl.classList.add("hidden");
+
+  const encoded = encodeURIComponent(hetaCode);
+  const [cycles, profile] = await Promise.all([
+    apiFetch(`/api/cycles?heta_code=${encoded}`),
+    apiFetch(`/api/profile?heta_code=${encoded}`),
+  ]);
+
+  renderProfileStats(profile);
+  renderCyclesTable(cycles || []);
+}
+
+function renderProfileStats(profile) {
+  const badge = document.getElementById("profile-validity-badge");
+  if (badge) {
+    if (profile?.profile_valid) {
+      badge.textContent = "VALIDIERT";
+      badge.className = "badge badge-ok";
+    } else if (profile) {
+      badge.textContent = "LERNEND";
+      badge.className = "badge badge-warn";
+    } else {
+      badge.textContent = "KEIN PROFIL";
+      badge.className = "badge badge-observe";
+    }
+  }
+
+  const profileContent = document.getElementById("profile-content");
+  if (!profile) {
+    if (profileContent) profileContent.classList.add("hidden");
+    return;
+  }
+  if (profileContent) profileContent.classList.remove("hidden");
+
+  setText("prof-r-eff",        fmt(profile.reference_r_eff, 5));
+  setText("prof-loading-rate", ((profile.reference_loading_rate ?? 0) * 1000).toFixed(3));
+  setText("prof-avg-flow",     fmt(profile.reference_avg_flow, 1));
+  setText("prof-avg-temp",     fmt(profile.reference_avg_temp, 1));
+
+  const count = profile.cycles_count ?? 0;
+  const req   = window._lastStatus?.required_cycles ?? 3;
+  setText("prof-cycles-count",  count);
+  setText("prof-cycles-needed", `von ${req} erforderlich`);
+
+  const bar = document.getElementById("prof-progress-bar");
+  if (bar) {
+    bar.style.width      = Math.min(100, (count / req) * 100) + "%";
+    bar.style.background = profile.profile_valid ? "var(--ok-green)" : "var(--warn-yellow)";
+  }
+}
+
+function renderCyclesTable(cycles) {
+  const tbody    = document.getElementById("cycles-tbody");
+  const emptyEl  = document.getElementById("cycles-empty");
+  const tableWrap = document.getElementById("cycles-table-wrap");
+  const countBadge = document.getElementById("cycles-count-badge");
+  if (!tbody) return;
+
+  if (!cycles || cycles.length === 0) {
+    tbody.innerHTML = "";
+    if (emptyEl)   emptyEl.classList.remove("hidden");
+    if (tableWrap) tableWrap.classList.add("hidden");
+    if (countBadge) countBadge.style.display = "none";
+    return;
+  }
+
+  if (emptyEl)   emptyEl.classList.add("hidden");
+  if (tableWrap) tableWrap.classList.remove("hidden");
+
+  if (countBadge) {
+    countBadge.textContent = `${cycles.length} Zyklen`;
+    countBadge.style.display = "";
+  }
+
+  const rows = cycles.slice().reverse().map((c, idx) => {
+    const dt      = new Date((c.start_time ?? 0) * 1000);
+    const dateStr = dt.toLocaleDateString("de-DE",  { day: "2-digit", month: "2-digit", year: "numeric" });
+    const timeStr = dt.toLocaleTimeString("de-DE",  { hour: "2-digit", minute: "2-digit" });
+    const durMin  = Math.round((c.duration_seconds ?? 0) / 60);
+    const durStr  = durMin >= 60
+      ? `${Math.floor(durMin / 60)}h ${durMin % 60}min`
+      : `${durMin} min`;
+    const rateMs  = ((c.loading_rate ?? 0) * 1000).toFixed(3);
+    const ok      = c.confirmed_filter_change;
+    const rowCls  = ok ? "cycle-confirmed" : "";
+    return `<tr class="${rowCls}">
+      <td>${cycles.length - idx}</td>
+      <td><span class="cycle-date">${dateStr}</span><span class="cycle-time">${timeStr}</span></td>
+      <td>${durStr}</td>
+      <td>${fmt(c.start_dp, 3)} bar</td>
+      <td>${fmt(c.end_dp, 3)} bar</td>
+      <td>${fmt(c.average_flow, 1)} l/min</td>
+      <td>${fmt(c.average_temperature, 1)} °C</td>
+      <td>${rateMs} mbar/s</td>
+      <td class="${ok ? "cycle-check-ok" : ""}">${ok ? "✓" : "–"}</td>
+    </tr>`;
+  });
+
+  tbody.innerHTML = rows.join("");
 }

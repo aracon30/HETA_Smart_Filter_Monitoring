@@ -9,7 +9,7 @@
 <body>
 
   <!-- ================================================================
-       SENSORFEHLER-OVERLAY (blockierend – Bediener muss bestätigen)
+       SENSORFEHLER-OVERLAY
        ================================================================ -->
   <div id="sensor-fault-overlay" class="overlay hidden">
     <div class="sensor-fault-box">
@@ -32,7 +32,6 @@
           Alle Sensoren angeschlossen – System prüfen
         </button>
       </div>
-
       <div class="sensor-fault-sim-section">
         <button class="sensor-fault-sim-toggle" id="btn-sim-toggle" onclick="toggleSimLogin()">
           &#9654; Im Simulationsmodus fortfahren (Passwort erforderlich)
@@ -56,7 +55,7 @@
   </div>
 
   <!-- ================================================================
-       ONBOARDING-ASSISTENT (wird beim ersten Start angezeigt)
+       ONBOARDING-ASSISTENT
        ================================================================ -->
   <div id="onboarding-overlay" class="overlay hidden">
     <div class="wizard">
@@ -66,7 +65,6 @@
         <div class="wizard-steps" id="wizard-steps"></div>
       </div>
 
-      <!-- Schritt 1: Willkommen -->
       <div class="wizard-step" data-step="1">
         <h2>Willkommen</h2>
         <p>Dieser Assistent richtet das HETA Smart Filter Monitoring für Ihren Einsatz ein. Bitte folgen Sie den Schritten.</p>
@@ -78,7 +76,6 @@
         <p class="wizard-note">Die Konfiguration kann später im passwortgeschützten Einstellungsbereich angepasst werden. Bei Änderung relevanter Parameter wird der Lernprozess automatisch neu gestartet.</p>
       </div>
 
-      <!-- Schritt 2: Betriebsart -->
       <div class="wizard-step hidden" data-step="2">
         <h2>Betriebsart</h2>
         <p>Wie soll das System betrieben werden?</p>
@@ -91,12 +88,11 @@
           <label class="mode-card" id="mode-sim">
             <input type="radio" name="op-mode" value="simulation" />
             <strong>Simulationsmodus</strong>
-            <span>Ohne echte Sensoren – nur für Entwicklung und Test (Simulations-Fallback).</span>
+            <span>Ohne echte Sensoren – nur für Entwicklung und Test.</span>
           </label>
         </div>
       </div>
 
-      <!-- Schritt 3: Filterparameter -->
       <div class="wizard-step hidden" data-step="3">
         <h2>Filterparameter</h2>
         <div class="form-grid">
@@ -135,7 +131,6 @@
         </div>
       </div>
 
-      <!-- Schritt 4: Temperaturbereiche -->
       <div class="wizard-step hidden" data-step="4">
         <h2>Temperatursensor</h2>
         <p>Messbereich des Temperatursensors (ifm TA2405). Standardwerte können übernommen werden.</p>
@@ -157,7 +152,6 @@
         </div>
       </div>
 
-      <!-- Schritt 5: Passwort -->
       <div class="wizard-step hidden" data-step="5">
         <h2>Zugriffspasswort</h2>
         <p>Legen Sie ein Passwort für den Einstellungsbereich fest. Es schützt die Konfiguration vor unbeabsichtigten Änderungen.</p>
@@ -174,7 +168,6 @@
         <div id="ob-pw-msg" class="msg"></div>
       </div>
 
-      <!-- Schritt 6: Zusammenfassung -->
       <div class="wizard-step hidden" data-step="6">
         <h2>Zusammenfassung</h2>
         <p>Bitte prüfen Sie die Einstellungen und klicken Sie auf <strong>Einrichtung abschließen</strong>.</p>
@@ -191,7 +184,7 @@
   </div>
 
   <!-- ================================================================
-       EINSTELLUNGEN-MODAL (passwortgeschützt)
+       EINSTELLUNGEN-MODAL
        ================================================================ -->
   <div id="settings-overlay" class="overlay hidden">
     <div class="modal">
@@ -200,7 +193,6 @@
         <button class="btn-close" onclick="closeSettings()">&#10005;</button>
       </div>
 
-      <!-- Login-Bereich -->
       <div id="settings-login-area">
         <p>Bitte Passwort eingeben um die Einstellungen zu ändern.</p>
         <div class="form-grid">
@@ -214,7 +206,6 @@
         <div id="settings-login-msg" class="msg"></div>
       </div>
 
-      <!-- Einstellungsformular (nach Login) -->
       <div id="settings-form-area" class="hidden">
         <div class="settings-section">
           <h3>Filterparameter</h3>
@@ -310,22 +301,19 @@
         </div>
 
         <div class="settings-warning hidden" id="settings-reset-warning">
-          <strong>&#9888; Achtung:</strong> Sie haben lernrelevante Parameter (dp_limit, dp_clean, Durchfluss oder Druckbereich) geändert. Das System wird die <strong>3 Lernphasen neu durchlaufen</strong>, um eine saubere Datenlage zu gewährleisten. Alle bisherigen Lernzyklen und Profile werden gelöscht.
+          <strong>&#9888; Achtung:</strong> Sie haben lernrelevante Parameter geändert. Das System wird die
+          <strong>3 Lernphasen neu durchlaufen</strong>. Alle bisherigen Lernzyklen und Profile werden gelöscht.
         </div>
 
-        <!-- ── Hardware-Diagnose ── -->
         <div class="settings-section diag-section">
           <h3>Hardware-Diagnose</h3>
-          <p class="settings-hint">
-            Prüft alle angeschlossenen Komponenten und zeigt Fehlerursachen mit Lösungshinweisen.
-          </p>
+          <p class="settings-hint">Prüft alle angeschlossenen Komponenten und zeigt Fehlerursachen mit Lösungshinweisen.</p>
           <button class="btn btn-secondary" id="btn-diag" onclick="runDiagnostics()">
             &#128270; Selbstcheck starten
           </button>
           <div id="diag-results" class="diag-results hidden"></div>
         </div>
 
-        <!-- ── Software-Update ── -->
         <div class="settings-section update-section">
           <h3>Software-Update</h3>
           <p class="settings-hint">
@@ -348,321 +336,498 @@
   </div>
 
   <!-- ================================================================
-       HAUPTLAYOUT
+       HEADER
        ================================================================ -->
   <header>
     <div class="header-inner">
-      <div class="logo">
-        <span class="logo-heta">HETA</span>
-        <span class="logo-sub">Smart Filter Monitoring</span>
+      <div class="header-logo">
+        <img src="heta_logo.svg" class="logo-img" alt="HETA Logo" />
+        <div class="logo-tagline">Smart Filter Monitoring</div>
       </div>
+
       <div class="header-status">
-        <span id="sensor-mode-badge" class="badge badge-sim">SIM</span>
-        <span id="status-badge" class="badge badge-ok">OK</span>
-        <span id="last-update" class="timestamp">–</span>
+        <div class="header-badges">
+          <span id="sensor-mode-badge" class="badge badge-sim">SIM</span>
+          <span id="status-badge" class="badge badge-ok">OK</span>
+        </div>
+        <div class="header-meta">
+          <span class="meta-label">Letzte Messung</span>
+          <span id="last-update" class="timestamp">–</span>
+        </div>
         <button class="btn-icon" onclick="openSettings()" title="Einstellungen">&#9881;</button>
       </div>
     </div>
   </header>
 
-  <main>
-    <!-- ===== Dashboard-Karten ===== -->
-    <section class="cards-grid">
-
-      <div class="card" id="card-p1">
-        <div class="card-label">Eintrittsdruck p1</div>
-        <div class="card-value" id="val-p1">–</div>
-        <div class="card-unit">bar</div>
-      </div>
-
-      <div class="card" id="card-p2">
-        <div class="card-label">Austrittsdruck p2</div>
-        <div class="card-value" id="val-p2">–</div>
-        <div class="card-unit">bar</div>
-      </div>
-
-      <div class="card card-highlight" id="card-dp">
-        <div class="card-label">Differenzdruck Δp</div>
-        <div class="card-value" id="val-dp">–</div>
-        <div class="card-unit">bar</div>
-        <div class="card-sub" id="dp-limit-hint"></div>
-      </div>
-
-      <div class="card" id="card-flow">
-        <div class="card-label">Durchfluss Q</div>
-        <div class="card-value" id="val-flow">–</div>
-        <div class="card-unit">l/min</div>
-      </div>
-
-      <div class="card" id="card-temp">
-        <div class="card-label">Temperatur T</div>
-        <div class="card-value" id="val-temp">–</div>
-        <div class="card-unit">°C</div>
-      </div>
-
-      <div class="card" id="card-reff">
-        <div class="card-label">Filterwiderstand R<sub>eff</sub></div>
-        <div class="card-value" id="val-reff">–</div>
-        <div class="card-unit">bar·min/l</div>
-      </div>
-
-      <div class="card card-health" id="card-health">
-        <div class="card-label">Beladungsgrad</div>
-        <div class="progress-bar-outer">
-          <div class="progress-bar-inner" id="health-bar"></div>
-        </div>
-        <div class="card-value" id="val-health">–</div>
-        <div class="card-unit">%</div>
-        <div class="card-note" id="card-health-note"></div>
-      </div>
-
-      <div class="card" id="card-remaining">
-        <div class="card-label">Reststandzeit</div>
-        <div class="card-value" id="val-remaining">–</div>
-        <div class="card-unit" id="remaining-mode">BASIS</div>
-      </div>
-
-      <div class="card" id="card-heta">
-        <div class="card-label">HETA-Modus</div>
-        <div class="card-value small" id="val-heta-code">–</div>
-        <div class="card-unit" id="val-heta-status">nicht aktiviert</div>
-      </div>
-
-      <div class="card card-service" id="card-service">
-        <div class="card-label">Servicehinweis</div>
-        <div class="card-value small" id="val-service-msg">–</div>
-        <div class="card-unit" id="val-service-prio">–</div>
-      </div>
-
-    </section>
-
-    <!-- ===== Filterwechsel-Banner ===== -->
-    <div id="filter-change-banner" class="banner-alert hidden">
-      <strong>&#9888; FILTERWECHSEL ERFORDERLICH</strong> –
-      Bitte Filter tauschen und anschließend bestätigen.
-      <button class="btn btn-danger" onclick="confirmFilterChange()">
-        Filterwechsel bestätigen
+  <!-- ================================================================
+       TAB-NAVIGATION
+       ================================================================ -->
+  <nav class="tab-nav" id="main-nav">
+    <div class="tab-nav-inner">
+      <button class="tab-btn active" data-tab="dashboard" onclick="switchTab('dashboard')">
+        <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+          <rect x="1" y="1" width="8" height="8" rx="1.5"/>
+          <rect x="11" y="1" width="8" height="8" rx="1.5"/>
+          <rect x="1" y="11" width="8" height="8" rx="1.5"/>
+          <rect x="11" y="11" width="8" height="8" rx="1.5"/>
+        </svg>
+        Dashboard
+      </button>
+      <button class="tab-btn" data-tab="cycles" onclick="switchTab('cycles')">
+        <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M2 4h16v2H2zM2 9h16v2H2zM2 14h10v2H2z"/>
+          <circle cx="16" cy="15" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M15 14.5l.8.8 1.5-1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/>
+        </svg>
+        Zyklen &amp; Profil
+      </button>
+      <button class="tab-btn" data-tab="system" onclick="switchTab('system')">
+        <svg class="tab-icon" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+        </svg>
+        System
       </button>
     </div>
+  </nav>
 
-    <!-- ===== Prozessanalyse (Sensor- UND Simulationsmodus) ===== -->
-    <section id="analysis-section" class="analysis-section hidden">
-      <div class="analysis-header">
-        <h3>Prozessanalyse</h3>
-        <span id="analysis-mode-badge" class="analysis-mode-badge">–</span>
-      </div>
+  <!-- ================================================================
+       HAUPTINHALT
+       ================================================================ -->
+  <main>
 
-      <div id="analysis-loading" class="analysis-loading hidden">
-        &#9203; Messwerte werden gesammelt &ndash; Analyse startet in wenigen Sekunden&hellip;
-      </div>
+    <!-- ===== TAB 1: DASHBOARD ===== -->
+    <div id="tab-panel-dashboard" class="tab-panel">
 
-      <div id="analysis-content" class="hidden">
-        <div class="analysis-grid">
-          <div class="analysis-head">Kenngröße</div>
-          <div class="analysis-head">Referenz (gelernt)</div>
-          <div class="analysis-head">Aktuell</div>
-          <div class="analysis-head">Abweichung</div>
-
-          <div class="analysis-label">&#916;p-Anstieg</div>
-          <div id="an-dp-ref"  class="analysis-val">–</div>
-          <div id="an-dp-cur"  class="analysis-val">–</div>
-          <div id="an-dp-dev"  class="analysis-dev">–</div>
-
-          <div class="analysis-label">Durchfluss Q</div>
-          <div id="an-fl-ref"  class="analysis-val">–</div>
-          <div id="an-fl-cur"  class="analysis-val">–</div>
-          <div id="an-fl-dev"  class="analysis-dev">–</div>
-
-          <div class="analysis-label">Temperatur T</div>
-          <div id="an-tmp-ref" class="analysis-val">–</div>
-          <div id="an-tmp-cur" class="analysis-val">–</div>
-          <div id="an-tmp-dev" class="analysis-dev">–</div>
+      <!-- Filterwechsel-Banner -->
+      <div id="filter-change-banner" class="banner-alert hidden">
+        <span class="banner-icon">&#9888;</span>
+        <div class="banner-text">
+          <strong>FILTERWECHSEL ERFORDERLICH</strong>
+          <span>Bitte Filter tauschen und anschließend bestätigen.</span>
         </div>
-        <div id="analysis-diagnosis" class="analysis-diagnosis"></div>
-      </div>
-    </section>
-
-    <!-- ===== Simulations-Demo-Steuerung ===== -->
-    <section id="sim-demo-panel" class="sim-demo-panel hidden">
-      <div class="sim-demo-header">
-        <h3>&#127916; Simulations-Demo</h3>
-        <span class="sim-demo-badge">Nur im Simulationsmodus</span>
-      </div>
-
-      <!-- Lernphase -->
-      <div id="sim-learn-area">
-        <p class="sim-demo-hint">
-          Simuliert <strong id="sim-learn-needed">3</strong> Lernzyklen,
-          damit Prognose und Beladungsgrad berechnet werden können.
-        </p>
-        <div class="sim-learn-dots" id="sim-learn-dots"></div>
-        <button class="btn btn-accent" id="btn-quick-learn" onclick="quickLearn()">
-          &#9654; Lernzyklen simulieren
+        <button class="btn btn-danger" onclick="confirmFilterChange()">
+          Filterwechsel bestätigen
         </button>
-        <div id="sim-learn-msg" class="msg"></div>
       </div>
 
-      <!-- Raten-Steuerung (nach Lernphase) -->
-      <div id="sim-manual-area" class="hidden">
-        <div class="sim-manual-header">
-          <span>Prozessabweichungen simulieren</span>
-          <label class="toggle-wrap">
-            <input type="checkbox" id="sim-manual-toggle" onchange="onManualToggle(this)">
-            <span class="toggle-label">Vergleich aktiv</span>
-          </label>
+      <!-- Messkarten -->
+      <section class="cards-grid">
+
+        <div class="card" id="card-p1">
+          <div class="card-label">Eintrittsdruck p<sub>1</sub></div>
+          <div class="card-value" id="val-p1">–</div>
+          <div class="card-unit">bar</div>
         </div>
-        <p class="sim-demo-hint">
-          Die Regler ändern den <strong>Verlauf über die Zeit</strong> –
-          nicht den Momentanwert. Die Simulation läuft weiter und zeigt,
-          wie sich Reststandzeit, Beladungsgrad und Servicehinweis verändern.
-        </p>
 
-        <div class="sim-sliders" id="sim-sliders">
+        <div class="card" id="card-p2">
+          <div class="card-label">Austrittsdruck p<sub>2</sub></div>
+          <div class="card-value" id="val-p2">–</div>
+          <div class="card-unit">bar</div>
+        </div>
 
-          <div class="sim-slider-row">
-            <label class="sim-slider-label">
-              Eintrittsdruck p1
-              <span class="sim-slider-note">absolut</span>
+        <div class="card card-highlight" id="card-dp">
+          <div class="card-label">Differenzdruck &Delta;p</div>
+          <div class="card-value" id="val-dp">–</div>
+          <div class="card-unit">bar</div>
+          <div class="card-sub" id="dp-limit-hint"></div>
+        </div>
+
+        <div class="card" id="card-flow">
+          <div class="card-label">Durchfluss Q</div>
+          <div class="card-value" id="val-flow">–</div>
+          <div class="card-unit">l/min</div>
+        </div>
+
+        <div class="card" id="card-temp">
+          <div class="card-label">Temperatur T</div>
+          <div class="card-value" id="val-temp">–</div>
+          <div class="card-unit">°C</div>
+        </div>
+
+        <div class="card" id="card-reff">
+          <div class="card-label">Filterwiderstand R<sub>eff</sub></div>
+          <div class="card-value" id="val-reff">–</div>
+          <div class="card-unit">bar·min/l</div>
+        </div>
+
+        <div class="card card-health" id="card-health">
+          <div class="card-label">Beladungsgrad</div>
+          <div class="progress-bar-outer">
+            <div class="progress-bar-inner" id="health-bar"></div>
+          </div>
+          <div class="card-value" id="val-health">–</div>
+          <div class="card-unit">%</div>
+          <div class="card-note" id="card-health-note"></div>
+        </div>
+
+        <div class="card" id="card-remaining">
+          <div class="card-label">Reststandzeit</div>
+          <div class="card-value" id="val-remaining">–</div>
+          <div class="card-unit" id="remaining-mode">BASIS</div>
+        </div>
+
+        <div class="card" id="card-heta">
+          <div class="card-label">HETA-Modus</div>
+          <div class="card-value small" id="val-heta-code">–</div>
+          <div class="card-unit" id="val-heta-status">nicht aktiviert</div>
+        </div>
+
+        <div class="card card-service" id="card-service">
+          <div class="card-label">Servicehinweis</div>
+          <div class="card-value small" id="val-service-msg">–</div>
+          <div class="card-unit" id="val-service-prio">–</div>
+        </div>
+
+      </section>
+
+      <!-- Prozessanalyse -->
+      <section id="analysis-section" class="analysis-section hidden">
+        <div class="section-header">
+          <div class="section-title-group">
+            <h2 class="section-title">Prozessanalyse</h2>
+            <span id="analysis-mode-badge" class="analysis-mode-badge">–</span>
+          </div>
+        </div>
+
+        <div id="analysis-loading" class="analysis-loading hidden">
+          &#9203; Messwerte werden gesammelt &ndash; Analyse startet in wenigen Sekunden&hellip;
+        </div>
+
+        <div id="analysis-content" class="hidden">
+          <div class="analysis-grid">
+            <div class="analysis-head">Kenngröße</div>
+            <div class="analysis-head">Referenz (gelernt)</div>
+            <div class="analysis-head">Aktuell</div>
+            <div class="analysis-head">Abweichung</div>
+
+            <div class="analysis-label">&#916;p-Anstieg</div>
+            <div id="an-dp-ref"  class="analysis-val">–</div>
+            <div id="an-dp-cur"  class="analysis-val">–</div>
+            <div id="an-dp-dev"  class="analysis-dev">–</div>
+
+            <div class="analysis-label">Durchfluss Q</div>
+            <div id="an-fl-ref"  class="analysis-val">–</div>
+            <div id="an-fl-cur"  class="analysis-val">–</div>
+            <div id="an-fl-dev"  class="analysis-dev">–</div>
+
+            <div class="analysis-label">Temperatur T</div>
+            <div id="an-tmp-ref" class="analysis-val">–</div>
+            <div id="an-tmp-cur" class="analysis-val">–</div>
+            <div id="an-tmp-dev" class="analysis-dev">–</div>
+          </div>
+          <div id="analysis-diagnosis" class="analysis-diagnosis"></div>
+        </div>
+      </section>
+
+      <!-- Simulations-Demo-Panel -->
+      <section id="sim-demo-panel" class="sim-demo-panel hidden">
+        <div class="section-header">
+          <div class="section-title-group">
+            <h2 class="section-title">&#127916; Simulations-Demo</h2>
+            <span class="sim-demo-badge">Nur im Simulationsmodus</span>
+          </div>
+        </div>
+
+        <div id="sim-learn-area">
+          <p class="sim-demo-hint">
+            Simuliert <strong id="sim-learn-needed">3</strong> Lernzyklen,
+            damit Prognose und Beladungsgrad berechnet werden können.
+          </p>
+          <div class="sim-learn-dots" id="sim-learn-dots"></div>
+          <button class="btn btn-accent" id="btn-quick-learn" onclick="quickLearn()">
+            &#9654; Lernzyklen simulieren
+          </button>
+          <div id="sim-learn-msg" class="msg"></div>
+        </div>
+
+        <div id="sim-manual-area" class="hidden">
+          <div class="sim-manual-header">
+            <span>Prozessabweichungen simulieren</span>
+            <label class="toggle-wrap">
+              <input type="checkbox" id="sim-manual-toggle" onchange="onManualToggle(this)">
+              <span class="toggle-label">Vergleich aktiv</span>
             </label>
-            <input type="range" id="sl-p1" class="sim-slider"
-                   min="0.5" max="10" step="0.1" value="3.5"
-                   oninput="onSliderInput('p1', this.value)">
-            <span class="sim-slider-val" id="sv-p1">3.5 bar</span>
+          </div>
+          <p class="sim-demo-hint">
+            Die Regler ändern den <strong>Verlauf über die Zeit</strong> –
+            nicht den Momentanwert. Die Simulation läuft weiter und zeigt,
+            wie sich Reststandzeit, Beladungsgrad und Servicehinweis verändern.
+          </p>
+
+          <div class="sim-sliders" id="sim-sliders">
+            <div class="sim-slider-row">
+              <label class="sim-slider-label">
+                Eintrittsdruck p<sub>1</sub>
+                <span class="sim-slider-note">absolut</span>
+              </label>
+              <input type="range" id="sl-p1" class="sim-slider"
+                     min="0.5" max="10" step="0.1" value="3.5"
+                     oninput="onSliderInput('p1', this.value)">
+              <span class="sim-slider-val" id="sv-p1">3.5 bar</span>
+            </div>
+
+            <div class="sim-slider-row">
+              <label class="sim-slider-label">
+                &#916;p-Beladungsrate
+                <span class="sim-slider-note">% der gelernten Rate</span>
+              </label>
+              <input type="range" id="sl-dp-rate" class="sim-slider"
+                     min="30" max="300" step="5" value="100"
+                     oninput="onSliderInput('dp_rate', this.value)">
+              <span class="sim-slider-val" id="sv-dp-rate">100 %</span>
+            </div>
+
+            <div class="sim-slider-row">
+              <label class="sim-slider-label">
+                Durchfluss Q
+                <span class="sim-slider-note">% des Solldurchflusses</span>
+              </label>
+              <input type="range" id="sl-flow-rate" class="sim-slider"
+                     min="30" max="150" step="5" value="100"
+                     oninput="onSliderInput('flow_rate', this.value)">
+              <span class="sim-slider-val" id="sv-flow-rate">100 %</span>
+            </div>
+
+            <div class="sim-slider-row">
+              <label class="sim-slider-label">
+                Temperaturabweichung
+                <span class="sim-slider-note">&#916;&#176;C zum gelernten Mittel</span>
+              </label>
+              <input type="range" id="sl-temp-off" class="sim-slider"
+                     min="-30" max="50" step="1" value="0"
+                     oninput="onSliderInput('temp_off', this.value)">
+              <span class="sim-slider-val" id="sv-temp-off">0 &#176;C</span>
+            </div>
+
+            <div class="sim-slider-actions">
+              <button class="btn btn-ghost btn-sm" onclick="resetSliders()">Auf Baseline zurücksetzen</button>
+            </div>
           </div>
 
-          <div class="sim-slider-row">
-            <label class="sim-slider-label">
-              &#916;p-Beladungsrate
-              <span class="sim-slider-note">% der gelernten Rate</span>
-            </label>
-            <input type="range" id="sl-dp-rate" class="sim-slider"
-                   min="30" max="300" step="5" value="100"
-                   oninput="onSliderInput('dp_rate', this.value)">
-            <span class="sim-slider-val" id="sv-dp-rate">100 %</span>
-          </div>
+          <div id="sim-comparison" class="sim-comparison hidden">
+            <div class="sim-cmp-title">Vergleich mit gelerntem Profil</div>
+            <div class="sim-cmp-grid">
+              <div class="sim-cmp-head">Größe</div>
+              <div class="sim-cmp-head">Gelernt</div>
+              <div class="sim-cmp-head">Aktuell</div>
+              <div class="sim-cmp-head">Abweichung</div>
 
-          <div class="sim-slider-row">
-            <label class="sim-slider-label">
-              Durchfluss Q
-              <span class="sim-slider-note">% des Solldurchflusses</span>
-            </label>
-            <input type="range" id="sl-flow-rate" class="sim-slider"
-                   min="30" max="150" step="5" value="100"
-                   oninput="onSliderInput('flow_rate', this.value)">
-            <span class="sim-slider-val" id="sv-flow-rate">100 %</span>
-          </div>
+              <div class="sim-cmp-label">&#916;p-Anstieg</div>
+              <div id="cmp-dp-ref" class="sim-cmp-val">–</div>
+              <div id="cmp-dp-cur" class="sim-cmp-val">–</div>
+              <div id="cmp-dp-dev" class="sim-cmp-dev">–</div>
 
-          <div class="sim-slider-row">
-            <label class="sim-slider-label">
-              Temperaturabweichung
-              <span class="sim-slider-note">&#916;&#176;C zum gelernten Mittel</span>
-            </label>
-            <input type="range" id="sl-temp-off" class="sim-slider"
-                   min="-30" max="50" step="1" value="0"
-                   oninput="onSliderInput('temp_off', this.value)">
-            <span class="sim-slider-val" id="sv-temp-off">0 &#176;C</span>
-          </div>
+              <div class="sim-cmp-label">Durchfluss</div>
+              <div id="cmp-flow-ref" class="sim-cmp-val">–</div>
+              <div id="cmp-flow-cur" class="sim-cmp-val">–</div>
+              <div id="cmp-flow-dev" class="sim-cmp-dev">–</div>
 
-          <div class="sim-slider-actions">
-            <button class="btn btn-ghost btn-sm" onclick="resetSliders()">Auf Baseline zurücksetzen</button>
+              <div class="sim-cmp-label">Temperatur</div>
+              <div id="cmp-temp-ref" class="sim-cmp-val">–</div>
+              <div id="cmp-temp-cur" class="sim-cmp-val">–</div>
+              <div id="cmp-temp-dev" class="sim-cmp-dev">–</div>
+            </div>
+            <div id="sim-diagnosis" class="sim-diagnosis"></div>
           </div>
         </div>
+      </section>
 
-        <!-- Vergleichsanzeige -->
-        <div id="sim-comparison" class="sim-comparison hidden">
-          <div class="sim-cmp-title">Vergleich mit gelerntem Profil</div>
-          <div class="sim-cmp-grid">
-            <div class="sim-cmp-head">Größe</div>
-            <div class="sim-cmp-head">Gelernt</div>
-            <div class="sim-cmp-head">Aktuell</div>
-            <div class="sim-cmp-head">Abweichung</div>
+    </div><!-- /tab-panel-dashboard -->
 
-            <div class="sim-cmp-label">&#916;p-Anstieg</div>
-            <div id="cmp-dp-ref" class="sim-cmp-val">–</div>
-            <div id="cmp-dp-cur" class="sim-cmp-val">–</div>
-            <div id="cmp-dp-dev" class="sim-cmp-dev">–</div>
+    <!-- ===== TAB 2: ZYKLEN & PROFIL ===== -->
+    <div id="tab-panel-cycles" class="tab-panel hidden">
 
-            <div class="sim-cmp-label">Durchfluss</div>
-            <div id="cmp-flow-ref" class="sim-cmp-val">–</div>
-            <div id="cmp-flow-cur" class="sim-cmp-val">–</div>
-            <div id="cmp-flow-dev" class="sim-cmp-dev">–</div>
-
-            <div class="sim-cmp-label">Temperatur</div>
-            <div id="cmp-temp-ref" class="sim-cmp-val">–</div>
-            <div id="cmp-temp-cur" class="sim-cmp-val">–</div>
-            <div id="cmp-temp-dev" class="sim-cmp-dev">–</div>
+      <!-- Lernprofil-Übersicht -->
+      <section class="profile-section">
+        <div class="section-header">
+          <div class="section-title-group">
+            <h2 class="section-title">Lernprofil</h2>
+            <span id="profile-validity-badge" class="badge badge-warn">–</span>
           </div>
-          <div id="sim-diagnosis" class="sim-diagnosis"></div>
+          <button class="btn btn-ghost btn-sm" onclick="loadCyclesOverview()">&#8635; Aktualisieren</button>
         </div>
-      </div>
-    </section>
 
-    <!-- ===== Steuerung ===== -->
-    <section class="controls">
-      <div class="controls-group">
-        <h3>Betrieb</h3>
-        <button class="btn btn-primary" onclick="startSimulation()">Messung starten</button>
-        <button class="btn btn-secondary" onclick="stopSimulation()">Messung stoppen</button>
-        <button class="btn btn-warning" onclick="resetSystem()">Reset</button>
-      </div>
-
-      <div class="controls-group">
-        <h3>HETA-Code aktivieren</h3>
-        <div class="heta-code-input-wrap">
-          <span class="heta-code-prefix">HETA-</span>
-          <input type="text" id="input-heta-code" placeholder="12345" maxlength="15"
-                 inputmode="numeric" pattern="[0-9]*" />
+        <div id="cycles-no-code" class="empty-state">
+          <svg viewBox="0 0 48 48" fill="none" class="empty-icon">
+            <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="2"/>
+            <path d="M24 14v12M24 32v2" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+          <p>Kein HETA-Code aktiv.</p>
+          <small>Bitte einen HETA-Code aktivieren (System-Tab), um Profil- und Zyklusdaten anzuzeigen.</small>
         </div>
-        <input type="text" id="input-pin" placeholder="PIN (6-stellig)" maxlength="6" />
-        <button class="btn btn-primary" onclick="activateHetaCode()">Aktivieren</button>
-        <button class="btn btn-ghost" onclick="showDemo()">Demo-PIN anzeigen</button>
-        <div id="heta-msg" class="msg"></div>
-      </div>
 
-      <div class="controls-group">
-        <h3>Export &amp; Service</h3>
-        <button class="btn btn-secondary" onclick="exportCSV()">CSV exportieren</button>
-        <button class="btn btn-secondary" onclick="generateServiceReport()">Servicebericht erzeugen</button>
-      </div>
-    </section>
-
-    <!-- ===== Service-Payload ===== -->
-    <section id="service-section" class="hidden">
-      <h2>Servicebericht</h2>
-      <pre id="service-report-text"></pre>
-      <button class="btn btn-ghost" onclick="hideService()">Schließen</button>
-    </section>
-
-    <!-- ===== Charts ===== -->
-    <section class="charts">
-      <div class="charts-header">
-        <h2>Verlaufsdiagramm</h2>
-        <div class="chart-controls">
-          <span class="chart-hint">Mausrad&nbsp;=&nbsp;Zoom &nbsp;·&nbsp; Ziehen&nbsp;=&nbsp;Verschieben</span>
-          <button class="btn btn-ghost btn-sm" onclick="resetChartZoom()">Zoom zurücksetzen</button>
+        <div id="profile-content" class="hidden">
+          <div class="profile-stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Referenz R<sub>eff</sub></div>
+              <div class="stat-value" id="prof-r-eff">–</div>
+              <div class="stat-unit">bar·min/l</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Referenz &Delta;p-Rate</div>
+              <div class="stat-value" id="prof-loading-rate">–</div>
+              <div class="stat-unit">mbar/s</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Ø Durchfluss</div>
+              <div class="stat-value" id="prof-avg-flow">–</div>
+              <div class="stat-unit">l/min</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Ø Temperatur</div>
+              <div class="stat-value" id="prof-avg-temp">–</div>
+              <div class="stat-unit">°C</div>
+            </div>
+            <div class="stat-card stat-card-cycles">
+              <div class="stat-label">Bestätigte Lernzyklen</div>
+              <div class="stat-value-row">
+                <span class="stat-value" id="prof-cycles-count">0</span>
+                <span class="stat-cycles-needed" id="prof-cycles-needed">von 3 erforderlich</span>
+              </div>
+              <div class="profile-progress-outer">
+                <div class="profile-progress-fill" id="prof-progress-bar"></div>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-      <div class="chart-container">
-        <canvas id="chart-combined"></canvas>
-      </div>
-    </section>
+      </section>
 
-    <!-- ===== Systeminfo ===== -->
-    <section class="sysinfo">
-      <h2>Systemstatus</h2>
-      <div class="info-grid">
-        <div><span class="info-label">Sensorquelle:</span><span id="info-sensor-mode">–</span></div>
-        <div><span class="info-label">Zyklen gelernt:</span><span id="info-cycles">–</span></div>
-        <div><span class="info-label">Profil:</span><span id="info-profile">–</span></div>
-        <div><span class="info-label">Anomalie:</span><span id="info-anomaly">–</span></div>
-        <div><span class="info-label">Prognose-Modus:</span><span id="info-pred-mode">–</span></div>
-        <div><span class="info-label">Sensor-Fehler:</span><span id="info-sensor-err">–</span></div>
-      </div>
-    </section>
+      <!-- Filterzyklen-Tabelle -->
+      <section class="cycles-section">
+        <div class="section-header">
+          <h2 class="section-title">Filterzyklen</h2>
+          <span id="cycles-count-badge" class="badge badge-observe" style="display:none"></span>
+        </div>
+
+        <div id="cycles-empty" class="empty-state hidden">
+          <svg viewBox="0 0 48 48" fill="none" class="empty-icon">
+            <path d="M8 40V16l16-8 16 8v24" stroke="currentColor" stroke-width="2"/>
+            <rect x="18" y="24" width="12" height="16" stroke="currentColor" stroke-width="2"/>
+            <line x1="24" y1="8" x2="24" y2="40" stroke="currentColor" stroke-width="1" stroke-dasharray="3"/>
+          </svg>
+          <p>Keine Filterzyklen vorhanden.</p>
+          <small>Filterzyklen werden nach dem ersten bestätigten Filterwechsel gespeichert.</small>
+        </div>
+
+        <div id="cycles-table-wrap" class="table-responsive hidden">
+          <table class="cycles-table" id="cycles-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Datum &amp; Uhrzeit</th>
+                <th>Dauer</th>
+                <th>&Delta;p Start</th>
+                <th>&Delta;p Ende</th>
+                <th>Ø Durchfluss</th>
+                <th>Ø Temp.</th>
+                <th>Beladungsrate</th>
+                <th>&#10003;</th>
+              </tr>
+            </thead>
+            <tbody id="cycles-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </div><!-- /tab-panel-cycles -->
+
+    <!-- ===== TAB 3: SYSTEM ===== -->
+    <div id="tab-panel-system" class="tab-panel hidden">
+
+      <!-- Steuerung -->
+      <section class="controls">
+        <div class="controls-group">
+          <h3>Betrieb</h3>
+          <button class="btn btn-primary" onclick="startSimulation()">Messung starten</button>
+          <button class="btn btn-secondary" onclick="stopSimulation()">Messung stoppen</button>
+          <button class="btn btn-warning" onclick="resetSystem()">Reset</button>
+        </div>
+
+        <div class="controls-group">
+          <h3>HETA-Code aktivieren</h3>
+          <div class="heta-code-input-wrap">
+            <span class="heta-code-prefix">HETA-</span>
+            <input type="text" id="input-heta-code" placeholder="12345" maxlength="15"
+                   inputmode="numeric" pattern="[0-9]*" />
+          </div>
+          <input type="text" id="input-pin" placeholder="PIN (6-stellig)" maxlength="6" />
+          <button class="btn btn-primary" onclick="activateHetaCode()">Aktivieren</button>
+          <button class="btn btn-ghost" onclick="showDemo()">Demo-PIN anzeigen</button>
+          <div id="heta-msg" class="msg"></div>
+        </div>
+
+        <div class="controls-group">
+          <h3>Export &amp; Service</h3>
+          <button class="btn btn-secondary" onclick="exportCSV()">CSV exportieren</button>
+          <button class="btn btn-secondary" onclick="generateServiceReport()">Servicebericht erzeugen</button>
+        </div>
+      </section>
+
+      <!-- Service-Payload -->
+      <section id="service-section" class="hidden">
+        <div class="section-header">
+          <h2 class="section-title">Servicebericht</h2>
+          <button class="btn btn-ghost btn-sm" onclick="hideService()">Schließen</button>
+        </div>
+        <pre id="service-report-text"></pre>
+      </section>
+
+      <!-- Verlaufsdiagramm -->
+      <section class="charts">
+        <div class="section-header">
+          <h2 class="section-title">Verlaufsdiagramm</h2>
+          <div class="chart-controls">
+            <span class="chart-hint">Mausrad&nbsp;=&nbsp;Zoom &nbsp;&middot;&nbsp; Ziehen&nbsp;=&nbsp;Verschieben</span>
+            <button class="btn btn-ghost btn-sm" onclick="resetChartZoom()">Zoom zurücksetzen</button>
+          </div>
+        </div>
+        <div class="chart-container">
+          <canvas id="chart-combined"></canvas>
+        </div>
+      </section>
+
+      <!-- Systemstatus -->
+      <section class="sysinfo">
+        <div class="section-header">
+          <h2 class="section-title">Systemstatus</h2>
+        </div>
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">Sensorquelle</span>
+            <span id="info-sensor-mode" class="info-value">–</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Zyklen gelernt</span>
+            <span id="info-cycles" class="info-value">–</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Profil</span>
+            <span id="info-profile" class="info-value">–</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Anomalie</span>
+            <span id="info-anomaly" class="info-value">–</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Prognose-Modus</span>
+            <span id="info-pred-mode" class="info-value">–</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Sensor-Fehler</span>
+            <span id="info-sensor-err" class="info-value">–</span>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /tab-panel-system -->
+
   </main>
 
   <footer>
-    <span>HETA Smart Filter Monitoring &copy; 2026 – Raspberry Pi 5 Prototyp</span>
+    <div class="footer-inner">
+      <img src="heta_logo.svg" class="footer-logo" alt="HETA" />
+      <span>Smart Filter Monitoring &copy; 2026 &ndash; Raspberry Pi 5 Prototyp</span>
+    </div>
   </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
