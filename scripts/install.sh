@@ -12,6 +12,7 @@ SERVICE_NAME="heta-monitor"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 PYTHON_BIN="python3"
 VENV_DIR="${PROJECT_DIR}/.venv"
+INSTALL_USER="$(whoami)"
 
 echo "============================================================"
 echo "  HETA Smart Filter Monitoring – Installation"
@@ -66,7 +67,7 @@ pip install -r "${PROJECT_DIR}/requirements.txt"
 
 echo ""
 echo "  Installierte Pakete:"
-pip list | grep -E "flask|numpy|pandas|luma|paho|PIL|RPi|gpio|seesaw"
+pip list --format=columns | grep -Ei "flask|luma|pillow|paho|gpiozero|spidev"
 
 # -----------------------------------------------------------
 # 5. Verzeichnisse erstellen
@@ -92,7 +93,7 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
+User=${INSTALL_USER}
 WorkingDirectory=${PROJECT_DIR}
 ExecStart=${VENV_PYTHON} ${PROJECT_DIR}/backend/app.py
 Restart=always
@@ -110,10 +111,10 @@ sudo systemctl daemon-reload
 sudo systemctl enable "${SERVICE_NAME}"
 echo "  Service '${SERVICE_NAME}' installiert und aktiviert."
 
-# Sudoers-Eintrag: pi darf den Service ohne Passwort neu starten
+# Sudoers-Eintrag: Installationsbenutzer darf den Service ohne Passwort neu starten
 # (wird vom Software-Update über die Weboberfläche benötigt)
 SUDOERS_FILE="/etc/sudoers.d/heta-monitor"
-SUDOERS_LINE="pi ALL=(ALL) NOPASSWD: /bin/systemctl restart ${SERVICE_NAME}"
+SUDOERS_LINE="${INSTALL_USER} ALL=(ALL) NOPASSWD: /bin/systemctl restart ${SERVICE_NAME}"
 if ! sudo grep -qF "${SUDOERS_LINE}" "${SUDOERS_FILE}" 2>/dev/null; then
     echo "${SUDOERS_LINE}" | sudo tee "${SUDOERS_FILE}" > /dev/null
     sudo chmod 0440 "${SUDOERS_FILE}"

@@ -1,18 +1,24 @@
-# Web-Backend
+# Web-Backend (läuft auf allen Plattformen)
 flask>=2.3.0
 flask-cors>=4.0.0
 
-# OLED-Display (Waveshare 2.42" SSD1309)
+# OLED-Display (Waveshare 2.42" SSD1309, SPI)
+# Wird bei fehlendem Display sicher übersprungen (Warnung im Log).
 luma.oled>=3.12.0
 Pillow>=10.0.0
 
-# ANO-Rotary-Encoder (direktes GPIO, Raspberry Pi)
-# gpiozero ist auf Raspberry Pi OS vorinstalliert; lgpio wird als Backend für Pi 5 benötigt
+# ANO-Rotary-Encoder (direktes GPIO, nur Raspberry Pi)
+# gpiozero ist auf Raspberry Pi OS vorinstalliert.
+# lgpio ist das empfohlene GPIO-Backend für den Raspberry Pi 5.
+# Auf anderen Systemen (Entwicklungsrechner, VM) werden diese Pakete
+# installiert, aber der Encoder-Code fällt sicher in den Simulations-Fallback.
 gpiozero>=2.0
 lgpio
 
-# MQTT (optional, nur wenn mqtt_enabled=true in settings.json)
+# MQTT-Client (optional – nur aktiv wenn mqtt_enabled=true in settings.json)
 paho-mqtt>=1.6.1
 
-# SPI-ADC (AnoPi Shield) – nur auf Raspberry Pi
+# SPI-ADC (AnoPi Shield) – nur auf Raspberry Pi verfügbar
+# Auf anderen Systemen schlägt der Import fehl; sensors.py behandelt das
+# als "Hardware nicht erkannt" und gibt einen klaren Hinweis im Log aus.
 spidev

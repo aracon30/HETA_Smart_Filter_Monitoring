@@ -1,5 +1,13 @@
 """
 Konfigurationsmodul – lädt settings.json und stellt alle Parameter bereit.
+
+Konfigurationsprioritäten (höhere Nummer = höhere Priorität):
+  1. _DEFAULTS          (Fallback-Werte im Code)
+  2. config/settings.json       (git-versionierte Standardwerte, nie lokal editieren)
+  3. config/settings.local.json (lokale Übersteuerungen, gitignored, git-pull-sicher)
+
+Alle Einstellungsänderungen (Onboarding, Einstellungsbereich) werden in
+settings.local.json gespeichert – git pull überschreibt sie nie.
 """
 
 import json
@@ -9,9 +17,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# Pfad zur Konfigurationsdatei relativ zum Projektverzeichnis
-_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_CONFIG_PATH = os.path.join(_BASE_DIR, "config", "settings.json")
+_BASE_DIR        = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_CONFIG_PATH     = os.path.join(_BASE_DIR, "config", "settings.json")
+_CONFIG_LOCAL_PATH = os.path.join(_BASE_DIR, "config", "settings.local.json")
 
 # Standardwerte falls settings.json nicht vorhanden
 _DEFAULTS = {
@@ -65,26 +73,67 @@ _DEFAULTS = {
 
 
 def load_settings() -> dict:
-    """Lädt die Konfiguration aus settings.json, füllt fehlende Felder mit Standardwerten."""
+    """
+    Lädt die Konfiguration in drei Schichten:
+      1. _DEFAULTS (Code-Fallback)
+      2. settings.json (git-versionierte Standardwerte)
+      3. settings.local.json (lokale Übersteuerungen, gitignored)
+
+    Automatische Migration: Falls settings.json bereits Benutzerdaten enthält
+    (onboarding_complete=true oder Passwort-Hash gesetzt) und settings.local.json
+    noch nicht existiert, wird settings.local.json automatisch erstellt – danach
+    ist git pull ohne Konflikte möglich.
+    """
     settings = _DEFAULTS.copy()
+
+    # Schicht 2: git-versionierte Standardwerte
     try:
         with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
             loaded = json.load(f)
         settings.update(loaded)
-        logger.info("Konfiguration aus %s geladen.", _CONFIG_PATH)
+        logger.info("Basiskonfiguration aus %s geladen.", _CONFIG_PATH)
     except FileNotFoundError:
         logger.warning("settings.json nicht gefunden, verwende Standardwerte.")
     except json.JSONDecodeError as e:
         logger.error("Fehler beim Parsen von settings.json: %s – Standardwerte aktiv.", e)
+
+    # Schicht 3: lokale Übersteuerungen (gitignored, git-pull-sicher)
+    local_exists = False
+    try:
+        with open(_CONFIG_LOCAL_PATH, "r", encoding="utf-8") as f:
+            local = json.load(f)
+        settings.update(local)
+        local_exists = True
+        logger.info("Lokale Konfiguration aus %s geladen.", _CONFIG_LOCAL_PATH)
+    except FileNotFoundError:
+        pass
+    except json.JSONDecodeError as e:
+        logger.error("Fehler beim Parsen von settings.local.json: %s – lokale Werte ignoriert.", e)
+
+    # Automatische Migration: Benutzerdaten aus settings.json nach settings.local.json
+    # übertragen, damit künftige git pulls keine Konflikte erzeugen.
+    if not local_exists and (settings.get("onboarding_complete") or settings.get("settings_password_hash")):
+        logger.info(
+            "Migration: Erstelle %s aus bestehenden Benutzerdaten in settings.json. "
+            "Danach kann settings.json mit 'git checkout config/settings.json' "
+            "auf die Standardwerte zurückgesetzt werden.",
+            _CONFIG_LOCAL_PATH,
+        )
+        save_settings(settings)
+
     return settings
 
 
 def save_settings(settings: dict) -> bool:
-    """Speichert die Konfiguration in settings.json."""
+    """
+    Speichert die Konfiguration in settings.local.json (gitignored).
+    settings.json bleibt unverändert – git pull erzeugt keine Konflikte.
+    """
     try:
-        with open(_CONFIG_PATH, "w", encoding="utf-8") as f:
+        os.makedirs(os.path.dirname(_CONFIG_LOCAL_PATH), exist_ok=True)
+        with open(_CONFIG_LOCAL_PATH, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2, ensure_ascii=False)
-        logger.info("Konfiguration in %s gespeichert.", _CONFIG_PATH)
+        logger.info("Konfiguration in %s gespeichert.", _CONFIG_LOCAL_PATH)
         return True
     except OSError as e:
         logger.error("Fehler beim Speichern der Konfiguration: %s", e)

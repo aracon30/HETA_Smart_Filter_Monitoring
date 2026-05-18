@@ -42,9 +42,9 @@ fordert den Bediener zur Prüfung auf.
 | Datenhaltung / Statusanzeige       | ✅ getestet      | Debian 13 VM                    |
 | Raspberry Pi 5 (Echtbetrieb)       | 🔄 in Betrieb    | Raspberry Pi 5 (Testsystem)     |
 | Autostart via systemd              | 🔄 in Betrieb    | Raspberry Pi 5 (Testsystem)     |
+| 4–20-mA-Sensorik (AnoPi Shield)    | 🔄 in Betrieb    | Raspberry Pi 5 (Testsystem)     |
 | OLED-Display (SSD1309 via SPI)     | ⏳ ausstehend    | –                               |
-| ANO-Rotary-Encoder (I2C)           | ⏳ ausstehend    | –                               |
-| 4–20-mA-Sensorik (AnoPi Shield)    | ⏳ ausstehend    | –                               |
+| ANO-Rotary-Encoder (GPIO)          | ⏳ ausstehend    | –                               |
 
 > Das System läuft auf einem **realen Raspberry Pi 5 Testsystem**. Echtbetrieb mit Sensoren hat Vorrang.
 > Der Simulationsmodus ist kein automatischer Fallback – er muss bewusst aktiviert werden (Onboarding oder Einstellungen).
@@ -154,7 +154,7 @@ Das Skript führt folgende Schritte automatisch aus:
 | 1/7 | Systempakete aktualisieren (`python3`, `libfreetype6-dev`, `fonts-dejavu-core`, …) |
 | 2/7 | SPI/I2C-Konfiguration prüfen und Hinweise ausgeben |
 | 3/7 | Python Virtual Environment erstellen (`.venv/`) |
-| 4/7 | Python-Pakete installieren (`flask`, `luma.oled`, `Pillow`, `adafruit-seesaw`, …) |
+| 4/7 | Python-Pakete installieren (`flask`, `luma.oled`, `Pillow`, `gpiozero`, `lgpio`, …) |
 | 5/7 | Verzeichnisse anlegen (`data/`, `logs/`, `exports/`) |
 | 6/7 | systemd-Service `heta-monitor` installieren und aktivieren |
 | 7/7 | Abschlussmeldung mit nächsten Schritten |
@@ -342,9 +342,23 @@ Ein Warnhinweis im Dialog macht darauf aufmerksam, bevor gespeichert wird.
 
 ## Software-Updates (Entwicklung & Testphase)
 
-### Option A – Update-Button im Dashboard (empfohlen)
+### Option A – update.sh (auf dem Pi, empfohlen)
 
-Der einfachste Weg: direkt im Browser, ohne Terminal.
+Das einfachste Verfahren direkt auf dem Raspberry Pi. Das Skript migriert bei Bedarf
+automatisch Einstellungen, führt `git pull` durch und startet den Dienst neu.
+
+```bash
+cd ~/HETA_Smart_Filter_Monitoring
+./scripts/update.sh
+```
+
+Das Skript prüft automatisch, ob eine **einmalige Einstellungsmigration** nötig ist
+(wenn Benutzerdaten in `settings.json` und noch kein `settings.local.json` vorhanden).
+Nach der Migration sind alle künftigen Updates ohne manuelle `git stash`-Schritte möglich.
+
+### Option B – Update-Button im Dashboard (im Browser)
+
+Alternativ direkt im Browser, ohne Terminal-Zugang.
 
 1. Einstellungen öffnen (⚙-Symbol oben rechts)
 2. Passwort eingeben und anmelden
@@ -379,7 +393,7 @@ Was passiert:
 > **Bereits aktuell?** Das Dashboard zeigt `✓ Bereits auf dem aktuellen Stand.`
 > und startet den Dienst nicht neu.
 
-### Option B – SSH-Deploy-Skript (Entwicklungsrechner)
+### Option C – SSH-Deploy-Skript (Entwicklungsrechner)
 
 Für schnelle Deployments direkt vom Entwicklungsrechner (Mac/Linux/Windows mit WSL):
 
@@ -423,10 +437,11 @@ ssh-copy-id pi@<IP-Adresse>
 
 | Situation | Empfehlung |
 |-----------|-----------|
-| Update schnell vom Browser aus | Option A (Dashboard) |
-| Viele schnelle Iterationen vom PC | Option B (deploy.sh) |
-| Kein SSH eingerichtet | Option A |
-| Neues Gerät ohne SSH-Key | Option A für ersten Boot, dann Option B |
+| Reguläres Update direkt auf dem Pi | Option A (update.sh) |
+| Update schnell vom Browser aus | Option B (Dashboard) |
+| Viele schnelle Iterationen vom PC | Option C (deploy.sh) |
+| Kein SSH eingerichtet | Option B |
+| Neues Gerät ohne SSH-Key | Option B für ersten Boot, dann Option C |
 
 ### Neustart-Logik
 
@@ -437,11 +452,11 @@ Der Dienst startet nach einem Update automatisch neu:
    (kein FD-Erbe, kein „Port belegt"-Fehler – funktioniert auch ohne systemd)
 
 Der sudo-Eintrag für `systemctl restart` wird automatisch durch `install.sh` angelegt.
-Falls nötig manuell einrichten:
+Falls nötig manuell einrichten (Benutzernamen anpassen):
 
 ```bash
 sudo visudo -f /etc/sudoers.d/heta-monitor
-# Zeile:
+# Zeile (Benutzernamen anpassen, z. B. pi oder ubuntu):
 pi ALL=(ALL) NOPASSWD: /bin/systemctl restart heta-monitor
 ```
 

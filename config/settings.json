@@ -35,7 +35,13 @@
   "display_i2c_address": 60,
 
   "navigation_enabled": true,
-  "encoder_i2c_address": 73,
+  "encoder_pin_enca": 16,
+  "encoder_pin_encb": 20,
+  "encoder_pin_sw1": 21,
+  "encoder_pin_sw2": 12,
+  "encoder_pin_sw3": 13,
+  "encoder_pin_sw4": 19,
+  "encoder_pin_sw5": 26,
 
   "webserver_port": 8080,
   "webserver_host": "0.0.0.0",

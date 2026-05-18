@@ -16,7 +16,7 @@ HETA_Smart_Filter_Monitoring/
 │   ├── service_logic.py    Serviceempfehlungen + Serviceberichte
 │   ├── database.py         SQLite-Datenbankmodul + Lerndaten-Reset
 │   ├── display.py          OLED-Display-Steuerung (luma.oled + PIL-Layout)
-│   ├── navigation.py       Drehencoder-Navigation (Adafruit Seesaw)
+│   ├── navigation.py       Drehencoder-Navigation (direktes GPIO via gpiozero)
 │   └── mqtt_client.py      Optionaler MQTT-Client (paho-mqtt)
 ├── frontend/
 │   ├── index.html          Single-Page Dashboard + Onboarding + Einstellungs-Modal
@@ -613,11 +613,17 @@ read_sensors() → Kanal nicht lesbar
 | `display_gpio_rst` | `27` | GPIO-Nummer Reset-Pin |
 | `display_i2c_address` | `60` | I2C-Adresse in Dezimal (0x3C = 60, 0x3D = 61) |
 
-**ANO-Rotary-Encoder** (Adafruit Seesaw)
+**ANO-Rotary-Encoder** (direktes GPIO, kein I2C/Seesaw)
 
 | Parameter | Standard | Beschreibung |
 |-----------|---------|-------------|
 | `navigation_enabled` | `true` | Encoder-Initialisierung aktivieren |
-| `encoder_i2c_address` | `73` | I2C-Adresse in Dezimal (0x49 = 73) |
+| `encoder_pin_enca` | `16` | GPIO-Pin Drehgeber Signal A |
+| `encoder_pin_encb` | `20` | GPIO-Pin Drehgeber Signal B |
+| `encoder_pin_sw1`  | `21` | GPIO-Pin Mitteltaste (OK) |
+| `encoder_pin_sw2`  | `12` | GPIO-Pin Taste Unten |
+| `encoder_pin_sw3`  | `13` | GPIO-Pin Taste Rechts |
+| `encoder_pin_sw4`  | `19` | GPIO-Pin Taste Oben |
+| `encoder_pin_sw5`  | `26` | GPIO-Pin Taste Links |
 
 ⚠ = Lernrelevanter Parameter: Änderung löscht alle Zyklen und Profile.
