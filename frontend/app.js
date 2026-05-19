@@ -1083,7 +1083,7 @@ function buildDiagnosis(dpDevPct, flowDevPct, tempDev) {
 // ============================================================
 
 let _sliderDebounce = null;
-let _rateValues = { dp_factor: 1.0, p1_bar: 3.5 };
+let _rateValues = { p1_bar: 3.5, q_start: 80.0, t_start: 20.0, dirt_rate_pct: 100.0 };
 
 function updateSimDemoPanel(d) {
   const panel = document.getElementById("sim-demo-panel");
@@ -1095,7 +1095,7 @@ function updateSimDemoPanel(d) {
 
   const profileValid = d.profile_status === "VALIDIERT" && d.heta_activated;
   const learnArea    = document.getElementById("sim-learn-area");
-  const manualArea   = document.getElementById("sim-manual-area");
+  const analysisArea = document.getElementById("sim-analysis-area");
 
   const needed   = Math.max(0, (d.required_cycles ?? 3) - (d.learned_cycles ?? 0));
   const totalReq = d.required_cycles ?? 3;
@@ -1113,14 +1113,14 @@ function updateSimDemoPanel(d) {
   if (learnBtn) learnBtn.disabled = profileValid;
 
   if (profileValid) {
-    if (learnArea)  learnArea.classList.add("hidden");
-    if (manualArea) manualArea.classList.remove("hidden");
+    if (learnArea)    learnArea.classList.add("hidden");
+    if (analysisArea) analysisArea.classList.remove("hidden");
     const toggle = document.getElementById("sim-manual-toggle");
     if (toggle && !toggle.dataset.userSet) toggle.checked = !!d.sim_rates_active;
     updateComparison(d);
   } else {
-    if (learnArea)  learnArea.classList.remove("hidden");
-    if (manualArea) manualArea.classList.add("hidden");
+    if (learnArea)    learnArea.classList.remove("hidden");
+    if (analysisArea) analysisArea.classList.add("hidden");
   }
 }
 
@@ -1132,21 +1132,37 @@ function updateComparison(d) {
   cmpEl.classList.toggle("hidden", !active);
   if (!active) return;
 
-  const s = window._settings || {};
-  const dp_clean  = s.dp_clean_bar ?? 0.2;
-  const dp_limit  = s.dp_limit_bar ?? 2.5;
-  const samp      = parseFloat(s.sampling_interval_seconds ?? 1);
-  const cyc_steps = s.cycle_steps  ?? 300;
+  const s       = window._settings || {};
+  const dp_clean = s.dp_clean_bar ?? 0.2;
+  const dp_limit = s.dp_limit_bar ?? 2.5;
+  const samp     = parseFloat(s.sampling_interval_seconds ?? 1);
+  const cyc_steps = s.cycle_steps ?? 300;
   const ref_rate  = (dp_limit - dp_clean) / Math.max(samp * cyc_steps, 1);
 
-  const dp_factor = d.sim_dp_factor        ?? 1.0;
-  const dp_dev    = d.sim_dp_deviation_pct ?? 0.0;
+  const dirt_pct   = d.sim_dirt_rate_pct    ?? 100.0;
+  const dp_dev     = d.sim_dp_deviation_pct ?? 0.0;
+  const q_cur      = d.sim_q_start          ?? 80.0;
+  const flow_dev   = d.sim_flow_deviation_pct ?? 0.0;
+  const t_cur      = d.sim_t_start          ?? 20.0;
+  const temp_dev   = d.sim_temp_deviation   ?? 0.0;
 
-  setText("cmp-dp-ref", `${(ref_rate * 1000).toFixed(2)} mbar/s`);
-  setText("cmp-dp-cur", `${(ref_rate * dp_factor * 1000).toFixed(2)} mbar/s`);
-  setDev("cmp-dp-dev",  dp_dev, "%");
+  // Referenz-Durchfluss und -Temp aus Profil (falls verfügbar via analysis)
+  const ref_flow = d.analysis_ref_flow || (s.flow_max_l_min ?? 150) * 0.53;
+  const ref_temp = d.analysis_ref_temp || 20.0;
 
-  setText("sim-diagnosis", buildSimDiagnosis(dp_factor));
+  setText("cmp-dp-ref",   `${(ref_rate * 1000).toFixed(2)} mbar/s`);
+  setText("cmp-dp-cur",   `${(ref_rate * dirt_pct / 100 * 1000).toFixed(2)} mbar/s`);
+  setDev("cmp-dp-dev",    dp_dev, "%");
+
+  setText("cmp-flow-ref", `${ref_flow.toFixed(1)} l/min`);
+  setText("cmp-flow-cur", `${q_cur.toFixed(1)} l/min`);
+  setDev("cmp-flow-dev",  flow_dev, "%");
+
+  setText("cmp-temp-ref", `${ref_temp.toFixed(1)} °C`);
+  setText("cmp-temp-cur", `${t_cur.toFixed(1)} °C`);
+  setDev("cmp-temp-dev",  temp_dev, "°C", true);
+
+  setText("sim-diagnosis", buildSimDiagnosis(dirt_pct / 100.0));
 }
 
 function setDev(id, val, unit, isAbsolute = false) {
@@ -1200,12 +1216,18 @@ function onSliderInput(which, rawVal) {
   if (which === "p1") {
     _rateValues.p1_bar = v;
     setText("sv-p1", v.toFixed(1) + " bar");
+  } else if (which === "q_start") {
+    _rateValues.q_start = v;
+    setText("sv-q-start", Math.round(v) + " l/min");
+  } else if (which === "t_start") {
+    _rateValues.t_start = v;
+    setText("sv-t-start", Math.round(v) + " °C");
   } else if (which === "dp_rate") {
-    _rateValues.dp_factor = v / 100.0;
+    _rateValues.dirt_rate_pct = v;
     setText("sv-dp-rate", Math.round(v) + " %");
   }
-  const toggle = document.getElementById("sim-manual-toggle");
-  if (toggle && toggle.checked) scheduleSendValues();
+  // Immer sofort senden (nicht nur wenn Toggle aktiv)
+  scheduleSendValues();
 }
 
 function scheduleSendValues() {
@@ -1215,11 +1237,11 @@ function scheduleSendValues() {
 
 async function sendSliderValues() {
   await apiFetch("/api/simulation/set-rates", "POST", {
-    active:      true,
-    dp_factor:   _rateValues.dp_factor,
-    flow_factor: 1.0,
-    temp_offset: 0.0,
-    p1_bar:      _rateValues.p1_bar,
+    active:         true,
+    p1_bar:         _rateValues.p1_bar,
+    q_start:        _rateValues.q_start,
+    t_start:        _rateValues.t_start,
+    dirt_rate_pct:  _rateValues.dirt_rate_pct,
   });
 }
 
@@ -1234,14 +1256,22 @@ async function onManualToggle(checkbox) {
   setTimeout(() => { checkbox.dataset.userSet = ""; }, 3000);
 }
 
+
 function resetSliders() {
-  _rateValues = { dp_factor: 1.0, p1_bar: 3.5 };
-  document.getElementById("sl-p1").value      = 3.5;
-  document.getElementById("sl-dp-rate").value = 100;
+  _rateValues = { p1_bar: 3.5, q_start: 80.0, t_start: 20.0, dirt_rate_pct: 100.0 };
+  const sl = document.getElementById("sl-p1");
+  if (sl) sl.value = 3.5;
+  const slq = document.getElementById("sl-q-start");
+  if (slq) slq.value = 80;
+  const slt = document.getElementById("sl-t-start");
+  if (slt) slt.value = 20;
+  const sldp = document.getElementById("sl-dp-rate");
+  if (sldp) sldp.value = 100;
   setText("sv-p1",      "3.5 bar");
+  setText("sv-q-start", "80 l/min");
+  setText("sv-t-start", "20 °C");
   setText("sv-dp-rate", "100 %");
-  const toggle = document.getElementById("sim-manual-toggle");
-  if (toggle && toggle.checked) scheduleSendValues();
+  scheduleSendValues();
 }
 
 // ============================================================
