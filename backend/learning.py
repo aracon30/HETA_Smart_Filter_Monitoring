@@ -307,7 +307,22 @@ class LearningManager:
         if not curve:
             return None
 
-        # Aktueller Fortschritt in % der Referenzdauer
+        # Zyklusfortschritt via R_eff – unabhängig von Echtzeit und dp_factor.
+        # R_eff steigt proportional zur Filterbeladung: bei dp_factor=2 erreicht
+        # der Filter denselben R_eff in halber Zeit → Fortschritt korrekt 100%.
+        r_eff_start = (profile.get("reference_r_eff_start")
+                       or profile.get("reference_r_eff") or 0.0)
+        r_eff_end   = profile.get("reference_r_eff_end") or 0.0
+        if r_eff_end > r_eff_start > 0:
+            reff_span = r_eff_end - r_eff_start
+            cycle_progress_pct = round(
+                max(0.0, min(100.0, (current_r_eff - r_eff_start) / reff_span * 100.0)), 1
+            )
+        else:
+            # Fallback: zeitbasiert wenn Profil noch keine r_eff_end-Daten hat
+            cycle_progress_pct = round(max(0.0, min(100.0, elapsed_seconds / ref_dur * 100.0)), 1)
+
+        # Zeitbasierter Fortschritt für Referenzkurven-Vergleich (zeigt Raten-Abweichung)
         t_pct = max(0.0, min(100.0, elapsed_seconds / ref_dur * 100.0))
         ref   = self._interpolate_curve(curve, t_pct)
         if not ref:
@@ -324,7 +339,7 @@ class LearningManager:
             return 0.0
 
         return {
-            "cycle_progress_pct":  round(t_pct, 1),
+            "cycle_progress_pct":  cycle_progress_pct,
             "ref_dp":              round(ref_dp,   4),
             "ref_r_eff":           round(ref_reff, 6),
             "ref_flow":            round(ref_flow, 1),

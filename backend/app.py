@@ -646,8 +646,13 @@ def _measurement_loop():
         # ── Reststandzeit berechnen ───────────────────────────────────────
         if profile_valid and heta_activated and cycle_active:
             ref_dur = profile.get("reference_duration_seconds", 0) if profile else 0
-            reff_deviation = analysis["r_eff_deviation_pct"] if analysis else 0.0
-            remaining_s = predictor.update_curve_based(elapsed, ref_dur, reff_deviation)
+            # R_eff-basierter Fortschritt als "effektive" Zeit: bei dp_factor=2
+            # hat der Filter doppelt so schnell geladen → Reststandzeit halbiert sich.
+            if analysis:
+                reff_elapsed = (analysis["cycle_progress_pct"] / 100.0) * ref_dur
+            else:
+                reff_elapsed = elapsed
+            remaining_s = predictor.update_curve_based(reff_elapsed, ref_dur)
         else:
             remaining_s = predictor.update(fs.dp_bar)
 
