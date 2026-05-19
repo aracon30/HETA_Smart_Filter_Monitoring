@@ -1132,6 +1132,12 @@ footer {
   flex-direction: column;
   overflow: hidden;
 }
+.modal.modal-wide {
+  max-width: 900px;
+  overflow-y: auto;
+  padding-bottom: 1.5rem;
+}
+.modal.modal-wide .modal-header { flex-shrink: 0; }
 
 .modal-header {
   background: linear-gradient(135deg, var(--heta-dark), #0d2d52);

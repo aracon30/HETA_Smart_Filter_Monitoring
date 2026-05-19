@@ -132,6 +132,12 @@ class Database:
                 if col not in existing:
                     conn.execute(f"ALTER TABLE cycle_samples ADD COLUMN {col} {typ} DEFAULT {default}")
 
+        # Schema-Migration: events_json in filter_cycles
+        with self._conn() as conn:
+            existing = {r[1] for r in conn.execute("PRAGMA table_info(filter_cycles)").fetchall()}
+            if "events_json" not in existing:
+                conn.execute("ALTER TABLE filter_cycles ADD COLUMN events_json TEXT DEFAULT '[]'")
+
     # ------------------------------------------------------------------
     # Messwerte
     # ------------------------------------------------------------------
@@ -173,15 +179,18 @@ class Database:
 
     def insert_cycle(self, data: dict) -> int:
         """Speichert einen abgeschlossenen Filterzyklus."""
+        data.setdefault("events_json", "[]")
         sql = """
             INSERT INTO filter_cycles
                 (heta_code, start_time, end_time, duration_seconds,
                  start_r_eff, end_r_eff, start_dp, end_dp,
-                 average_flow, average_temperature, loading_rate, confirmed_filter_change)
+                 average_flow, average_temperature, loading_rate, confirmed_filter_change,
+                 events_json)
             VALUES
                 (:heta_code, :start_time, :end_time, :duration_seconds,
                  :start_r_eff, :end_r_eff, :start_dp, :end_dp,
-                 :average_flow, :average_temperature, :loading_rate, :confirmed_filter_change)
+                 :average_flow, :average_temperature, :loading_rate, :confirmed_filter_change,
+                 :events_json)
         """
         with self._conn() as conn:
             cur = conn.execute(sql, data)

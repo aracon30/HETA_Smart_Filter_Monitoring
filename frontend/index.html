@@ -184,6 +184,22 @@
   </div>
 
   <!-- ================================================================
+       ZYKLUS-DIAGRAMM MODAL
+       ================================================================ -->
+  <div id="cycle-modal-overlay" class="overlay hidden" onclick="if(event.target===this)closeCycleModal()">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h2 id="cycle-modal-title">Filterzyklus</h2>
+        <button class="btn-close" onclick="closeCycleModal()">&#10005;</button>
+      </div>
+      <div class="chart-container" style="height:280px;margin-top:0.75rem">
+        <canvas id="chart-cycle-modal"></canvas>
+      </div>
+      <div id="cycle-modal-events" style="margin-top:1rem;padding:0 0.25rem"></div>
+    </div>
+  </div>
+
+  <!-- ================================================================
        EINSTELLUNGEN-MODAL
        ================================================================ -->
   <div id="settings-overlay" class="overlay hidden">
@@ -756,6 +772,8 @@
                 <th>Ø Temp.</th>
                 <th>Beladungsrate</th>
                 <th>&#10003;</th>
+                <th>Probleme</th>
+                <th>Diagramm</th>
               </tr>
             </thead>
             <tbody id="cycles-tbody"></tbody>
@@ -804,6 +822,21 @@
           <button class="btn btn-ghost btn-sm" onclick="hideService()">Schließen</button>
         </div>
         <pre id="service-report-text"></pre>
+      </section>
+
+      <!-- Analysediagramm: aktueller Zyklus vs. Referenzkurve -->
+      <section class="charts" id="cycle-analysis-section">
+        <div class="section-header">
+          <h2 class="section-title">Analysediagramm – Aktueller Zyklus vs. Referenzkurve</h2>
+          <span id="cycle-analysis-badge" class="badge badge-observe" style="display:none"></span>
+        </div>
+        <div id="cycle-analysis-no-data" class="empty-state" style="padding:1.5rem 0">
+          <p style="margin:0">Kein aktiver Zyklus oder Referenzkurve noch nicht verfügbar.</p>
+          <small>Mindestens 3 bestätigte Filterzyklen mit aktivem HETA-Code erforderlich.</small>
+        </div>
+        <div class="chart-container" id="cycle-analysis-container" style="display:none">
+          <canvas id="chart-cycle-analysis"></canvas>
+        </div>
       </section>
 
       <!-- Verlaufsdiagramm -->

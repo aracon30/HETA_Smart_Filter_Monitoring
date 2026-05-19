@@ -33,6 +33,7 @@ class ActiveCycle:
     r_eff_samples: list = field(default_factory=list)
     health_samples: list = field(default_factory=list)
     remaining_samples: list = field(default_factory=list)
+    events: list = field(default_factory=list)
 
 
 class LearningManager:
@@ -113,6 +114,7 @@ class LearningManager:
             "average_temperature":    round(avg_temp, 1),
             "loading_rate":           round(loading_rate, 6),
             "confirmed_filter_change": 1 if confirmed else 0,
+            "events_json":            json.dumps(cycle.events),
         }
 
         cycle_id = self.db.insert_cycle(cycle_data)
@@ -442,3 +444,12 @@ class LearningManager:
     @property
     def active_cycle(self) -> Optional[ActiveCycle]:
         return self._active_cycle
+
+    def add_event(self, severity: str, message: str):
+        """Fügt ein Ereignis zum aktiven Zyklus hinzu (z.B. Anomalie, Sensorfehler)."""
+        if self._active_cycle is not None:
+            self._active_cycle.events.append({
+                "ts": round(time.time()),
+                "severity": severity,
+                "message": message,
+            })

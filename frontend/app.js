@@ -9,9 +9,18 @@ const POLL_INTERVAL_MS = 1500;
 // Lernrelevante Parameter – Änderung löst Reset der Lernphasen aus
 const LEARNING_SENSITIVE = ["dp_limit_bar", "dp_clean_bar", "flow_max_l_min", "pressure_range_bar"];
 
-// Chart.js Instanz (kombiniert)
+// Chart.js Instanzen
 const MAX_CHART_POINTS = 300;
 let combinedChart = null;
+let cycleAnalysisChart = null;
+let cycleModalChart = null;
+
+// Cache für Referenzkurve (wird einmalig gefetcht und bei Heta-Code-Wechsel neu geladen)
+let _refCurveCache = null;
+let _refCurveCacheCode = null;
+
+// Start-Zeitstempel des aktuell bekannten aktiven Zyklus (Erkennung Zykluswechsel)
+let _knownCycleStart = null;
 
 // Session-Token für Einstellungsbereich (wird im sessionStorage gehalten)
 const TOKEN_KEY = "heta_settings_token";
@@ -400,6 +409,7 @@ function updateDashboard(d) {
   pushChartData(d);
   updateSimDemoPanel(d);
   updateAnalysisSection(d);
+  updateCycleAnalysisChart(d);
 }
 
 // ============================================================
@@ -611,6 +621,239 @@ function pushChartData(status) {
 
 function resetChartZoom() {
   if (combinedChart) combinedChart.resetZoom();
+}
+
+// ============================================================
+// Analysediagramm – Zyklus vs. Referenzkurve
+// ============================================================
+
+function _buildCycleChartConfig(currentLabel, currentData, refData) {
+  const datasets = [];
+  if (refData && refData.length > 0) {
+    datasets.push({
+      label: "Referenzkurve Δp",
+      data: refData,
+      borderColor: "#0077cc",
+      backgroundColor: "rgba(0,119,204,0.07)",
+      borderWidth: 2,
+      borderDash: [6, 3],
+      pointRadius: 0,
+      tension: 0.3,
+      fill: true,
+    });
+  }
+  if (currentData && currentData.length > 0) {
+    datasets.push({
+      label: currentLabel,
+      data: currentData,
+      borderColor: "#e07800",
+      backgroundColor: "transparent",
+      borderWidth: 2,
+      pointRadius: 0,
+      tension: 0.3,
+    });
+  }
+  return {
+    type: "line",
+    data: { datasets },
+    options: {
+      animation: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      parsing: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: "top",
+          labels: { usePointStyle: true, padding: 14, font: { size: 11 }, color: "#1a1a2e" },
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(3)} bar`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          type: "linear",
+          title: { display: true, text: "Zyklusfortschritt [%]", font: { size: 11 } },
+          min: 0,
+          ticks: { font: { size: 10 } },
+        },
+        y: {
+          type: "linear",
+          title: { display: true, text: "Δp [bar]", font: { size: 11 } },
+          min: 0,
+          ticks: { font: { size: 10 } },
+        },
+      },
+    },
+  };
+}
+
+function _refDataFromCurve(refCurve) {
+  if (!refCurve?.curve?.length) return [];
+  return refCurve.curve.map(p => ({ x: p.t_pct, y: p.dp }));
+}
+
+function _cycleDataFromSamples(samples, durationSeconds) {
+  if (!samples?.length) return [];
+  // Für abgeschlossene Zyklen: cycle_second / duration → Prozent
+  if (durationSeconds > 0) {
+    return samples.map(s => ({ x: (s.cycle_second / durationSeconds) * 100, y: s.dp_bar }));
+  }
+  // Fallback: cycle_second direkt als x
+  return samples.map(s => ({ x: s.cycle_second, y: s.dp_bar }));
+}
+
+function _activeCycleData(activeCycle) {
+  if (!activeCycle?.samples?.length) return [];
+  // t_pct ist vorhanden wenn Referenz bekannt, sonst cycle_second
+  const hasRef = activeCycle.ref_duration_seconds > 0;
+  return activeCycle.samples.map(s => ({
+    x: hasRef ? (s.t_pct ?? (s.cycle_second / activeCycle.ref_duration_seconds * 100)) : s.cycle_second,
+    y: s.dp_bar,
+  }));
+}
+
+async function _getRefCurve(hetaCode) {
+  if (!hetaCode) return null;
+  if (_refCurveCacheCode === hetaCode && _refCurveCache) return _refCurveCache;
+  const data = await apiFetch(`/api/reference-curve?heta_code=${encodeURIComponent(hetaCode)}`);
+  if (data?.profile_valid && data.curve?.length) {
+    _refCurveCache = data;
+    _refCurveCacheCode = hetaCode;
+    return data;
+  }
+  return null;
+}
+
+function initCycleAnalysisChart() {
+  const ctx = document.getElementById("chart-cycle-analysis");
+  if (!ctx || cycleAnalysisChart) return;
+  cycleAnalysisChart = new Chart(ctx, _buildCycleChartConfig("Aktueller Zyklus Δp", [], []));
+}
+
+async function updateCycleAnalysisChart(status) {
+  if (_activeTab !== "system") return;
+
+  const hetaCode = status?.heta_code;
+  const cycleActive = !!status?.cycle_active;
+
+  // Referenzkurve laden (gecacht)
+  const refCurve = hetaCode ? await _getRefCurve(hetaCode) : null;
+  const refData = _refDataFromCurve(refCurve);
+
+  const noDataEl    = document.getElementById("cycle-analysis-no-data");
+  const container   = document.getElementById("cycle-analysis-container");
+  const badge       = document.getElementById("cycle-analysis-badge");
+
+  if (!cycleActive || !refData.length) {
+    if (noDataEl) noDataEl.style.display = "";
+    if (container) container.style.display = "none";
+    if (badge) { badge.style.display = "none"; }
+    return;
+  }
+
+  if (noDataEl) noDataEl.style.display = "none";
+  if (container) container.style.display = "";
+
+  if (!cycleAnalysisChart) initCycleAnalysisChart();
+
+  // Aktiven Zyklus fetchen
+  const activeCycle = await apiFetch("/api/active-cycle");
+  const currentData = _activeCycleData(activeCycle);
+
+  // Chart zurückbauen wenn Zyklus neu gestartet
+  const startTime = activeCycle?.start_time;
+  if (startTime !== _knownCycleStart) {
+    _knownCycleStart = startTime;
+    if (cycleAnalysisChart) { cycleAnalysisChart.destroy(); cycleAnalysisChart = null; }
+    initCycleAnalysisChart();
+  }
+
+  if (cycleAnalysisChart) {
+    cycleAnalysisChart.data.datasets[0].data = refData;
+    if (cycleAnalysisChart.data.datasets.length > 1)
+      cycleAnalysisChart.data.datasets[1].data = currentData;
+    else
+      cycleAnalysisChart.data.datasets.push({
+        label: "Aktueller Zyklus Δp",
+        data: currentData,
+        borderColor: "#e07800",
+        backgroundColor: "transparent",
+        borderWidth: 2,
+        pointRadius: 0,
+        tension: 0.3,
+      });
+    cycleAnalysisChart.update("none");
+  }
+
+  const elapsedMin = activeCycle?.elapsed_seconds
+    ? Math.round(activeCycle.elapsed_seconds / 60) : 0;
+  if (badge) {
+    badge.textContent = `Laufzeit: ${elapsedMin} min`;
+    badge.className = "badge badge-ok";
+    badge.style.display = "";
+  }
+}
+
+// ============================================================
+// Zyklus-Diagramm Modal (vergangene Zyklen)
+// ============================================================
+
+async function openCycleModal(cycleId, cycleNum, dateStr, hetaCode, durationSeconds, eventsJson) {
+  const overlay = document.getElementById("cycle-modal-overlay");
+  const titleEl = document.getElementById("cycle-modal-title");
+  const eventsEl = document.getElementById("cycle-modal-events");
+  if (!overlay) return;
+
+  if (titleEl) titleEl.textContent = `Filterzyklus #${cycleNum} – ${dateStr}`;
+
+  // Events anzeigen
+  let events = [];
+  try { events = JSON.parse(eventsJson || "[]"); } catch (_) {}
+  if (eventsEl) {
+    if (events.length === 0) {
+      eventsEl.innerHTML = '<p style="color:var(--ok-green);margin:0">&#10003; Keine Problemmeldungen in diesem Zyklus.</p>';
+    } else {
+      const rows = events.map(e => {
+        const ts = e.ts ? new Date(e.ts * 1000).toLocaleTimeString("de-DE") : "";
+        const color = e.severity === "FEHLER" ? "var(--alert-red)"
+                    : e.severity === "WECHSEL" ? "var(--warn-yellow)"
+                    : "var(--warn-yellow)";
+        return `<div style="display:flex;gap:0.75rem;padding:0.4rem 0;border-bottom:1px solid var(--border)">
+          <span style="color:${color};font-weight:600;min-width:5rem">${e.severity}</span>
+          <span style="color:var(--text-muted);min-width:4rem">${ts}</span>
+          <span>${e.message}</span>
+        </div>`;
+      }).join("");
+      eventsEl.innerHTML = `<h3 style="margin:0 0 0.5rem;font-size:0.9rem">Ereignisse</h3>${rows}`;
+    }
+  }
+
+  overlay.classList.remove("hidden");
+
+  // Daten laden
+  const [samples, refCurve] = await Promise.all([
+    apiFetch(`/api/cycle-samples/${cycleId}`),
+    hetaCode ? _getRefCurve(hetaCode) : Promise.resolve(null),
+  ]);
+
+  const currentData = _cycleDataFromSamples(samples || [], durationSeconds);
+  const refData = _refDataFromCurve(refCurve);
+
+  const ctx = document.getElementById("chart-cycle-modal");
+  if (!ctx) return;
+  if (cycleModalChart) { cycleModalChart.destroy(); cycleModalChart = null; }
+  cycleModalChart = new Chart(ctx, _buildCycleChartConfig(`Zyklus #${cycleNum} Δp`, currentData, refData));
+}
+
+function closeCycleModal() {
+  const overlay = document.getElementById("cycle-modal-overlay");
+  if (overlay) overlay.classList.add("hidden");
+  if (cycleModalChart) { cycleModalChart.destroy(); cycleModalChart = null; }
 }
 
 function updateChartDpLimit(dpLimitBar) {
@@ -1530,6 +1773,7 @@ function renderCyclesTable(cycles) {
     countBadge.style.display = "";
   }
 
+  const hetaCode = window._lastStatus?.heta_code || "";
   const rows = cycles.slice().reverse().map((c, idx) => {
     const dt      = new Date((c.start_time ?? 0) * 1000);
     const dateStr = dt.toLocaleDateString("de-DE",  { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -1541,8 +1785,28 @@ function renderCyclesTable(cycles) {
     const rateMs  = ((c.loading_rate ?? 0) * 1000).toFixed(3);
     const ok      = c.confirmed_filter_change;
     const rowCls  = ok ? "cycle-confirmed" : "";
+    const cycleNum = cycles.length - idx;
+
+    // Problemmeldungen aus events_json
+    let events = [];
+    try { events = JSON.parse(c.events_json || "[]"); } catch (_) {}
+    const hasProblems = events.length > 0;
+    const problemsBadge = hasProblems
+      ? `<span class="badge badge-warn" title="${events.map(e=>e.message).join('; ')}">&#9888; ${events.length}</span>`
+      : `<span style="color:var(--text-muted)">–</span>`;
+
+    // Diagramm-Button
+    const cycleDataAttr = [
+      `data-cycle-id="${c.id}"`,
+      `data-cycle-num="${cycleNum}"`,
+      `data-date="${dateStr} ${timeStr}"`,
+      `data-heta="${hetaCode}"`,
+      `data-duration="${c.duration_seconds ?? 0}"`,
+      `data-events='${(c.events_json || "[]").replace(/'/g, "&apos;")}'`,
+    ].join(" ");
+
     return `<tr class="${rowCls}">
-      <td>${cycles.length - idx}</td>
+      <td>${cycleNum}</td>
       <td><span class="cycle-date">${dateStr}</span><span class="cycle-time">${timeStr}</span></td>
       <td>${durStr}</td>
       <td>${fmt(c.start_dp, 3)} bar</td>
@@ -1551,8 +1815,24 @@ function renderCyclesTable(cycles) {
       <td>${fmt(c.average_temperature, 1)} °C</td>
       <td>${rateMs} mbar/s</td>
       <td class="${ok ? "cycle-check-ok" : ""}">${ok ? "✓" : "–"}</td>
+      <td>${problemsBadge}</td>
+      <td><button class="btn btn-ghost btn-sm cycle-chart-btn" ${cycleDataAttr}>&#128202;</button></td>
     </tr>`;
   });
 
   tbody.innerHTML = rows.join("");
+
+  // Event-Listener für Diagramm-Buttons
+  tbody.querySelectorAll(".cycle-chart-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+      openCycleModal(
+        Number(btn.dataset.cycleId),
+        Number(btn.dataset.cycleNum),
+        btn.dataset.date,
+        btn.dataset.heta,
+        Number(btn.dataset.duration),
+        btn.dataset.events,
+      );
+    });
+  });
 }

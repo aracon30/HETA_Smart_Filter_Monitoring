@@ -32,7 +32,9 @@ from sensors import (read_sensors, reset_simulation, full_reset_simulation,
                      clear_simulation_rates, get_simulation_rates_active,
                      get_simulation_cycle_steps)
 from calculations import (calculate_filter_state, FilterState,
-                          calculate_filter_health_from_r_eff)
+                          calculate_filter_health_from_r_eff,
+                          STATUS_OK, STATUS_WARNUNG, STATUS_FEHLER,
+                          STATUS_WECHSEL, STATUS_WECHSEL_BESTAETIGEN)
 from heta_code import verify_activation, validate_heta_format, get_demo_info
 from database import Database
 from learning import LearningManager
@@ -687,9 +689,23 @@ def _measurement_loop():
         if (cycle_active and heta_activated and cycle_start_ts
                 and (time.time() - cycle_start_ts) < 10):
             anomaly, anom_pct = learning.check_start_behavior(heta_code, fs.r_eff)
+            if anomaly and not _state["anomaly_active"]:
+                learning.add_event("WARNUNG",
+                    f"Startverhalten-Anomalie: R_eff {anom_pct:+.1f}% zur Referenz")
             with _state_lock:
                 _state["anomaly_active"] = anomaly
                 _state["anomaly_percent"] = anom_pct
+
+        # ── Statusänderungen als Ereignis im aktiven Zyklus speichern ────
+        prev_status = _state.get("filter_status", STATUS_OK)
+        if fs.status != prev_status and cycle_active:
+            if fs.status == STATUS_FEHLER:
+                learning.add_event("FEHLER", "Sensorfehler erkannt")
+            elif fs.status == STATUS_WARNUNG:
+                learning.add_event("WARNUNG", "Anomales Beladungsverhalten erkannt")
+            elif fs.status in (STATUS_WECHSEL, STATUS_WECHSEL_BESTAETIGEN):
+                learning.add_event("WECHSEL",
+                    f"Filterwechsel erforderlich – Δp={fs.dp_bar:.3f} bar")
 
         # dp-Limit erreicht → Reststandzeit ist definitiv 0
         if fs.dp_bar >= dp_limit:
@@ -1859,6 +1875,54 @@ def api_reference_curve():
         "reference_duration_seconds": profile.get("reference_duration_seconds", 0),
         "cycles_count":              profile.get("cycles_count", 0),
         "profile_valid":             bool(profile.get("profile_valid")),
+    })
+
+
+@app.route("/api/cycle-samples/<int:cycle_id>")
+def api_cycle_samples(cycle_id):
+    """Gibt die Zeitreihen-Messwerte eines abgeschlossenen Filterzyklus zurück (max. 300 Punkte)."""
+    samples = db.get_cycle_samples(cycle_id)
+    if len(samples) > 300:
+        step = max(1, len(samples) // 300)
+        samples = samples[::step]
+    return jsonify(samples)
+
+
+@app.route("/api/active-cycle")
+def api_active_cycle():
+    """Gibt den aktuellen laufenden Filterzyklus mit Zeitreihen zurück (max. 300 Punkte)."""
+    cycle = learning.active_cycle
+    if cycle is None:
+        return jsonify(None)
+    heta_code = cycle.heta_code
+    profile = learning.get_profile(heta_code) or {}
+    ref_duration = profile.get("reference_duration_seconds", 0.0)
+    n = len(cycle.dp_samples)
+    if n == 0:
+        return jsonify({
+            "heta_code": heta_code,
+            "start_time": cycle.start_time,
+            "elapsed_seconds": 0.0,
+            "ref_duration_seconds": ref_duration,
+            "samples": [],
+        })
+    step = max(1, n // 300)
+    samples = []
+    for i in range(0, n, step):
+        t_off = cycle.timestamps[i] - cycle.start_time
+        t_pct = (t_off / ref_duration * 100.0) if ref_duration > 0 else None
+        samples.append({
+            "cycle_second": round(t_off, 1),
+            "t_pct": round(t_pct, 2) if t_pct is not None else None,
+            "dp_bar": round(cycle.dp_samples[i], 4),
+            "r_eff": round(cycle.r_eff_samples[i], 5) if i < len(cycle.r_eff_samples) else None,
+        })
+    return jsonify({
+        "heta_code": heta_code,
+        "start_time": cycle.start_time,
+        "elapsed_seconds": round(time.time() - cycle.start_time, 1),
+        "ref_duration_seconds": ref_duration,
+        "samples": samples,
     })
 
 
