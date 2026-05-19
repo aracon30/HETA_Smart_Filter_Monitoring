@@ -7,6 +7,9 @@ import time
 import logging
 from typing import Optional
 
+from calculations import (STATUS_OK, STATUS_BEOBACHTEN, STATUS_WECHSEL,
+                          STATUS_WECHSEL_BESTAETIGEN, STATUS_WARNUNG, STATUS_FEHLER)
+
 logger = logging.getLogger(__name__)
 
 
@@ -50,12 +53,7 @@ def build_service_payload(
 
 
 def generate_service_recommendation(filter_state, prediction_status: dict) -> dict:
-    """
-    Leitet eine Serviceempfehlung aus dem Filterzustand ab.
-    """
-    from calculations import (STATUS_OK, STATUS_BEOBACHTEN, STATUS_WECHSEL,
-                               STATUS_WECHSEL_BESTAETIGEN, STATUS_WARNUNG, STATUS_FEHLER)
-
+    """Leitet eine Serviceempfehlung aus dem Filterzustand ab."""
     status = filter_state.status
     health = filter_state.filter_health_percent
     remaining = prediction_status.get("remaining_display", "Unbekannt")

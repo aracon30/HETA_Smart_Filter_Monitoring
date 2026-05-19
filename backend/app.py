@@ -28,10 +28,9 @@ from flask_cors import CORS
 from config import settings, save_settings, get_abs_path, hash_password, verify_password
 from sensors import (read_sensors, reset_simulation, full_reset_simulation,
                      update_simulation_params, probe_hardware, check_hardware_sensors,
-                     set_simulation_rates, set_simulation_scenario_params,
-                     get_simulation_scenario_params,
-                     clear_simulation_rates,
-                     get_simulation_rates_active, get_simulation_cycle_steps)
+                     set_simulation_scenario_params, get_simulation_scenario_params,
+                     clear_simulation_rates, get_simulation_rates_active,
+                     get_simulation_cycle_steps)
 from calculations import (calculate_filter_state, FilterState,
                           calculate_filter_health_from_r_eff)
 from heta_code import verify_activation, validate_heta_format, get_demo_info

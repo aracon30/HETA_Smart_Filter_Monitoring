@@ -251,14 +251,6 @@ class PredictionEngine:
         """Wählt die passende Formatierung je nach Anzeigemodus."""
         if seconds is None:
             return "Wird berechnet …"
-
         if mode == MODE_VALIDIERT:
-            # Minutengenaue Angabe nur für validierte HETA-Elemente
             return _format_validated(seconds)
-
-        if mode == MODE_LERNEND:
-            # Breite Bereiche während der Lernphase
-            return _format_basis_range(seconds)
-
-        # BASIS – adaptive Bereiche, keine Minutenangaben
         return _format_basis_range(seconds)

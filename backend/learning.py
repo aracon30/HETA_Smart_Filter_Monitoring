@@ -141,23 +141,27 @@ class LearningManager:
         if not cycle.timestamps:
             return
         t0 = cycle.timestamps[0]
-        n = len(cycle.timestamps)
-        samples = []
-        for i in range(n):
-            samples.append({
-                "cycle_id":             cycle_id,
-                "heta_code":            cycle.heta_code,
-                "timestamp":            cycle.timestamps[i],
-                "cycle_second":         round(cycle.timestamps[i] - t0, 2),
-                "p1_bar":               cycle.p1_samples[i]       if i < len(cycle.p1_samples)       else None,
-                "p2_bar":               cycle.p2_samples[i]       if i < len(cycle.p2_samples)       else None,
-                "dp_bar":               cycle.dp_samples[i]       if i < len(cycle.dp_samples)       else None,
-                "flow_l_min":           cycle.flow_samples[i]     if i < len(cycle.flow_samples)     else None,
-                "temp_c":               cycle.temp_samples[i]     if i < len(cycle.temp_samples)     else None,
-                "r_eff":                cycle.r_eff_samples[i]    if i < len(cycle.r_eff_samples)    else None,
-                "filter_health_percent":cycle.health_samples[i]   if i < len(cycle.health_samples)   else None,
-                "remaining_seconds":    cycle.remaining_samples[i] if i < len(cycle.remaining_samples) else None,
-            })
+        samples = [
+            {
+                "cycle_id":              cycle_id,
+                "heta_code":             cycle.heta_code,
+                "timestamp":             ts,
+                "cycle_second":          round(ts - t0, 2),
+                "p1_bar":                p1,
+                "p2_bar":                p2,
+                "dp_bar":                dp,
+                "flow_l_min":            fl,
+                "temp_c":                tmp,
+                "r_eff":                 r,
+                "filter_health_percent": hp,
+                "remaining_seconds":     rem,
+            }
+            for ts, p1, p2, dp, fl, tmp, r, hp, rem in zip(
+                cycle.timestamps, cycle.p1_samples, cycle.p2_samples,
+                cycle.dp_samples, cycle.flow_samples, cycle.temp_samples,
+                cycle.r_eff_samples, cycle.health_samples, cycle.remaining_samples,
+            )
+        ]
         self.db.insert_cycle_samples(samples)
         logger.info("Zyklus %d: %d Samples gespeichert.", cycle_id, len(samples))
 

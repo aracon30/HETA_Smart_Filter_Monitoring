@@ -147,7 +147,6 @@ def check_hardware_sensors() -> dict:
     }
 
 
-
 class FilterSimulator:
     """
     Szenariobasierter Filterbeladungs-Simulator.
@@ -223,19 +222,6 @@ class FilterSimulator:
             self._flow_drop_factor     = 0.75
             self._temp_trend_per_cycle = 0.0
             self._rates_active         = False
-
-    # Rückwärtskompatibel
-    def set_rate_factors(self, dp_factor: float, flow_factor: float,
-                         temp_offset: float, p1_bar: float):
-        self.set_scenario_params(
-            dirt_rate_factor=dp_factor,
-            p1_trend_factor=0.0,
-            flow_drop_factor=0.75,
-            temp_trend_per_cycle=0.0,
-        )
-
-    def clear_rate_factors(self):
-        self.clear_scenario_params()
 
     @property
     def rates_active(self) -> bool:
@@ -343,12 +329,6 @@ def set_simulation_scenario_params(dirt_rate_factor: float,
         dirt_rate_factor, p1_trend_factor,
         flow_drop_factor, temp_trend_per_cycle,
     )
-
-
-def set_simulation_rates(dp_factor: float, flow_factor: float,
-                         temp_offset: float, p1_bar: float):
-    """Rückwärtskompatibel."""
-    _simulator.set_rate_factors(dp_factor, flow_factor, temp_offset, p1_bar)
 
 
 def clear_simulation_rates():

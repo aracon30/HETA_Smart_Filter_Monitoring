@@ -88,11 +88,6 @@ class Database:
                     payload     TEXT
                 );
 
-                CREATE TABLE IF NOT EXISTS settings (
-                    key     TEXT PRIMARY KEY,
-                    value   TEXT
-                );
-
                 CREATE TABLE IF NOT EXISTS cycle_samples (
                     id                    INTEGER PRIMARY KEY AUTOINCREMENT,
                     cycle_id              INTEGER NOT NULL,
