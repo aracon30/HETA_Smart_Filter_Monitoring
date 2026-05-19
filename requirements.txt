@@ -9,11 +9,10 @@ Pillow>=10.0.0
 
 # ANO-Rotary-Encoder (direktes GPIO, nur Raspberry Pi)
 # gpiozero ist auf Raspberry Pi OS vorinstalliert.
-# lgpio ist das empfohlene GPIO-Backend für den Raspberry Pi 5.
-# Auf anderen Systemen (Entwicklungsrechner, VM) werden diese Pakete
-# installiert, aber der Encoder-Code fällt sicher in den Simulations-Fallback.
+# lgpio wird als GPIO-Backend für Pi 5 benötigt – Installation via apt:
+#   sudo apt-get install -y python3-lgpio
+# (lgpio hier absichtlich nicht in pip-Abhängigkeiten, da Build aus Quellcode fehlschlägt)
 gpiozero>=2.0
-lgpio
 
 # MQTT-Client (optional – nur aktiv wenn mqtt_enabled=true in settings.json)
 paho-mqtt>=1.6.1

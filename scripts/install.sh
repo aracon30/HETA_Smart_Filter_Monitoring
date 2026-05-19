@@ -68,6 +68,12 @@ echo "[4/7] Python-Pakete installieren..."
 pip install --upgrade pip
 pip install -r "${PROJECT_DIR}/requirements.txt"
 
+# lgpio wird für gpiozero auf dem Raspberry Pi 5 benötigt.
+# Es wird als Systempaket installiert (pip-Build schlägt ohne Kernel-Header fehl).
+# Das Virtual Environment wurde mit --system-site-packages erstellt,
+# daher ist das Systempaket python3-lgpio automatisch sichtbar.
+echo "  lgpio ist als Systempaket python3-lgpio installiert (via apt, Schritt 1)."
+
 echo ""
 echo "  Installierte Pakete:"
 pip list --format=columns | grep -Ei "flask|luma|pillow|paho|gpiozero|spidev"
