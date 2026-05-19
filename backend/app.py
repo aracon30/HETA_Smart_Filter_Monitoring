@@ -208,8 +208,8 @@ _state = {
     # Modusneutrale Prozessanalyse (Sensor- UND Simulationsmodus)
     "analysis_active":             False,  # True wenn Profil valide + läuft
     "analysis_ready":              False,  # True wenn Kurvenvergleich verfügbar
-    "analysis_dp_rate_ref":        0.0,    # Referenz-Beladungsrate (bar/s) – Legacy
-    "analysis_dp_rate_current":    0.0,    # Aktuelle Beladungsrate (bar/s) – Legacy
+    "analysis_dp_rate_ref":        0.0,
+    "analysis_dp_rate_current":    0.0,
     "analysis_dp_deviation_pct":   0.0,    # Abweichung in %
     "analysis_flow_ref":           0.0,    # Referenz-Durchfluss (l/min)
     "analysis_flow_deviation_pct": 0.0,    # Abweichung in %
@@ -1387,7 +1387,7 @@ def api_settings_login():
 @app.route("/api/settings/logout", methods=["POST"])
 def api_settings_logout():
     """Beendet die Sitzung."""
-    token = request.headers.get("X-Auth-Token", "") or request.get_json(force=True, silent=True or {}).get("token", "")
+    token = request.headers.get("X-Auth-Token", "") or (request.get_json(force=True, silent=True) or {}).get("token", "")
     _invalidate_session(token)
     return jsonify({"success": True, "message": "Abgemeldet."})
 
