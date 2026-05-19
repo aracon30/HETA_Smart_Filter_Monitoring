@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 # HETA Smart Filter Monitoring – Installationsskript
-# Raspberry Pi 5 / Raspberry Pi OS Lite 64-bit
+# Raspberry Pi 5 / Raspberry Pi OS Lite 64-bit (Bookworm)
 # ============================================================
 
 set -e
@@ -14,9 +14,20 @@ PYTHON_BIN="python3"
 VENV_DIR="${PROJECT_DIR}/.venv"
 INSTALL_USER="$(whoami)"
 
+# Boot-Konfigurationsdatei: Bookworm = /boot/firmware/config.txt,
+# ältere Pi OS Versionen = /boot/config.txt
+if [ -f /boot/firmware/config.txt ]; then
+    BOOT_CONFIG="/boot/firmware/config.txt"
+elif [ -f /boot/config.txt ]; then
+    BOOT_CONFIG="/boot/config.txt"
+else
+    BOOT_CONFIG=""
+fi
+
 echo "============================================================"
 echo "  HETA Smart Filter Monitoring – Installation"
 echo "  Projektverzeichnis: ${PROJECT_DIR}"
+echo "  Benutzer:           ${INSTALL_USER}"
 echo "============================================================"
 
 # -----------------------------------------------------------
@@ -24,31 +35,53 @@ echo "============================================================"
 # -----------------------------------------------------------
 echo ""
 echo "[1/7] Systempakete aktualisieren..."
-sudo apt-get update -y
+sudo apt-get update
 sudo apt-get install -y \
     python3 python3-pip python3-venv \
     python3-dev gcc make \
-    python3-lgpio \
     libfreetype6-dev libjpeg-dev \
     i2c-tools \
     fonts-dejavu-core
+
+# lgpio als Systempaket – pip-Build schlägt ohne Kernel-Header fehl.
+# Fehler hier ist nicht kritisch (Paket heißt auf manchen Versionen anders
+# oder ist bereits vorinstalliert).
+echo "  Installiere python3-lgpio (GPIO-Backend für Pi 5)..."
+sudo apt-get install -y python3-lgpio || echo "  Hinweis: python3-lgpio nicht verfügbar – gpiozero nutzt verfügbares Backend."
 
 # -----------------------------------------------------------
 # 2. SPI und I2C aktivieren
 # -----------------------------------------------------------
 echo ""
 echo "[2/7] SPI und I2C-Konfiguration prüfen..."
-if ! grep -q "^dtparam=spi=on" /boot/firmware/config.txt 2>/dev/null; then
-    echo "  Hinweis: SPI ist nicht in /boot/firmware/config.txt aktiviert."
-    echo "  Füge folgende Zeilen manuell hinzu und starte neu:"
-    echo "    dtparam=spi=on"
-    echo "    dtparam=i2c_arm=on"
+
+if [ -n "${BOOT_CONFIG}" ]; then
+    # SPI prüfen
+    if grep -q "^dtparam=spi=on" "${BOOT_CONFIG}" 2>/dev/null; then
+        echo "  SPI: bereits aktiviert (${BOOT_CONFIG})"
+    else
+        echo "  HINWEIS: SPI ist nicht aktiviert!"
+        echo "  Bitte in ${BOOT_CONFIG} eintragen: dtparam=spi=on"
+        echo "  Oder: sudo raspi-config → Interface Options → SPI → Yes"
+    fi
+
+    # I2C prüfen
+    if grep -q "^dtparam=i2c_arm=on" "${BOOT_CONFIG}" 2>/dev/null; then
+        echo "  I2C: bereits aktiviert (${BOOT_CONFIG})"
+    else
+        echo "  HINWEIS: I2C ist nicht aktiviert!"
+        echo "  Bitte in ${BOOT_CONFIG} eintragen: dtparam=i2c_arm=on"
+        echo "  Oder: sudo raspi-config → Interface Options → I2C → Yes"
+    fi
 else
-    echo "  SPI ist bereits aktiviert."
+    echo "  Boot-Konfigurationsdatei nicht gefunden – SPI/I2C manuell prüfen."
 fi
 
-if ! lsmod | grep -q i2c_dev 2>/dev/null; then
-    echo "  Hinweis: i2c_dev Modul nicht geladen. Prüfe Raspberry Pi Konfiguration."
+# SPI-Gerätedatei prüfen (zeigt ob SPI nach Neustart wirklich aktiv ist)
+if ls /dev/spidev* &>/dev/null; then
+    echo "  SPI-Gerät: $(ls /dev/spidev* | tr '\n' ' ')(aktiv)"
+else
+    echo "  SPI-Gerät: nicht gefunden – Neustart nach Aktivierung erforderlich."
 fi
 
 # -----------------------------------------------------------
@@ -56,8 +89,9 @@ fi
 # -----------------------------------------------------------
 echo ""
 echo "[3/7] Python Virtual Environment erstellen in ${VENV_DIR}..."
-# --system-site-packages erlaubt Zugriff auf system-installiertes python3-lgpio
-"${PYTHON_BIN}" -m venv --system-site-packages "${VENV_DIR}"
+# --system-site-packages: system-installiertes python3-lgpio ist im venv sichtbar
+# --clear: stellt bei Neuinstallation einen sauberen Zustand sicher
+"${PYTHON_BIN}" -m venv --system-site-packages --clear "${VENV_DIR}"
 source "${VENV_DIR}/bin/activate"
 
 # -----------------------------------------------------------
@@ -65,18 +99,12 @@ source "${VENV_DIR}/bin/activate"
 # -----------------------------------------------------------
 echo ""
 echo "[4/7] Python-Pakete installieren..."
-pip install --upgrade pip
+pip install --upgrade pip --quiet
 pip install -r "${PROJECT_DIR}/requirements.txt"
-
-# lgpio wird für gpiozero auf dem Raspberry Pi 5 benötigt.
-# Es wird als Systempaket installiert (pip-Build schlägt ohne Kernel-Header fehl).
-# Das Virtual Environment wurde mit --system-site-packages erstellt,
-# daher ist das Systempaket python3-lgpio automatisch sichtbar.
-echo "  lgpio ist als Systempaket python3-lgpio installiert (via apt, Schritt 1)."
 
 echo ""
 echo "  Installierte Pakete:"
-pip list --format=columns | grep -Ei "flask|luma|pillow|paho|gpiozero|spidev"
+pip list --format=columns | grep -Ei "flask|luma|pillow|paho|gpiozero|spidev" || true
 
 # -----------------------------------------------------------
 # 5. Verzeichnisse erstellen
@@ -86,6 +114,7 @@ echo "[5/7] Datenverzeichnisse erstellen..."
 mkdir -p "${PROJECT_DIR}/data"
 mkdir -p "${PROJECT_DIR}/logs"
 mkdir -p "${PROJECT_DIR}/exports"
+echo "  data/, logs/, exports/ vorhanden."
 
 # -----------------------------------------------------------
 # 6. systemd-Service installieren
@@ -118,16 +147,16 @@ EOF
 
 sudo systemctl daemon-reload
 sudo systemctl enable "${SERVICE_NAME}"
-echo "  Service '${SERVICE_NAME}' installiert und aktiviert."
+echo "  Service '${SERVICE_NAME}' installiert und aktiviert (User: ${INSTALL_USER})."
 
-# Sudoers-Eintrag: Installationsbenutzer darf den Service ohne Passwort neu starten
+# Sudoers-Eintrag: Benutzer darf den Service ohne Passwort neu starten
 # (wird vom Software-Update über die Weboberfläche benötigt)
 SUDOERS_FILE="/etc/sudoers.d/heta-monitor"
 SUDOERS_LINE="${INSTALL_USER} ALL=(ALL) NOPASSWD: /bin/systemctl restart ${SERVICE_NAME}"
 if ! sudo grep -qF "${SUDOERS_LINE}" "${SUDOERS_FILE}" 2>/dev/null; then
     echo "${SUDOERS_LINE}" | sudo tee "${SUDOERS_FILE}" > /dev/null
     sudo chmod 0440 "${SUDOERS_FILE}"
-    echo "  Sudoers-Eintrag für 'systemctl restart ${SERVICE_NAME}' angelegt."
+    echo "  Sudoers-Eintrag angelegt."
 else
     echo "  Sudoers-Eintrag bereits vorhanden."
 fi
@@ -135,6 +164,9 @@ fi
 # -----------------------------------------------------------
 # 7. Abschluss
 # -----------------------------------------------------------
+LOCAL_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+[ -z "${LOCAL_IP}" ] && LOCAL_IP="<IP-Adresse>"
+
 echo ""
 echo "============================================================"
 echo "  Installation abgeschlossen!"
@@ -143,8 +175,15 @@ echo "  Manueller Start:   sudo systemctl start ${SERVICE_NAME}"
 echo "  Status prüfen:     sudo systemctl status ${SERVICE_NAME}"
 echo "  Logs ansehen:      journalctl -u ${SERVICE_NAME} -f"
 echo ""
-echo "  Weboberfläche:     http://<IP-Adresse>:8080"
+echo "  Weboberfläche:     http://${LOCAL_IP}:8080"
 echo ""
-echo "  WICHTIG: Raspberry Pi neu starten um SPI/I2C zu aktivieren!"
-echo "    sudo reboot"
+if [ -n "${BOOT_CONFIG}" ]; then
+    if ! grep -q "^dtparam=spi=on" "${BOOT_CONFIG}" 2>/dev/null || \
+       ! grep -q "^dtparam=i2c_arm=on" "${BOOT_CONFIG}" 2>/dev/null; then
+        echo "  WICHTIG: SPI oder I2C noch nicht aktiviert!"
+        echo "  Einstellungen vornehmen, dann neu starten:"
+        echo "    sudo reboot"
+        echo ""
+    fi
+fi
 echo "============================================================"
