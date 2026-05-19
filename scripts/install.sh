@@ -27,7 +27,9 @@ echo "[1/7] Systempakete aktualisieren..."
 sudo apt-get update -y
 sudo apt-get install -y \
     python3 python3-pip python3-venv \
-    python3-dev libfreetype6-dev libjpeg-dev \
+    python3-dev gcc make \
+    python3-lgpio \
+    libfreetype6-dev libjpeg-dev \
     i2c-tools \
     fonts-dejavu-core
 
@@ -54,7 +56,8 @@ fi
 # -----------------------------------------------------------
 echo ""
 echo "[3/7] Python Virtual Environment erstellen in ${VENV_DIR}..."
-"${PYTHON_BIN}" -m venv "${VENV_DIR}"
+# --system-site-packages erlaubt Zugriff auf system-installiertes python3-lgpio
+"${PYTHON_BIN}" -m venv --system-site-packages "${VENV_DIR}"
 source "${VENV_DIR}/bin/activate"
 
 # -----------------------------------------------------------
