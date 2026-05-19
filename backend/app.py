@@ -264,6 +264,18 @@ predictor = PredictionEngine(
     min_slope=settings.get("min_slope", 0.001),
 )
 
+# Simulator mit gespeicherten Einstellungen synchronisieren.
+# reset_clogging=False: App-Start soll laufende Simulation nicht zurückwerfen.
+update_simulation_params(
+    dp_clean=settings.get("dp_clean_bar", 0.2),
+    dp_limit=settings.get("dp_limit_bar", 2.5),
+    flow_max=settings.get("flow_max_l_min", 150.0),
+    p1_base=settings.get("sim_p1_base_bar", 4.0),
+    q_base=settings.get("sim_q_base_l_min", 145.0),
+    t_base=settings.get("sim_t_base_c", 25.0),
+    reset_clogging=False,
+)
+
 # MQTT optional
 _mqtt = None
 if settings.get("mqtt_enabled", False):
@@ -488,14 +500,16 @@ if _display and _navigation:
 def _measurement_loop():
     """Haupt-Messzyklus – läuft in einem Hintergrund-Thread."""
     interval = settings.get("sampling_interval_seconds", 1)
-    dp_limit = settings.get("dp_limit_bar", 2.5)
-    dp_clean = settings.get("dp_clean_bar", 0.2)
 
     logger.info("Messzyklus gestartet (Intervall: %ds).", interval)
     _dp_rate_buffer.clear()
 
     while _state["running"]:
         t_start = time.time()
+        # Grenzwerte je Iteration aus den aktuellen Einstellungen lesen,
+        # damit Änderungen via UI sofort wirksam werden.
+        dp_limit = settings.get("dp_limit_bar", 2.5)
+        dp_clean = settings.get("dp_clean_bar", 0.2)
 
         with _state_lock:
             sim_mode = _state["simulation_mode"]
@@ -1309,11 +1323,21 @@ def api_settings_post():
     # Nur bekannte Felder übernehmen, interne Felder schützen
     protected = {"settings_password_hash", "db_path", "log_path", "export_path",
                  "webserver_host", "webserver_port", "onboarding_complete"}
+
+    # Simulationsparameter vor der Übernahme merken um Clogging-Reset zu steuern
+    _SIM_PARAMS = {"dp_clean_bar", "dp_limit_bar", "flow_max_l_min",
+                   "sim_p1_base_bar", "sim_q_base_l_min", "sim_t_base_c"}
+    sim_params_changed = any(
+        k in _SIM_PARAMS and data.get(k) != settings.get(k)
+        for k in data
+    )
+
     for k, v in data.items():
         if k in settings and k not in protected:
             settings[k] = v
 
-    # Simulation-Parameter und Prognose aktualisieren
+    # Simulator aktualisieren; Clogging nur zurücksetzen wenn physikalisch
+    # relevante Simulationsparameter geändert wurden.
     update_simulation_params(
         dp_clean=settings["dp_clean_bar"],
         dp_limit=settings["dp_limit_bar"],
@@ -1321,6 +1345,7 @@ def api_settings_post():
         p1_base=settings.get("sim_p1_base_bar", 4.0),
         q_base=settings.get("sim_q_base_l_min", 145.0),
         t_base=settings.get("sim_t_base_c", 25.0),
+        reset_clogging=sim_params_changed,
     )
     predictor.update_limits(settings["dp_limit_bar"], settings["dp_clean_bar"])
     save_settings(settings)

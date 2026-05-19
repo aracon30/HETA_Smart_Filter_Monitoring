@@ -306,8 +306,16 @@ def update_simulation_params(dp_clean: float, dp_limit: float, flow_max: float,
                               cycle_seconds: float = 300.0,
                               p1_base: float = 4.0,
                               q_base: float = 145.0,
-                              t_base: float = 25.0):
-    """Aktualisiert Basisparameter und setzt Beladung zurück."""
+                              t_base: float = 25.0,
+                              reset_clogging: bool = True):
+    """
+    Aktualisiert Basisparameter des Simulators.
+
+    reset_clogging=True  → Beladung auf 0 zurücksetzen (Standard: nach Filterwechsel
+                           oder wenn physikalisch relevante Parameter geändert wurden).
+    reset_clogging=False → Beladungszustand beibehalten (z.B. beim App-Start oder
+                           wenn sich nur Anzeigeeinstellungen ändern).
+    """
     with _simulator._lock:
         _simulator.dp_clean      = dp_clean
         _simulator.dp_limit      = dp_limit
@@ -316,8 +324,9 @@ def update_simulation_params(dp_clean: float, dp_limit: float, flow_max: float,
         _simulator._p1_base      = p1_base
         _simulator._q_base       = q_base
         _simulator._t_base       = t_base
-        _simulator._clogging     = 0.0
-        _simulator._last_time    = None
+        if reset_clogging:
+            _simulator._clogging  = 0.0
+            _simulator._last_time = None
 
 
 def set_simulation_scenario_params(dirt_rate_factor: float,
