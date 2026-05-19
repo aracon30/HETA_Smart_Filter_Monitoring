@@ -540,57 +540,72 @@
           </div>
         </div>
 
-        <!-- Startparameter – immer sichtbar im Sim-Modus -->
+        <!-- Szenario-Parameter – immer sichtbar im Sim-Modus -->
         <div id="sim-params-area">
-          <div class="sim-params-header">Startparameter</div>
+          <div class="sim-params-header">Prozessszenario</div>
+          <div class="sim-scenario-buttons" id="sim-scenario-buttons">
+            <button class="sim-scenario-btn active" data-scenario="normal"
+                    onclick="selectScenario('normal')">Normalbetrieb</button>
+            <button class="sim-scenario-btn" data-scenario="high_dirt"
+                    onclick="selectScenario('high_dirt')">Hohe Verschmutzung</button>
+            <button class="sim-scenario-btn" data-scenario="low_p1"
+                    onclick="selectScenario('low_p1')">Sinkender Druck</button>
+            <button class="sim-scenario-btn" data-scenario="high_flow_drop"
+                    onclick="selectScenario('high_flow_drop')">Starker Q-Abfall</button>
+            <button class="sim-scenario-btn" data-scenario="rising_temp"
+                    onclick="selectScenario('rising_temp')">Steigende Temp.</button>
+            <button class="sim-scenario-btn" data-scenario="atypical"
+                    onclick="selectScenario('atypical')">Untypisch</button>
+          </div>
+
           <div class="sim-sliders" id="sim-sliders">
-
-            <div class="sim-slider-row">
-              <label class="sim-slider-label">
-                Eintrittsdruck p<sub>1</sub>
-                <span class="sim-slider-note">bar, absolut</span>
-              </label>
-              <input type="range" id="sl-p1" class="sim-slider"
-                     min="0.5" max="10" step="0.1" value="3.5"
-                     oninput="onSliderInput('p1', this.value)">
-              <span class="sim-slider-val" id="sv-p1">3.5 bar</span>
-            </div>
-
-            <div class="sim-slider-row">
-              <label class="sim-slider-label">
-                Startdurchfluss Q<sub>0</sub>
-                <span class="sim-slider-note">l/min (sauber)</span>
-              </label>
-              <input type="range" id="sl-q-start" class="sim-slider"
-                     min="5" max="300" step="5" value="80"
-                     oninput="onSliderInput('q_start', this.value)">
-              <span class="sim-slider-val" id="sv-q-start">80 l/min</span>
-            </div>
-
-            <div class="sim-slider-row">
-              <label class="sim-slider-label">
-                Temperatur T<sub>0</sub>
-                <span class="sim-slider-note">°C, Startwert</span>
-              </label>
-              <input type="range" id="sl-t-start" class="sim-slider"
-                     min="0" max="80" step="1" value="20"
-                     oninput="onSliderInput('t_start', this.value)">
-              <span class="sim-slider-val" id="sv-t-start">20 °C</span>
-            </div>
 
             <div class="sim-slider-row">
               <label class="sim-slider-label">
                 Verschmutzungsrate
                 <span class="sim-slider-note">% der Referenzrate</span>
               </label>
-              <input type="range" id="sl-dp-rate" class="sim-slider"
+              <input type="range" id="sl-dirt-rate" class="sim-slider"
                      min="10" max="400" step="5" value="100"
-                     oninput="onSliderInput('dp_rate', this.value)">
-              <span class="sim-slider-val" id="sv-dp-rate">100 %</span>
+                     oninput="onSliderInput('dirt_rate', this.value)">
+              <span class="sim-slider-val" id="sv-dirt-rate">100 %</span>
+            </div>
+
+            <div class="sim-slider-row">
+              <label class="sim-slider-label">
+                Drucktrend p<sub>1</sub>
+                <span class="sim-slider-note">% über Zyklus (0 = stabil)</span>
+              </label>
+              <input type="range" id="sl-p1-trend" class="sim-slider"
+                     min="-20" max="20" step="1" value="0"
+                     oninput="onSliderInput('p1_trend', this.value)">
+              <span class="sim-slider-val" id="sv-p1-trend">0 %</span>
+            </div>
+
+            <div class="sim-slider-row">
+              <label class="sim-slider-label">
+                Durchflussabfall
+                <span class="sim-slider-note">% bei voller Beladung</span>
+              </label>
+              <input type="range" id="sl-flow-drop" class="sim-slider"
+                     min="10" max="99" step="5" value="75"
+                     oninput="onSliderInput('flow_drop', this.value)">
+              <span class="sim-slider-val" id="sv-flow-drop">75 %</span>
+            </div>
+
+            <div class="sim-slider-row">
+              <label class="sim-slider-label">
+                Temperaturtrend
+                <span class="sim-slider-note">°C pro Zyklus</span>
+              </label>
+              <input type="range" id="sl-temp-trend" class="sim-slider"
+                     min="-5" max="5" step="0.5" value="0"
+                     oninput="onSliderInput('temp_trend', this.value)">
+              <span class="sim-slider-val" id="sv-temp-trend">0 °C</span>
             </div>
 
             <div class="sim-slider-actions">
-              <button class="btn btn-ghost btn-sm" onclick="resetSliders()">Auf Baseline zurücksetzen</button>
+              <button class="btn btn-ghost btn-sm" onclick="resetSliders()">&#8635; Normalbetrieb</button>
             </div>
           </div>
         </div>

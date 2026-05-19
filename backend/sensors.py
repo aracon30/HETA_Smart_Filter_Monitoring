@@ -150,11 +150,14 @@ def check_hardware_sensors() -> dict:
 
 class FilterSimulator:
     """
-    Physikalisch plausibler Filterbeladungs-Simulator.
+    Szenariobasierter Filterbeladungs-Simulator.
 
-    Interne Zustandsvariable: clogging ∈ [0, 1]
-    clogging steigt pro Sekunde um: dirt_rate_factor / cycle_seconds
-    Bei clogging=1 ist dp=dp_limit → Zyklusende.
+    Feste Basiswerte: p1_base, q_base, t_base (aus Konfiguration).
+    Einstellbare Szenarien: dirt_rate_factor, p1_trend_factor,
+                            flow_drop_factor, temp_trend_per_cycle.
+
+    clogging ∈ [0, 1] wächst zeitbasiert:
+        clogging += dirt_rate_factor / cycle_seconds * delta_t
     """
 
     def __init__(self, dp_clean: float = 0.2, dp_limit: float = 2.5,
@@ -162,13 +165,17 @@ class FilterSimulator:
         self.dp_clean      = dp_clean
         self.dp_limit      = dp_limit
         self.cycle_seconds = max(1.0, float(cycle_seconds))
-        self.flow_max      = flow_max   # Referenz für default Q_start
+        self.flow_max      = flow_max   # Sensor-Maximalbereich (nicht Q_base)
         self._lock         = threading.Lock()
-        # Benutzer-Startparameter
-        self._p1_bar           = 3.5
-        self._q_start          = round(flow_max * 0.53, 1)   # ~80 l/min bei 150
-        self._t_start          = 20.0
-        self._dirt_rate_factor = 1.0
+        # Feste Basiswerte (aus Konfiguration gesetzt)
+        self._p1_base = 4.0
+        self._q_base  = 145.0
+        self._t_base  = 25.0
+        # Szenario-Parameter (einstellbar)
+        self._dirt_rate_factor    = 1.0   # 1.0 = Referenzrate
+        self._p1_trend_factor     = 0.0   # 0.0 = stabil, +0.1 = steigt 10 % über Zyklus
+        self._flow_drop_factor    = 0.75  # 0.75 = normaler Abfall
+        self._temp_trend_per_cycle = 0.0  # °C-Änderung über Zyklus
         # Interner Zustand
         self._clogging    = 0.0
         self._last_time   = None
@@ -176,67 +183,76 @@ class FilterSimulator:
 
     @property
     def cycle_steps(self) -> int:
-        """Abwärtskompatibel: Anzahl Schritte (= Sekunden) pro Zyklus."""
+        """Abwärtskompatibel: Schritte pro Zyklus (= Sekunden)."""
         return max(1, int(self.cycle_seconds))
 
     def reset(self):
-        """Setzt nur Beladungszustand zurück – Benutzerparameter bleiben."""
+        """Setzt nur Beladungszustand zurück – Szenarien bleiben."""
         with self._lock:
             self._clogging  = 0.0
             self._last_time = None
 
     def full_reset(self):
-        """Vollständiger Reset inkl. Benutzerparameter."""
+        """Vollständiger Reset inkl. Szenario-Parameter."""
         with self._lock:
-            self._clogging         = 0.0
-            self._last_time        = None
-            self._p1_bar           = 3.5
-            self._q_start          = round(self.flow_max * 0.53, 1)
-            self._t_start          = 20.0
-            self._dirt_rate_factor = 1.0
-            self._rates_active     = False
+            self._clogging             = 0.0
+            self._last_time            = None
+            self._dirt_rate_factor     = 1.0
+            self._p1_trend_factor      = 0.0
+            self._flow_drop_factor     = 0.75
+            self._temp_trend_per_cycle = 0.0
+            self._rates_active         = False
 
-    def set_user_params(self, p1_bar: float, q_start: float, t_start: float,
-                        dirt_rate_factor: float):
-        """Setzt Startparameter – kein Zyklus-Reset erforderlich."""
+    def set_scenario_params(self, dirt_rate_factor: float,
+                            p1_trend_factor: float,
+                            flow_drop_factor: float,
+                            temp_trend_per_cycle: float):
+        """Setzt Szenario-Parameter – kein Zyklus-Reset erforderlich."""
         with self._lock:
-            self._p1_bar           = max(0.1, p1_bar)
-            self._q_start          = max(1.0, q_start)
-            self._t_start          = float(t_start)
-            self._dirt_rate_factor = max(0.05, dirt_rate_factor)
-            self._rates_active     = True
+            self._dirt_rate_factor     = max(0.05, dirt_rate_factor)
+            self._p1_trend_factor      = max(-0.5,  min(0.5, p1_trend_factor))
+            self._flow_drop_factor     = max(0.10,  min(0.99, flow_drop_factor))
+            self._temp_trend_per_cycle = max(-20.0, min(20.0, temp_trend_per_cycle))
+            self._rates_active         = True
 
-    # Rückwärtskompatibel: set_rate_factors leitet auf set_user_params um
+    def clear_scenario_params(self):
+        """Setzt alle Szenario-Parameter auf Normalbetrieb zurück."""
+        with self._lock:
+            self._dirt_rate_factor     = 1.0
+            self._p1_trend_factor      = 0.0
+            self._flow_drop_factor     = 0.75
+            self._temp_trend_per_cycle = 0.0
+            self._rates_active         = False
+
+    # Rückwärtskompatibel
     def set_rate_factors(self, dp_factor: float, flow_factor: float,
                          temp_offset: float, p1_bar: float):
-        self.set_user_params(
-            p1_bar=p1_bar,
-            q_start=round(self.flow_max * 0.53 * flow_factor, 1),
-            t_start=20.0 + temp_offset,
+        self.set_scenario_params(
             dirt_rate_factor=dp_factor,
+            p1_trend_factor=0.0,
+            flow_drop_factor=0.75,
+            temp_trend_per_cycle=0.0,
         )
 
     def clear_rate_factors(self):
-        with self._lock:
-            self._p1_bar           = 3.5
-            self._q_start          = round(self.flow_max * 0.53, 1)
-            self._t_start          = 20.0
-            self._dirt_rate_factor = 1.0
-            self._rates_active     = False
+        self.clear_scenario_params()
 
     @property
     def rates_active(self) -> bool:
         with self._lock:
             return self._rates_active
 
-    def get_user_params(self) -> dict:
-        """Gibt aktuelle Benutzerparameter zurück (für quick-learn)."""
+    def get_scenario_params(self) -> dict:
+        """Gibt aktuelle Szenario-Parameter zurück (für quick-learn)."""
         with self._lock:
             return {
-                "p1_bar":           self._p1_bar,
-                "q_start":          self._q_start,
-                "t_start":          self._t_start,
-                "dirt_rate_factor": self._dirt_rate_factor,
+                "p1_base":              self._p1_base,
+                "q_base":               self._q_base,
+                "t_base":               self._t_base,
+                "dirt_rate_factor":     self._dirt_rate_factor,
+                "p1_trend_factor":      self._p1_trend_factor,
+                "flow_drop_factor":     self._flow_drop_factor,
+                "temp_trend_per_cycle": self._temp_trend_per_cycle,
             }
 
     def get_readings(self) -> dict:
@@ -249,29 +265,37 @@ class FilterSimulator:
                 delta_t = max(0.0, now - self._last_time)
             self._last_time = now
 
-            dirt_rate       = self._dirt_rate_factor / self.cycle_seconds
-            self._clogging  = min(1.0, self._clogging + dirt_rate * delta_t)
-            clogging        = self._clogging
-            p1              = self._p1_bar
-            q_start         = self._q_start
-            t_start         = self._t_start
-            dp_clean        = self.dp_clean
-            dp_limit        = self.dp_limit
+            dirt_rate      = self._dirt_rate_factor / self.cycle_seconds
+            self._clogging = min(1.0, self._clogging + dirt_rate * delta_t)
+            clogging       = self._clogging
 
-        # Δp: nichtlinearer Anstieg, am Ende deutlich steiler
+            p1_base              = self._p1_base
+            q_base               = self._q_base
+            t_base               = self._t_base
+            p1_trend_factor      = self._p1_trend_factor
+            flow_drop_factor     = self._flow_drop_factor
+            temp_trend_per_cycle = self._temp_trend_per_cycle
+            dp_clean             = self.dp_clean
+            dp_limit             = self.dp_limit
+
+        # p1: Basiswert mit linearern Trend über den Zyklus
+        p1 = round(p1_base * (1.0 + p1_trend_factor * clogging), 4)
+        p1 = max(0.1, p1)
+
+        # Δp: nichtlinearer Anstieg (Exponent 1.8 → exponentiell am Ende)
         dp = dp_clean + (dp_limit - dp_clean) * clogging ** 1.8
         dp = round(max(dp_clean, min(dp, dp_limit)), 4)
 
-        # p2: immer automatisch aus p1 − Δp
+        # p2: immer automatisch
         p2 = round(max(0.0, p1 - dp), 4)
 
-        # Durchfluss: sinkt mit Beladung, Mindestdurchfluss 10 % von Q_start
-        q_min = max(1.0, q_start * 0.10)
-        flow  = round(max(q_min, q_start * (1.0 - 0.75 * clogging ** 1.5)), 2)
+        # Q: sinkt mit Beladung, Minimum 10 % von Q_base
+        q_min = max(1.0, q_base * 0.10)
+        flow  = round(max(q_min, q_base * (1.0 - flow_drop_factor * clogging ** 1.5)), 2)
 
-        # Temperatur: langsame Sinusdrift ±0,2 °C (keine Sprünge)
+        # T: Basistemperatur + Trend über Zyklus + langsame Sinusdrift ±0,2 °C
         drift = 0.2 * math.sin(2.0 * math.pi * now / 600.0)
-        temp  = round(t_start + drift, 2)
+        temp  = round(t_base + temp_trend_per_cycle * clogging + drift, 2)
 
         return {"p1": p1, "p2": p2, "dp": dp, "flow": flow, "temp": temp}
 
@@ -281,44 +305,55 @@ _simulator = FilterSimulator()
 
 
 def reset_simulation():
-    """Setzt Beladungszustand zurück (Benutzerparameter bleiben)."""
+    """Setzt Beladungszustand zurück (Szenario-Parameter bleiben)."""
     _simulator.reset()
     logger.info("Filtersimulation zurückgesetzt.")
 
 
 def full_reset_simulation():
-    """Vollständiger Reset inkl. Benutzerparameter."""
+    """Vollständiger Reset inkl. Szenario-Parameter."""
     _simulator.full_reset()
     logger.info("Filtersimulation vollständig zurückgesetzt.")
 
 
 def update_simulation_params(dp_clean: float, dp_limit: float, flow_max: float,
-                              cycle_seconds: float = 300.0):
+                              cycle_seconds: float = 300.0,
+                              p1_base: float = 4.0,
+                              q_base: float = 145.0,
+                              t_base: float = 25.0):
     """Aktualisiert Basisparameter und setzt Beladung zurück."""
     with _simulator._lock:
         _simulator.dp_clean      = dp_clean
         _simulator.dp_limit      = dp_limit
         _simulator.flow_max      = flow_max
         _simulator.cycle_seconds = max(1.0, float(cycle_seconds))
+        _simulator._p1_base      = p1_base
+        _simulator._q_base       = q_base
+        _simulator._t_base       = t_base
         _simulator._clogging     = 0.0
         _simulator._last_time    = None
 
 
+def set_simulation_scenario_params(dirt_rate_factor: float,
+                                    p1_trend_factor: float,
+                                    flow_drop_factor: float,
+                                    temp_trend_per_cycle: float):
+    """Setzt Szenario-Parameter direkt."""
+    _simulator.set_scenario_params(
+        dirt_rate_factor, p1_trend_factor,
+        flow_drop_factor, temp_trend_per_cycle,
+    )
+
+
 def set_simulation_rates(dp_factor: float, flow_factor: float,
                          temp_offset: float, p1_bar: float):
-    """Rückwärtskompatibel – leitet auf set_user_params um."""
+    """Rückwärtskompatibel."""
     _simulator.set_rate_factors(dp_factor, flow_factor, temp_offset, p1_bar)
 
 
-def set_simulation_user_params(p1_bar: float, q_start: float, t_start: float,
-                                dirt_rate_factor: float):
-    """Setzt Startparameter direkt."""
-    _simulator.set_user_params(p1_bar, q_start, t_start, dirt_rate_factor)
-
-
 def clear_simulation_rates():
-    """Setzt alle Startparameter auf Baseline zurück."""
-    _simulator.clear_rate_factors()
+    """Setzt Szenario auf Normalbetrieb zurück."""
+    _simulator.clear_scenario_params()
 
 
 def get_simulation_rates_active() -> bool:
@@ -329,9 +364,9 @@ def get_simulation_cycle_steps() -> int:
     return _simulator.cycle_steps
 
 
-def get_simulation_user_params() -> dict:
-    """Gibt aktuelle Benutzerparameter zurück."""
-    return _simulator.get_user_params()
+def get_simulation_scenario_params() -> dict:
+    """Gibt aktuelle Szenario-Parameter zurück."""
+    return _simulator.get_scenario_params()
 
 
 # ---------------------------------------------------------------------------

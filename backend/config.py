@@ -44,6 +44,10 @@ _DEFAULTS = {
     "anomaly_threshold_percent": 25,
     "clean_resistance_tolerance": 0.25,
     "required_cycles_for_profile": 3,
+    # Simulation – feste Basiswerte
+    "sim_p1_base_bar":   4.0,
+    "sim_q_base_l_min":  145.0,
+    "sim_t_base_c":      25.0,
     "smoothing_factor": 0.15,
     "max_increase_percent_per_update": 2,
     "max_decrease_percent_per_update": 8,

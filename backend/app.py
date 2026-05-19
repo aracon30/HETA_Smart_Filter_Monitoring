@@ -28,8 +28,8 @@ from flask_cors import CORS
 from config import settings, save_settings, get_abs_path, hash_password, verify_password
 from sensors import (read_sensors, reset_simulation, full_reset_simulation,
                      update_simulation_params, probe_hardware, check_hardware_sensors,
-                     set_simulation_rates, set_simulation_user_params,
-                     get_simulation_user_params,
+                     set_simulation_rates, set_simulation_scenario_params,
+                     get_simulation_scenario_params,
                      clear_simulation_rates,
                      get_simulation_rates_active, get_simulation_cycle_steps)
 from calculations import (calculate_filter_state, FilterState,
@@ -194,15 +194,16 @@ _state = {
     "sensor_fault_channels": [],
     "sensor_fault_message": "",
 
-    # Simulations-Parameter
-    "sim_rates_active":       False,
-    "sim_dirt_rate_pct":      100.0,
-    "sim_q_start":            80.0,
-    "sim_t_start":            20.0,
-    "sim_p1_bar":             3.5,
-    "sim_dp_deviation_pct":   0.0,
-    "sim_flow_deviation_pct": 0.0,
-    "sim_temp_deviation":     0.0,
+    # Simulations-Szenario-Parameter
+    "sim_rates_active":        False,
+    "sim_scenario":            "normal",
+    "sim_dirt_rate_pct":       100.0,
+    "sim_p1_trend_pct":        0.0,
+    "sim_flow_drop_pct":       75.0,
+    "sim_temp_trend":          0.0,
+    "sim_dp_deviation_pct":    0.0,
+    "sim_flow_deviation_pct":  0.0,
+    "sim_temp_deviation":      0.0,
 
     # Modusneutrale Prozessanalyse (Sensor- UND Simulationsmodus)
     "analysis_active":             False,  # True wenn Profil valide + läuft
@@ -1320,6 +1321,9 @@ def api_settings_post():
         dp_clean=settings["dp_clean_bar"],
         dp_limit=settings["dp_limit_bar"],
         flow_max=settings["flow_max_l_min"],
+        p1_base=settings.get("sim_p1_base_bar", 4.0),
+        q_base=settings.get("sim_q_base_l_min", 145.0),
+        t_base=settings.get("sim_t_base_c", 25.0),
     )
     predictor.update_limits(settings["dp_limit_bar"], settings["dp_clean_bar"])
     save_settings(settings)
@@ -1447,6 +1451,9 @@ def api_onboarding_complete():
         dp_clean=settings["dp_clean_bar"],
         dp_limit=settings["dp_limit_bar"],
         flow_max=settings["flow_max_l_min"],
+        p1_base=settings.get("sim_p1_base_bar", 4.0),
+        q_base=settings.get("sim_q_base_l_min", 145.0),
+        t_base=settings.get("sim_t_base_c", 25.0),
     )
     predictor.update_limits(settings["dp_limit_bar"], settings["dp_clean_bar"])
 
@@ -1498,15 +1505,16 @@ def api_simulation_reset():
     predictor.reset()
     _smoothed_health_pct = None
     with _state_lock:
-        _state["cycle_active"]            = False
-        _state["sim_rates_active"]        = False
-        _state["sim_dirt_rate_pct"]       = 100.0
-        _state["sim_q_start"]             = 80.0
-        _state["sim_t_start"]             = 20.0
-        _state["sim_p1_bar"]              = 3.5
-        _state["sim_dp_deviation_pct"]    = 0.0
-        _state["sim_flow_deviation_pct"]  = 0.0
-        _state["sim_temp_deviation"]      = 0.0
+        _state["cycle_active"]           = False
+        _state["sim_rates_active"]       = False
+        _state["sim_scenario"]           = "normal"
+        _state["sim_dirt_rate_pct"]      = 100.0
+        _state["sim_p1_trend_pct"]       = 0.0
+        _state["sim_flow_drop_pct"]      = 75.0
+        _state["sim_temp_trend"]         = 0.0
+        _state["sim_dp_deviation_pct"]   = 0.0
+        _state["sim_flow_deviation_pct"] = 0.0
+        _state["sim_temp_deviation"]     = 0.0
     return jsonify({"success": True, "message": "System zurückgesetzt."})
 
 
@@ -1533,32 +1541,35 @@ def api_simulation_quick_learn():
     cycle_secs        = float(cycle_steps) * sampling_interval
     required_cycles   = settings.get("required_cycles_for_profile", 3)
 
-    # Benutzerparameter für konsistente Simulation
-    user_params = get_simulation_user_params()
-    sim_p1    = user_params.get("p1_bar",  3.5)
-    sim_q     = user_params.get("q_start", round(flow_max * 0.53, 1))
-    sim_t     = user_params.get("t_start", 20.0)
-    q_min_sim = max(1.0, sim_q * 0.10)
+    # Aktuelle Szenario-Parameter für konsistente Simulation
+    sc = get_simulation_scenario_params()
+    sim_p1_base      = sc.get("p1_base",              4.0)
+    sim_q_base       = sc.get("q_base",               145.0)
+    sim_t_base       = sc.get("t_base",               25.0)
+    sim_p1_trend     = sc.get("p1_trend_factor",      0.0)
+    sim_flow_drop    = sc.get("flow_drop_factor",     0.75)
+    sim_temp_trend   = sc.get("temp_trend_per_cycle", 0.0)
+    q_min_sim        = max(1.0, sim_q_base * 0.10)
 
     # ── Physikalische Werte identisch mit FilterSimulator.get_readings() ────
-    # clogging = s / cycle_steps (Schrittzähler für Batch-Generierung)
     def _sim_step(s: int) -> dict:
         clogging = min(s / max(cycle_steps, 1), 1.0)
+        p1  = round(sim_p1_base * (1.0 + sim_p1_trend * clogging), 4)
+        p1  = max(0.1, p1)
         dp  = dp_clean + (dp_limit - dp_clean) * clogging ** 1.8
         dp  = round(max(dp_clean, min(dp, dp_limit)), 5)
-        p2  = round(max(0.0, sim_p1 - dp), 4)
-        fl  = round(max(q_min_sim, sim_q * (1.0 - 0.75 * clogging ** 1.5)), 2)
-        tmp = round(sim_t, 1)   # Konstant in Batch-Simulation (kein Zeitdrift)
-        return {"dp": dp, "p1": sim_p1, "p2": p2, "flow": fl, "temp": tmp,
+        p2  = round(max(0.0, p1 - dp), 4)
+        fl  = round(max(q_min_sim, sim_q_base * (1.0 - sim_flow_drop * clogging ** 1.5)), 2)
+        tmp = round(sim_t_base + sim_temp_trend * clogging, 1)
+        return {"dp": dp, "p1": p1, "p2": p2, "flow": fl, "temp": tmp,
                 "r_eff": dp / max(fl, 0.01)}
 
     start_vals = _sim_step(0)
     end_vals   = _sim_step(cycle_steps)
 
-    # Zeitgemittelte Werte über den gesamten Zyklus (analytisch integriert)
-    # ∫₀¹ flow(t) dt ≈ sim_q * (1 - 0.75 * ∫₀¹ t^1.5 dt) = sim_q * (1 - 0.75*2/5)
-    avg_flow    = round(sim_q * (1.0 - 0.75 * 0.4), 2)
-    avg_temp    = round(sim_t, 1)
+    # Analytisch: ∫₀¹ (1 - flow_drop * c^1.5) dc = 1 - flow_drop * 2/5 = 1 - 0.4*flow_drop
+    avg_flow = round(sim_q_base * (1.0 - 0.4 * sim_flow_drop), 2)
+    avg_temp = round(sim_t_base + sim_temp_trend * 0.5, 1)
     loading_rate = round((end_vals["dp"] - dp_clean) / max(cycle_secs, 1.0), 6)
 
     existing = db.count_confirmed_cycles(heta_code)
@@ -1594,7 +1605,7 @@ def api_simulation_quick_learn():
                 "heta_code":            heta_code,
                 "timestamp":            t,
                 "cycle_second":         round(s * sampling_interval, 1),
-                "p1_bar":               sim_p1,
+                "p1_bar":               sv["p1"],
                 "p2_bar":               sv["p2"],
                 "dp_bar":               sv["dp"],
                 "flow_l_min":           round(sv["flow"], 2),
@@ -1634,10 +1645,9 @@ def api_simulation_quick_learn():
 
 @app.route("/api/simulation/set-rates", methods=["POST"])
 def api_simulation_set_rates():
-    """Setzt Simulationsparameter (Startparameter für physikalische Simulation)."""
+    """Setzt Simulations-Szenario-Parameter."""
     with _state_lock:
-        sim_mode  = _state["simulation_mode"]
-
+        sim_mode = _state["simulation_mode"]
     if not sim_mode:
         return jsonify({"success": False, "message": "Nur im Simulationsmodus verfügbar."})
 
@@ -1647,48 +1657,51 @@ def api_simulation_set_rates():
         clear_simulation_rates()
         with _state_lock:
             _state["sim_rates_active"]       = False
+            _state["sim_scenario"]           = "normal"
             _state["sim_dirt_rate_pct"]      = 100.0
-            _state["sim_q_start"]            = 80.0
-            _state["sim_t_start"]            = 20.0
-            _state["sim_p1_bar"]             = 3.5
+            _state["sim_p1_trend_pct"]       = 0.0
+            _state["sim_flow_drop_pct"]      = 75.0
+            _state["sim_temp_trend"]         = 0.0
             _state["sim_dp_deviation_pct"]   = 0.0
             _state["sim_flow_deviation_pct"] = 0.0
             _state["sim_temp_deviation"]     = 0.0
         return jsonify({"success": True, "active": False})
 
-    pressure_range  = settings.get("pressure_range_bar", 10.0)
-    flow_max_conf   = settings.get("flow_max_l_min", 150.0)
-    q_start_default = round(flow_max_conf * 0.53, 1)
+    dirt_rate_pct  = max(10.0,  min(float(data.get("dirt_rate_pct",  100.0)), 400.0))
+    p1_trend_pct   = max(-20.0, min(float(data.get("p1_trend_pct",   0.0)),   20.0))
+    flow_drop_pct  = max(10.0,  min(float(data.get("flow_drop_pct",  75.0)),  99.0))
+    temp_trend     = max(-5.0,  min(float(data.get("temp_trend",     0.0)),   5.0))
+    scenario       = str(data.get("scenario", "custom"))
 
-    p1_bar           = max(0.5,  min(float(data.get("p1_bar",           3.5)),             pressure_range))
-    q_start          = max(1.0,  min(float(data.get("q_start",          q_start_default)), flow_max_conf * 2))
-    t_start          = max(-30.0, min(float(data.get("t_start",         20.0)),            150.0))
-    dirt_rate_pct    = max(10.0, min(float(data.get("dirt_rate_pct",    100.0)),           500.0))
-    dirt_rate_factor = dirt_rate_pct / 100.0
-
-    set_simulation_user_params(p1_bar, q_start, t_start, dirt_rate_factor)
+    set_simulation_scenario_params(
+        dirt_rate_factor    = dirt_rate_pct / 100.0,
+        p1_trend_factor     = p1_trend_pct  / 100.0,
+        flow_drop_factor    = flow_drop_pct / 100.0,
+        temp_trend_per_cycle = temp_trend,
+    )
 
     dp_dev_pct   = round(dirt_rate_pct - 100.0, 1)
-    flow_dev_pct = round((q_start / max(q_start_default, 1.0) - 1.0) * 100.0, 1)
-    temp_dev     = round(t_start - 20.0, 1)
+    flow_dev_pct = round((flow_drop_pct / 75.0 - 1.0) * 100.0, 1)
+    temp_dev     = round(temp_trend, 1)
 
     with _state_lock:
         _state["sim_rates_active"]       = True
+        _state["sim_scenario"]           = scenario
         _state["sim_dirt_rate_pct"]      = round(dirt_rate_pct, 1)
-        _state["sim_q_start"]            = round(q_start, 1)
-        _state["sim_t_start"]            = round(t_start, 1)
-        _state["sim_p1_bar"]             = round(p1_bar, 2)
+        _state["sim_p1_trend_pct"]       = round(p1_trend_pct,  1)
+        _state["sim_flow_drop_pct"]      = round(flow_drop_pct, 1)
+        _state["sim_temp_trend"]         = round(temp_trend,     1)
         _state["sim_dp_deviation_pct"]   = dp_dev_pct
         _state["sim_flow_deviation_pct"] = flow_dev_pct
         _state["sim_temp_deviation"]     = temp_dev
 
     return jsonify({
         "success": True, "active": True,
-        "p1_bar": p1_bar, "q_start": q_start,
-        "t_start": t_start, "dirt_rate_pct": dirt_rate_pct,
-        "dp_deviation_pct": dp_dev_pct,
-        "flow_deviation_pct": flow_dev_pct,
-        "temp_deviation": temp_dev,
+        "scenario": scenario,
+        "dirt_rate_pct": dirt_rate_pct,
+        "p1_trend_pct": p1_trend_pct,
+        "flow_drop_pct": flow_drop_pct,
+        "temp_trend": temp_trend,
     })
 
 
