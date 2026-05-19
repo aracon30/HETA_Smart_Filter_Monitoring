@@ -1631,6 +1631,10 @@ def api_simulation_quick_learn():
     global _smoothed_health_pct
     _smoothed_health_pct = None
     reset_simulation()
+    learning._active_cycle = None   # laufenden Zyklus verwerfen (Daten vor Quick-Learn)
+    with _state_lock:
+        _state["cycle_active"]     = False   # Messzyklus neu starten
+        _state["cycle_start_time"] = None
 
     db.insert_service_event("SIM_SCHNELLLERN", heta_code,
                             json.dumps({"simulated_cycles": needed, "loading_rate": loading_rate}))
