@@ -205,6 +205,15 @@ class LearningManager:
         Berechnet eine zeitnormierte Referenzkurve aus allen bestätigten Zyklen.
         Jeder Zyklus wird auf 0–100 % normiert; die Werte werden in N_CURVE_BUCKETS
         gemittelt. Zyklen ohne Sample-Daten werden linear interpoliert.
+
+        Kurvenstruktur (N+2 Punkte):
+          [0]      – expliziter Ankerpunkt t_pct=0   aus gemittelten Zyklusstartwerten
+          [1..N]   – N Bucket-Mittelwerte, beschriftet an der Bucket-Mitte (i+0.5)/N*100
+          [N+1]    – expliziter Ankerpunkt t_pct=100 aus gemittelten Zyklusenddaten
+
+        Durch die Bucket-Mitten-Beschriftung stimmt die Interpolation auch bei
+        nichtlinearem dp/R_eff-Verlauf; die Endpunkt-Anker verhindern die
+        bisherige systematische Abweichung am Zyklusanfang und -ende.
         """
         n = N_CURVE_BUCKETS
         buckets = [{"dp": [], "r_eff": [], "flow": [], "temp": []} for _ in range(n)]
@@ -243,9 +252,11 @@ class LearningManager:
                     buckets[i]["flow"].append(cycle.get("average_flow", 0))
                     buckets[i]["temp"].append(cycle.get("average_temperature", 20))
 
+        # Innere Kurve: Bucket-Mittelpunkte als t_pct-Beschriftung.
+        # Bucket i deckt t_frac ∈ [i/n, (i+1)/n) ab → Mittelpunkt (i+0.5)/n.
         curve = []
         for i in range(n):
-            t_pct = round(i / max(n - 1, 1) * 100.0, 1)
+            t_pct = round((i + 0.5) / n * 100.0, 1)
             b = buckets[i]
             point = {"t_pct": t_pct}
             for key in ("dp", "r_eff", "flow", "temp"):
@@ -253,6 +264,35 @@ class LearningManager:
             curve.append(point)
 
         self._fill_none_in_curve(curve)
+
+        # Explizite Endpunkt-Anker aus gemittelten Zyklusdaten berechnen.
+        # Verhindert systematische Abweichung wenn dp/R_eff am Ende steil ansteigt.
+        count = len(confirmed_cycles)
+        if count > 0:
+            avg_start_dp    = sum(c.get("start_dp",    0.0) for c in confirmed_cycles) / count
+            avg_end_dp      = sum(c.get("end_dp",      0.0) for c in confirmed_cycles) / count
+            avg_start_reff  = sum(c.get("start_r_eff", 0.0) for c in confirmed_cycles) / count
+            avg_end_reff    = sum(c.get("end_r_eff",   0.0) for c in confirmed_cycles) / count
+            avg_temp        = sum(c.get("average_temperature", 20.0) for c in confirmed_cycles) / count
+            # Durchfluss aus dp/R_eff ableiten (R_eff = dp/flow → flow = dp/R_eff)
+            start_flow = avg_start_dp / avg_start_reff if avg_start_reff > 1e-9 else 0.0
+            end_flow   = avg_end_dp   / avg_end_reff   if avg_end_reff   > 1e-9 else 0.0
+
+            curve.insert(0, {
+                "t_pct": 0.0,
+                "dp":    round(avg_start_dp,   6),
+                "r_eff": round(avg_start_reff, 6),
+                "flow":  round(start_flow,     2),
+                "temp":  round(avg_temp,       2),
+            })
+            curve.append({
+                "t_pct": 100.0,
+                "dp":    round(avg_end_dp,   6),
+                "r_eff": round(avg_end_reff, 6),
+                "flow":  round(end_flow,     2),
+                "temp":  round(avg_temp,     2),
+            })
+
         return curve
 
     @staticmethod
@@ -307,23 +347,11 @@ class LearningManager:
         if not curve:
             return None
 
-        # Zyklusfortschritt via R_eff – unabhängig von Echtzeit und dp_factor.
-        # R_eff steigt proportional zur Filterbeladung: bei dp_factor=2 erreicht
-        # der Filter denselben R_eff in halber Zeit → Fortschritt korrekt 100%.
-        r_eff_start = (profile.get("reference_r_eff_start")
-                       or profile.get("reference_r_eff") or 0.0)
-        r_eff_end   = profile.get("reference_r_eff_end") or 0.0
-        if r_eff_end > r_eff_start > 0:
-            reff_span = r_eff_end - r_eff_start
-            cycle_progress_pct = round(
-                max(0.0, min(100.0, (current_r_eff - r_eff_start) / reff_span * 100.0)), 1
-            )
-        else:
-            # Fallback: zeitbasiert wenn Profil noch keine r_eff_end-Daten hat
-            cycle_progress_pct = round(max(0.0, min(100.0, elapsed_seconds / ref_dur * 100.0)), 1)
-
-        # Zeitbasierter Fortschritt für Referenzkurven-Vergleich (zeigt Raten-Abweichung)
+        # Zyklusfortschritt zeitbasiert – konsistent mit Reststandzeit-Anzeige.
+        # Die R_eff-Abweichung (schnellere/langsamere Beladung) wird separat als
+        # r_eff_deviation_pct ausgegeben und fließt in die Reststandzeit-Korrektur ein.
         t_pct = max(0.0, min(100.0, elapsed_seconds / ref_dur * 100.0))
+        cycle_progress_pct = round(t_pct, 1)
         ref   = self._interpolate_curve(curve, t_pct)
         if not ref:
             return None

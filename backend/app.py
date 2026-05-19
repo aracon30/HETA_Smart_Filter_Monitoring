@@ -653,13 +653,11 @@ def _measurement_loop():
         # ── Reststandzeit berechnen ───────────────────────────────────────
         if profile_valid and heta_activated and cycle_active:
             ref_dur = profile.get("reference_duration_seconds", 0) if profile else 0
-            # R_eff-basierter Fortschritt als "effektive" Zeit: bei dp_factor=2
-            # hat der Filter doppelt so schnell geladen → Reststandzeit halbiert sich.
-            if analysis:
-                reff_elapsed = (analysis["cycle_progress_pct"] / 100.0) * ref_dur
-            else:
-                reff_elapsed = elapsed
-            remaining_s = predictor.update_curve_based(reff_elapsed, ref_dur)
+            # Reststandzeit aus tatsächlich verstrichener Zeit; R_eff-Abweichung
+            # korrigiert die Rate (bei +100 % R_eff-Abw. → Filter lädt doppelt so
+            # schnell → Restzeit halbiert sich via predictor-internem factor).
+            reff_dev_for_pred = reff_dev if analysis else 0.0
+            remaining_s = predictor.update_curve_based(elapsed, ref_dur, reff_dev_for_pred)
         else:
             remaining_s = predictor.update(fs.dp_bar)
 
@@ -1562,7 +1560,7 @@ def api_simulation_quick_learn():
         fl  = round(max(q_min_sim, sim_q_base * (1.0 - sim_flow_drop * clogging ** 1.5)), 2)
         tmp = round(sim_t_base + sim_temp_trend * clogging, 1)
         return {"dp": dp, "p1": p1, "p2": p2, "flow": fl, "temp": tmp,
-                "r_eff": dp / max(fl, 0.01)}
+                "r_eff": dp / max(fl, 0.1)}
 
     start_vals = _sim_step(0)
     end_vals   = _sim_step(cycle_steps)
