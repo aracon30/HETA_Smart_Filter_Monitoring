@@ -673,6 +673,10 @@ def _measurement_loop():
                 _state["anomaly_active"] = anomaly
                 _state["anomaly_percent"] = anom_pct
 
+        # dp-Limit erreicht → Reststandzeit ist definitiv 0
+        if fs.dp_bar >= dp_limit:
+            remaining_s = 0.0
+
         # ── Prognosestatus ────────────────────────────────────────────────
         req_cycles  = settings.get("required_cycles_for_profile", 3)
         pred_status = predictor.get_status(
