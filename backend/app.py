@@ -26,9 +26,11 @@ from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 from config import settings, save_settings, get_abs_path, hash_password, verify_password
-from sensors import (read_sensors, reset_simulation, update_simulation_params,
-                     probe_hardware, check_hardware_sensors,
-                     set_simulation_rates, clear_simulation_rates,
+from sensors import (read_sensors, reset_simulation, full_reset_simulation,
+                     update_simulation_params, probe_hardware, check_hardware_sensors,
+                     set_simulation_rates, set_simulation_user_params,
+                     get_simulation_user_params,
+                     clear_simulation_rates,
                      get_simulation_rates_active, get_simulation_cycle_steps)
 from calculations import (calculate_filter_state, FilterState,
                           calculate_filter_health_from_r_eff)
@@ -192,11 +194,15 @@ _state = {
     "sensor_fault_channels": [],
     "sensor_fault_message": "",
 
-    # Simulations-Raten-Steuerung
-    "sim_rates_active": False,
-    "sim_dp_factor":    1.0,
-    "sim_flow_factor":  1.0,
-    "sim_temp_offset":  0.0,
+    # Simulations-Parameter
+    "sim_rates_active":       False,
+    "sim_dirt_rate_pct":      100.0,
+    "sim_q_start":            80.0,
+    "sim_t_start":            20.0,
+    "sim_p1_bar":             3.5,
+    "sim_dp_deviation_pct":   0.0,
+    "sim_flow_deviation_pct": 0.0,
+    "sim_temp_deviation":     0.0,
 
     # Modusneutrale Prozessanalyse (Sensor- UND Simulationsmodus)
     "analysis_active":             False,  # True wenn Profil valide + läuft

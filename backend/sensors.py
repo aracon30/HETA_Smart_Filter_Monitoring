@@ -10,6 +10,7 @@ Kanalbelegung:
 Alle Sensoren liefern 4–20 mA Signale.
 """
 
+import math
 import time
 import logging
 import threading
@@ -149,89 +150,128 @@ def check_hardware_sensors() -> dict:
 
 class FilterSimulator:
     """
-    Simuliert einen Filterbeladungszyklus – deterministisch, thread-safe.
+    Physikalisch plausibler Filterbeladungs-Simulator.
 
-    Schrittzähler statt Echtzeit: jeder get_readings()-Aufruf erhöht _step um 1.
-    Steigungsfaktoren (dp_factor, flow_factor, temp_offset, p1_bar) modifizieren
-    den Verlauf kontinuierlich – kein Reset beim Ändern der Faktoren.
-    dp_factor > 1.0 beschleunigt die Beladung; < 1.0 verlangsamt sie.
+    Interne Zustandsvariable: clogging ∈ [0, 1]
+    clogging steigt pro Sekunde um: dirt_rate_factor / cycle_seconds
+    Bei clogging=1 ist dp=dp_limit → Zyklusende.
     """
 
     def __init__(self, dp_clean: float = 0.2, dp_limit: float = 2.5,
                  cycle_seconds: float = 300.0, flow_max: float = 150.0):
-        self.dp_clean     = dp_clean
-        self.dp_limit     = dp_limit
-        self.cycle_steps  = max(1, int(cycle_seconds))
-        self.flow_max     = flow_max
-        self._step        = 0
-        self._lock        = threading.Lock()
-        # Steigungsfaktoren (Baseline = 1.0 / 0.0)
-        self._dp_factor   = 1.0   # Multiplikator der Beladungsrate
-        self._flow_factor = 1.0   # Multiplikator des Solldurchflusses
-        self._temp_offset = 0.0   # Temperaturabweichung in °C
-        self._p1_bar      = 3.5   # Eintrittsdruck (absolut)
+        self.dp_clean      = dp_clean
+        self.dp_limit      = dp_limit
+        self.cycle_seconds = max(1.0, float(cycle_seconds))
+        self.flow_max      = flow_max   # Referenz für default Q_start
+        self._lock         = threading.Lock()
+        # Benutzer-Startparameter
+        self._p1_bar           = 3.5
+        self._q_start          = round(flow_max * 0.53, 1)   # ~80 l/min bei 150
+        self._t_start          = 20.0
+        self._dirt_rate_factor = 1.0
+        # Interner Zustand
+        self._clogging    = 0.0
+        self._last_time   = None
         self._rates_active = False
 
-    def reset(self):
-        with self._lock:
-            self._step        = 0
-            self._dp_factor   = 1.0
-            self._flow_factor = 1.0
-            self._temp_offset = 0.0
-            self._p1_bar      = 3.5
-            self._rates_active = False
+    @property
+    def cycle_steps(self) -> int:
+        """Abwärtskompatibel: Anzahl Schritte (= Sekunden) pro Zyklus."""
+        return max(1, int(self.cycle_seconds))
 
+    def reset(self):
+        """Setzt nur Beladungszustand zurück – Benutzerparameter bleiben."""
+        with self._lock:
+            self._clogging  = 0.0
+            self._last_time = None
+
+    def full_reset(self):
+        """Vollständiger Reset inkl. Benutzerparameter."""
+        with self._lock:
+            self._clogging         = 0.0
+            self._last_time        = None
+            self._p1_bar           = 3.5
+            self._q_start          = round(self.flow_max * 0.53, 1)
+            self._t_start          = 20.0
+            self._dirt_rate_factor = 1.0
+            self._rates_active     = False
+
+    def set_user_params(self, p1_bar: float, q_start: float, t_start: float,
+                        dirt_rate_factor: float):
+        """Setzt Startparameter – kein Zyklus-Reset erforderlich."""
+        with self._lock:
+            self._p1_bar           = max(0.1, p1_bar)
+            self._q_start          = max(1.0, q_start)
+            self._t_start          = float(t_start)
+            self._dirt_rate_factor = max(0.05, dirt_rate_factor)
+            self._rates_active     = True
+
+    # Rückwärtskompatibel: set_rate_factors leitet auf set_user_params um
     def set_rate_factors(self, dp_factor: float, flow_factor: float,
                          temp_offset: float, p1_bar: float):
-        """Setzt Steigungsfaktoren – Simulation läuft ohne Reset weiter."""
-        with self._lock:
-            self._dp_factor    = max(0.1, dp_factor)
-            self._flow_factor  = max(0.1, flow_factor)
-            self._temp_offset  = temp_offset
-            self._p1_bar       = max(0.0, p1_bar)
-            self._rates_active = True
+        self.set_user_params(
+            p1_bar=p1_bar,
+            q_start=round(self.flow_max * 0.53 * flow_factor, 1),
+            t_start=20.0 + temp_offset,
+            dirt_rate_factor=dp_factor,
+        )
 
     def clear_rate_factors(self):
-        """Setzt alle Faktoren auf Baseline zurück."""
         with self._lock:
-            self._dp_factor    = 1.0
-            self._flow_factor  = 1.0
-            self._temp_offset  = 0.0
-            self._p1_bar       = 3.5
-            self._rates_active = False
+            self._p1_bar           = 3.5
+            self._q_start          = round(self.flow_max * 0.53, 1)
+            self._t_start          = 20.0
+            self._dirt_rate_factor = 1.0
+            self._rates_active     = False
 
     @property
     def rates_active(self) -> bool:
         with self._lock:
             return self._rates_active
 
-    def get_readings(self) -> dict:
-        """
-        Gibt physikalische Simulationswerte zurück.
-        dp_factor skaliert die effektive Schrittweite → beschleunigt/verlangsamt Beladung.
-        """
+    def get_user_params(self) -> dict:
+        """Gibt aktuelle Benutzerparameter zurück (für quick-learn)."""
         with self._lock:
-            step         = self._step
-            self._step  += 1
-            dp_factor    = self._dp_factor
-            flow_factor  = self._flow_factor
-            temp_offset  = self._temp_offset
-            p1           = self._p1_bar
+            return {
+                "p1_bar":           self._p1_bar,
+                "q_start":          self._q_start,
+                "t_start":          self._t_start,
+                "dirt_rate_factor": self._dirt_rate_factor,
+            }
 
-        # Effektiver Fortschritt: dp_factor > 1 → schnellere Beladung
-        eff_progress = min(step * dp_factor / self.cycle_steps, 1.0)
+    def get_readings(self) -> dict:
+        """Berechnet physikalische Werte aus aktuellem clogging-Zustand."""
+        with self._lock:
+            now = time.time()
+            if self._last_time is None:
+                delta_t = 0.0
+            else:
+                delta_t = max(0.0, now - self._last_time)
+            self._last_time = now
 
-        dp = self.dp_clean + (self.dp_limit - self.dp_clean) * eff_progress ** 1.5
-        dp = round(max(self.dp_clean, min(dp, self.dp_limit)), 4)
+            dirt_rate       = self._dirt_rate_factor / self.cycle_seconds
+            self._clogging  = min(1.0, self._clogging + dirt_rate * delta_t)
+            clogging        = self._clogging
+            p1              = self._p1_bar
+            q_start         = self._q_start
+            t_start         = self._t_start
+            dp_clean        = self.dp_clean
+            dp_limit        = self.dp_limit
 
+        # Δp: nichtlinearer Anstieg, am Ende deutlich steiler
+        dp = dp_clean + (dp_limit - dp_clean) * clogging ** 1.8
+        dp = round(max(dp_clean, min(dp, dp_limit)), 4)
+
+        # p2: immer automatisch aus p1 − Δp
         p2 = round(max(0.0, p1 - dp), 4)
 
-        dp_fraction = (dp - self.dp_clean) / max(self.dp_limit - self.dp_clean, 1e-9)
-        dp_fraction = max(0.0, min(1.0, dp_fraction))
-        flow = round(self.flow_max * 0.53 * flow_factor * (1.0 - 0.50 * dp_fraction), 2)
+        # Durchfluss: sinkt mit Beladung, Mindestdurchfluss 10 % von Q_start
+        q_min = max(1.0, q_start * 0.10)
+        flow  = round(max(q_min, q_start * (1.0 - 0.75 * clogging ** 1.5)), 2)
 
-        # Basistemperaturtrend + Abweichung
-        temp = round(20.0 + eff_progress * 15.0 + temp_offset, 2)
+        # Temperatur: langsame Sinusdrift ±0,2 °C (keine Sprünge)
+        drift = 0.2 * math.sin(2.0 * math.pi * now / 600.0)
+        temp  = round(t_start + drift, 2)
 
         return {"p1": p1, "p2": p2, "dp": dp, "flow": flow, "temp": temp}
 
@@ -241,41 +281,57 @@ _simulator = FilterSimulator()
 
 
 def reset_simulation():
-    """Startet die Filtersimulation neu."""
+    """Setzt Beladungszustand zurück (Benutzerparameter bleiben)."""
     _simulator.reset()
     logger.info("Filtersimulation zurückgesetzt.")
 
 
+def full_reset_simulation():
+    """Vollständiger Reset inkl. Benutzerparameter."""
+    _simulator.full_reset()
+    logger.info("Filtersimulation vollständig zurückgesetzt.")
+
+
 def update_simulation_params(dp_clean: float, dp_limit: float, flow_max: float,
                               cycle_seconds: float = 300.0):
-    """Aktualisiert Simulationsparameter und setzt den Schrittzähler zurück."""
+    """Aktualisiert Basisparameter und setzt Beladung zurück."""
     with _simulator._lock:
-        _simulator.dp_clean = dp_clean
-        _simulator.dp_limit = dp_limit
-        _simulator.flow_max = flow_max
-        _simulator.cycle_steps = max(1, int(cycle_seconds))
-        _simulator._step = 0
+        _simulator.dp_clean      = dp_clean
+        _simulator.dp_limit      = dp_limit
+        _simulator.flow_max      = flow_max
+        _simulator.cycle_seconds = max(1.0, float(cycle_seconds))
+        _simulator._clogging     = 0.0
+        _simulator._last_time    = None
 
 
 def set_simulation_rates(dp_factor: float, flow_factor: float,
                          temp_offset: float, p1_bar: float):
-    """Aktiviert modifizierte Beladungsraten für Demo-Vergleich."""
+    """Rückwärtskompatibel – leitet auf set_user_params um."""
     _simulator.set_rate_factors(dp_factor, flow_factor, temp_offset, p1_bar)
 
 
+def set_simulation_user_params(p1_bar: float, q_start: float, t_start: float,
+                                dirt_rate_factor: float):
+    """Setzt Startparameter direkt."""
+    _simulator.set_user_params(p1_bar, q_start, t_start, dirt_rate_factor)
+
+
 def clear_simulation_rates():
-    """Setzt alle Steigungsfaktoren auf Baseline zurück."""
+    """Setzt alle Startparameter auf Baseline zurück."""
     _simulator.clear_rate_factors()
 
 
 def get_simulation_rates_active() -> bool:
-    """Gibt zurück ob modifizierte Raten aktiv sind."""
     return _simulator.rates_active
 
 
 def get_simulation_cycle_steps() -> int:
-    """Gibt die konfigurierte Zyklus-Schrittanzahl zurück."""
     return _simulator.cycle_steps
+
+
+def get_simulation_user_params() -> dict:
+    """Gibt aktuelle Benutzerparameter zurück."""
+    return _simulator.get_user_params()
 
 
 # ---------------------------------------------------------------------------
