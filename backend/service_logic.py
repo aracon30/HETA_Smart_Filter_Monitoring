@@ -52,10 +52,11 @@ def build_service_payload(
     }
 
 
-def generate_service_recommendation(filter_state, prediction_status: dict) -> dict:
+def generate_service_recommendation(filter_state, prediction_status: dict,
+                                    health_percent: float = None) -> dict:
     """Leitet eine Serviceempfehlung aus dem Filterzustand ab."""
     status = filter_state.status
-    health = filter_state.filter_health_percent
+    health = health_percent if health_percent is not None else filter_state.filter_health_percent
     remaining = prediction_status.get("remaining_display", "Unbekannt")
 
     if status == STATUS_OK:

@@ -736,7 +736,7 @@ def _measurement_loop():
                 _mqtt.publish_alarm("WECHSEL", "Filterwechsel erforderlich!", heta_code)
 
         # ── Serviceempfehlung ─────────────────────────────────────────────
-        rec = generate_service_recommendation(fs, pred_status)
+        rec = generate_service_recommendation(fs, pred_status, health_percent=smoothed_health)
 
         # ── Datenbank ─────────────────────────────────────────────────────
         db.insert_measurement({
@@ -1787,7 +1787,8 @@ def api_service_request():
         anomaly_percent=current["anomaly_percent"],
         action="SERVICE_ANFRAGE",
     )
-    rec = generate_service_recommendation(fs, pred_status)
+    rec = generate_service_recommendation(fs, pred_status,
+                                          health_percent=current["filter_health_percent"])
     spare = generate_spare_parts_order(current["heta_code"], fs)
     report = generate_service_report(payload, rec, spare)
 
