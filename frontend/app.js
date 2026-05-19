@@ -417,16 +417,16 @@ function updateDashboard(d) {
 
 // ── Farben ──────────────────────────────────────────────────────────────────
 const DS_COLORS = {
-  p1:      "#4a90d9",   // mittelblau
-  p2:      "#90c4f0",   // hellblau
-  dp:      "#0052a3",   // dunkelblau
-  flow:    "#27ae60",   // grün
-  temp:    "#e67e22",   // orange
-  reff:    "#8e44ad",   // lila
-  remain:  "#c07000",   // bernstein
-  refLine: "#00aaff",   // cyan-blau (Referenz)
-  tolBand: "rgba(0,170,255,0.10)", // Toleranzband-Füllung
-  tolEdge: "rgba(0,170,255,0.35)",
+  p1:      "#60a5fa",   // hellblau
+  p2:      "#93c5fd",   // sehr hellblau
+  dp:      "#38bdf8",   // cyan (Hauptmesswert)
+  flow:    "#34d399",   // hellgrün
+  temp:    "#fb923c",   // orange
+  reff:    "#c084fc",   // lila
+  remain:  "#fbbf24",   // amber
+  refLine: "#00d4ff",   // cyan-blau (Referenz)
+  tolBand: "rgba(0,212,255,0.08)", // Toleranzband-Füllung
+  tolEdge: "rgba(0,212,255,0.30)",
 };
 
 function initCharts() {
@@ -450,7 +450,7 @@ function initCharts() {
         mkDs("p2 [bar]",            DS_COLORS.p2,     "yPressure", { borderWidth: 1.5 }),
         mkDs("Δp [bar]",            DS_COLORS.dp,     "yPressure", {
           borderWidth: 2.5,
-          backgroundColor: "rgba(0,82,163,0.08)",
+          backgroundColor: "rgba(56,189,248,0.07)",
           fill: "origin",
         }),
         mkDs("Q [l/min]",           DS_COLORS.flow,   "yFlow"),
@@ -495,7 +495,7 @@ function initCharts() {
             usePointStyle: true,
             padding: 14,
             font: { size: 11 },
-            color: "#1a1a2e",
+            color: "#cbd5e1",
             filter: item => !item.text.startsWith("_"),
           },
           onClick(e, legendItem, legend) {
@@ -557,15 +557,15 @@ function initCharts() {
               type: "line",
               scaleID: "yPressure",
               value: dpLimit,
-              borderColor: "rgba(192,57,43,0.65)",
+              borderColor: "rgba(239,68,68,0.7)",
               borderWidth: 1.5,
               borderDash: [6, 3],
               label: {
                 display: true,
                 content: `dp-Limit (${Number(dpLimit).toFixed(2)} bar)`,
                 position: "end",
-                backgroundColor: "rgba(192,57,43,0.08)",
-                color: "#c0392b",
+                backgroundColor: "rgba(239,68,68,0.15)",
+                color: "#f87171",
                 font: { size: 10 },
                 padding: { x: 5, y: 2 },
               },
@@ -580,10 +580,10 @@ function initCharts() {
             maxTicksLimit: 8,
             maxRotation: 0,
             font: { size: 10 },
-            color: "#5f6878",
+            color: "#64748b",
             callback: val => new Date(val).toLocaleTimeString("de-DE"),
           },
-          grid: { color: "rgba(100,130,160,0.12)" },
+          grid: { color: "rgba(100,130,160,0.15)" },
         },
         yPressure: {
           type: "linear",
@@ -591,7 +591,7 @@ function initCharts() {
           min: 0,
           title: { display: true, text: "Druck [bar]", font: { size: 10 }, color: DS_COLORS.dp },
           ticks: { font: { size: 10 }, color: DS_COLORS.dp },
-          grid: { color: "rgba(100,130,160,0.12)" },
+          grid: { color: "rgba(100,130,160,0.15)" },
         },
         yFlow: {
           type: "linear",
@@ -736,7 +736,7 @@ function _buildCycleChartConfig(cycleLabel, cycleData, refCurve) {
           borderWidth: 1.5, borderDash: [10, 5], pointRadius: 0, tension: 0.3,
           parsing: false },
         { label: cycleLabel, data: cycleData,
-          borderColor: DS_COLORS.dp, backgroundColor: "rgba(0,82,163,0.07)",
+          borderColor: DS_COLORS.dp, backgroundColor: "rgba(56,189,248,0.07)",
           borderWidth: 2.5, pointRadius: 0, tension: 0.3,
           parsing: false, fill: "origin" },
       ],
@@ -747,7 +747,7 @@ function _buildCycleChartConfig(cycleLabel, cycleData, refCurve) {
       plugins: {
         legend: {
           display: true, position: "top",
-          labels: { usePointStyle: true, padding: 14, font: { size: 11 }, color: "#1a1a2e",
+          labels: { usePointStyle: true, padding: 14, font: { size: 11 }, color: "#cbd5e1",
             filter: item => !item.text.startsWith("_") },
         },
         tooltip: {
@@ -768,13 +768,13 @@ function _buildCycleChartConfig(cycleLabel, cycleData, refCurve) {
       },
       scales: {
         x: { type: "linear", min: 0,
-          title: { display: true, text: "Zyklusfortschritt [%]", font: { size: 11 } },
-          ticks: { font: { size: 10 }, color: "#5f6878" },
-          grid: { color: "rgba(100,130,160,0.12)" } },
+          title: { display: true, text: "Zyklusfortschritt [%]", font: { size: 11 }, color: "#94a3b8" },
+          ticks: { font: { size: 10 }, color: "#64748b" },
+          grid: { color: "rgba(100,130,160,0.15)" } },
         y: { type: "linear", min: 0,
-          title: { display: true, text: "Δp [bar]", font: { size: 11 } },
-          ticks: { font: { size: 10 } },
-          grid: { color: "rgba(100,130,160,0.12)" } },
+          title: { display: true, text: "Δp [bar]", font: { size: 11 }, color: "#94a3b8" },
+          ticks: { font: { size: 10 }, color: "#64748b" },
+          grid: { color: "rgba(100,130,160,0.15)" } },
       },
     },
   };
