@@ -1871,11 +1871,12 @@ def api_reference_curve():
         except Exception:
             pass
     return jsonify({
-        "heta_code":                 heta_code,
-        "curve":                     curve,
+        "heta_code":                  heta_code,
+        "curve":                      curve,
         "reference_duration_seconds": profile.get("reference_duration_seconds", 0),
-        "cycles_count":              profile.get("cycles_count", 0),
-        "profile_valid":             bool(profile.get("profile_valid")),
+        "cycles_count":               profile.get("cycles_count", 0),
+        "profile_valid":              bool(profile.get("profile_valid")),
+        "tolerance_pct":              settings.get("clean_resistance_tolerance", 0.25),
     })
 
 

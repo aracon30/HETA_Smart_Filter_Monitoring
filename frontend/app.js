@@ -12,14 +12,13 @@ const LEARNING_SENSITIVE = ["dp_limit_bar", "dp_clean_bar", "flow_max_l_min", "p
 // Chart.js Instanzen
 const MAX_CHART_POINTS = 300;
 let combinedChart = null;
-let cycleAnalysisChart = null;
 let cycleModalChart = null;
 
-// Cache für Referenzkurve (wird einmalig gefetcht und bei Heta-Code-Wechsel neu geladen)
+// Cache für Referenzkurve; wird beim Zykluswechsel invalidiert
 let _refCurveCache = null;
 let _refCurveCacheCode = null;
 
-// Start-Zeitstempel des aktuell bekannten aktiven Zyklus (Erkennung Zykluswechsel)
+// Zyklusverfolgung für das Referenz-Overlay im Live-Chart
 let _knownCycleStart = null;
 
 // Session-Token für Einstellungsbereich (wird im sessionStorage gehalten)
@@ -409,87 +408,78 @@ function updateDashboard(d) {
   pushChartData(d);
   updateSimDemoPanel(d);
   updateAnalysisSection(d);
-  updateCycleAnalysisChart(d);
+  updateReferenceOverlay(d);
 }
 
 // ============================================================
 // Chart (kombiniert)
 // ============================================================
 
+// ── Farben ──────────────────────────────────────────────────────────────────
+const DS_COLORS = {
+  p1:      "#4a90d9",   // mittelblau
+  p2:      "#90c4f0",   // hellblau
+  dp:      "#0052a3",   // dunkelblau
+  flow:    "#27ae60",   // grün
+  temp:    "#e67e22",   // orange
+  reff:    "#8e44ad",   // lila
+  remain:  "#c07000",   // bernstein
+  refLine: "#00aaff",   // cyan-blau (Referenz)
+  tolBand: "rgba(0,170,255,0.10)", // Toleranzband-Füllung
+  tolEdge: "rgba(0,170,255,0.35)",
+};
+
 function initCharts() {
   const ctx = document.getElementById("chart-combined");
   if (!ctx) return;
-
   const dpLimit = window._settings?.dp_limit_bar ?? 2.5;
+
+  const mkDs = (label, color, yAxis, extra = {}) => ({
+    label, yAxisID: yAxis, data: [], parsing: false,
+    borderColor: color, backgroundColor: "transparent",
+    borderWidth: 2, pointRadius: 0, tension: 0.3,
+    ...extra,
+  });
 
   combinedChart = new Chart(ctx, {
     type: "line",
     data: {
-      labels: [],
       datasets: [
+        // ── Messwerte (Indizes 0–6) ──────────────────────────────────────
+        mkDs("p1 [bar]",            DS_COLORS.p1,     "yPressure", { borderWidth: 1.5 }),
+        mkDs("p2 [bar]",            DS_COLORS.p2,     "yPressure", { borderWidth: 1.5 }),
+        mkDs("Δp [bar]",            DS_COLORS.dp,     "yPressure", {
+          borderWidth: 2.5,
+          backgroundColor: "rgba(0,82,163,0.08)",
+          fill: "origin",
+        }),
+        mkDs("Q [l/min]",           DS_COLORS.flow,   "yFlow"),
+        mkDs("Temp [°C]",           DS_COLORS.temp,   "yTemp"),
+        mkDs("R_eff [bar·min/l]",   DS_COLORS.reff,   "yReff",   { borderDash: [5, 3] }),
+        mkDs("Reststandzeit [min]", DS_COLORS.remain, "yTime",   { borderDash: [5, 3] }),
+        // ── Referenz & Toleranz (Indizes 7–9) ────────────────────────────
+        // 7 = Toleranz obere Grenze → füllt bis Dataset 8
         {
-          label: "p1 [bar]",
-          data: [],
-          yAxisID: "yPressure",
-          borderColor: "#7bafd4",
+          label: "Toleranzband",
+          yAxisID: "yPressure", data: [], parsing: false,
+          borderColor: DS_COLORS.tolEdge,
+          backgroundColor: DS_COLORS.tolBand,
+          borderWidth: 1, borderDash: [3, 4],
+          pointRadius: 0, tension: 0.3, fill: "+1",
+        },
+        // 8 = Toleranz untere Grenze (aus Legende ausgeblendet)
+        {
+          label: "_tol_lower",
+          yAxisID: "yPressure", data: [], parsing: false,
+          borderColor: DS_COLORS.tolEdge,
           backgroundColor: "transparent",
-          borderWidth: 1.5,
-          pointRadius: 0,
-          tension: 0.3,
+          borderWidth: 1, borderDash: [3, 4],
+          pointRadius: 0, tension: 0.3, fill: false,
         },
-        {
-          label: "p2 [bar]",
-          data: [],
-          yAxisID: "yPressure",
-          borderColor: "#a8c8e8",
-          backgroundColor: "transparent",
-          borderWidth: 1.5,
-          pointRadius: 0,
-          tension: 0.3,
-        },
-        {
-          label: "Δp [bar]",
-          data: [],
-          yAxisID: "yPressure",
-          borderColor: "#0077cc",
-          backgroundColor: "rgba(0,119,204,0.07)",
-          borderWidth: 2,
-          pointRadius: 0,
-          tension: 0.3,
-          fill: true,
-        },
-        {
-          label: "Q [l/min]",
-          data: [],
-          yAxisID: "yFlow",
-          borderColor: "#1a9e3c",
-          backgroundColor: "transparent",
-          borderWidth: 1.5,
-          pointRadius: 0,
-          tension: 0.3,
-        },
-        {
-          label: "R_eff [bar·min/l]",
-          data: [],
-          yAxisID: "yReff",
-          borderColor: "#7b1fa2",
-          backgroundColor: "transparent",
-          borderWidth: 1.5,
-          borderDash: [4, 2],
-          pointRadius: 0,
-          tension: 0.3,
-        },
-        {
-          label: "Reststandzeit [min]",
-          data: [],
-          yAxisID: "yTime",
-          borderColor: "#d4820a",
-          backgroundColor: "transparent",
-          borderWidth: 1.5,
-          borderDash: [4, 2],
-          pointRadius: 0,
-          tension: 0.3,
-        },
+        // 9 = Referenz Δp-Linie
+        mkDs("Referenz Δp", DS_COLORS.refLine, "yPressure", {
+          borderWidth: 1.5, borderDash: [10, 5],
+        }),
       ],
     },
     options: {
@@ -506,27 +496,50 @@ function initCharts() {
             padding: 14,
             font: { size: 11 },
             color: "#1a1a2e",
+            filter: item => !item.text.startsWith("_"),
+          },
+          onClick(e, legendItem, legend) {
+            // Standard-Toggle; Toleranz oben+unten gemeinsam schalten
+            const idx = legendItem.datasetIndex;
+            const chart = legend.chart;
+            const meta7 = chart.getDatasetMeta(7);
+            const meta8 = chart.getDatasetMeta(8);
+            if (idx === 7) {
+              const hidden = !meta7.hidden;
+              meta7.hidden = hidden;
+              meta8.hidden = hidden;
+            } else {
+              const meta = chart.getDatasetMeta(idx);
+              meta.hidden = !meta.hidden;
+            }
+            chart.update();
           },
         },
         tooltip: {
           mode: "index",
           intersect: false,
-          backgroundColor: "rgba(15, 25, 40, 0.93)",
+          backgroundColor: "rgba(12,22,38,0.95)",
           titleColor: "#a8c8f0",
-          bodyColor: "#e0eaf5",
+          bodyColor: "#dde8f5",
           borderColor: "#1c3a5c",
           borderWidth: 1,
           padding: 10,
           usePointStyle: true,
           callbacks: {
-            label: (ctx) => {
+            title: items => items[0]
+              ? new Date(items[0].parsed.x).toLocaleTimeString("de-DE")
+              : "",
+            label: ctx => {
+              if (ctx.dataset.label.startsWith("_")) return null;
               const v = ctx.parsed.y;
               if (v == null || isNaN(v)) return null;
-              const decimals = {
+              const dec = {
                 "p1 [bar]": 3, "p2 [bar]": 3, "Δp [bar]": 3,
-                "Q [l/min]": 1, "R_eff [bar·min/l]": 5, "Reststandzeit [min]": 1,
+                "Q [l/min]": 1, "Temp [°C]": 1,
+                "R_eff [bar·min/l]": 5, "Reststandzeit [min]": 1,
+                "Referenz Δp": 3, "Toleranzband": 3,
               };
-              return ` ${ctx.dataset.label}: ${v.toFixed(decimals[ctx.dataset.label] ?? 2)}`;
+              return ` ${ctx.dataset.label}: ${v.toFixed(dec[ctx.dataset.label] ?? 2)}`;
             },
           },
         },
@@ -544,14 +557,14 @@ function initCharts() {
               type: "line",
               scaleID: "yPressure",
               value: dpLimit,
-              borderColor: "rgba(192, 57, 43, 0.65)",
+              borderColor: "rgba(192,57,43,0.65)",
               borderWidth: 1.5,
               borderDash: [6, 3],
               label: {
                 display: true,
                 content: `dp-Limit (${Number(dpLimit).toFixed(2)} bar)`,
                 position: "end",
-                backgroundColor: "rgba(192, 57, 43, 0.08)",
+                backgroundColor: "rgba(192,57,43,0.08)",
                 color: "#c0392b",
                 font: { size: 10 },
                 padding: { x: 5, y: 2 },
@@ -562,23 +575,37 @@ function initCharts() {
       },
       scales: {
         x: {
-          ticks: { maxTicksLimit: 8, maxRotation: 0, font: { size: 10 }, color: "#5f6878" },
+          type: "linear",
+          ticks: {
+            maxTicksLimit: 8,
+            maxRotation: 0,
+            font: { size: 10 },
+            color: "#5f6878",
+            callback: val => new Date(val).toLocaleTimeString("de-DE"),
+          },
           grid: { color: "rgba(100,130,160,0.12)" },
         },
         yPressure: {
           type: "linear",
           position: "left",
           min: 0,
-          title: { display: true, text: "Druck [bar]", font: { size: 10 }, color: "#0077cc" },
-          ticks: { font: { size: 10 }, color: "#0077cc" },
+          title: { display: true, text: "Druck [bar]", font: { size: 10 }, color: DS_COLORS.dp },
+          ticks: { font: { size: 10 }, color: DS_COLORS.dp },
           grid: { color: "rgba(100,130,160,0.12)" },
         },
         yFlow: {
           type: "linear",
           position: "right",
           min: 0,
-          title: { display: true, text: "Durchfluss [l/min]", font: { size: 10 }, color: "#1a9e3c" },
-          ticks: { font: { size: 10 }, color: "#1a9e3c" },
+          title: { display: true, text: "Durchfluss [l/min]", font: { size: 10 }, color: DS_COLORS.flow },
+          ticks: { font: { size: 10 }, color: DS_COLORS.flow },
+          grid: { drawOnChartArea: false },
+        },
+        yTemp: {
+          type: "linear",
+          position: "right",
+          display: false,
+          min: 0,
           grid: { drawOnChartArea: false },
         },
         yReff: {
@@ -602,19 +629,18 @@ function initCharts() {
 
 function pushChartData(status) {
   if (!combinedChart) return;
-  const label = new Date().toLocaleTimeString("de-DE");
+  const now = Date.now();
   const remMin = status.remaining_seconds != null ? status.remaining_seconds / 60 : null;
-  const datasets = combinedChart.data.datasets;
-  combinedChart.data.labels.push(label);
-  datasets[0].data.push(status.p1_bar ?? null);
-  datasets[1].data.push(status.p2_bar ?? null);
-  datasets[2].data.push(status.dp_bar ?? null);
-  datasets[3].data.push(status.flow_l_min ?? null);
-  datasets[4].data.push(status.r_eff ?? null);
-  datasets[5].data.push(remMin);
-  if (combinedChart.data.labels.length > MAX_CHART_POINTS) {
-    combinedChart.data.labels.shift();
-    datasets.forEach(ds => ds.data.shift());
+  const ds = combinedChart.data.datasets;
+  ds[0].data.push({ x: now, y: status.p1_bar ?? null });
+  ds[1].data.push({ x: now, y: status.p2_bar ?? null });
+  ds[2].data.push({ x: now, y: status.dp_bar ?? null });
+  ds[3].data.push({ x: now, y: status.flow_l_min ?? null });
+  ds[4].data.push({ x: now, y: status.temperature_c ?? null });
+  ds[5].data.push({ x: now, y: status.r_eff ?? null });
+  ds[6].data.push({ x: now, y: remMin });
+  for (let i = 0; i < 7; i++) {
+    if (ds[i].data.length > MAX_CHART_POINTS) ds[i].data.shift();
   }
   combinedChart.update("none");
 }
@@ -624,98 +650,8 @@ function resetChartZoom() {
 }
 
 // ============================================================
-// Analysediagramm – Zyklus vs. Referenzkurve
+// Referenz-Overlay im Live-Chart (Zyklus vs. Referenzkurve)
 // ============================================================
-
-function _buildCycleChartConfig(currentLabel, currentData, refData) {
-  const datasets = [];
-  if (refData && refData.length > 0) {
-    datasets.push({
-      label: "Referenzkurve Δp",
-      data: refData,
-      borderColor: "#0077cc",
-      backgroundColor: "rgba(0,119,204,0.07)",
-      borderWidth: 2,
-      borderDash: [6, 3],
-      pointRadius: 0,
-      tension: 0.3,
-      fill: true,
-    });
-  }
-  if (currentData && currentData.length > 0) {
-    datasets.push({
-      label: currentLabel,
-      data: currentData,
-      borderColor: "#e07800",
-      backgroundColor: "transparent",
-      borderWidth: 2,
-      pointRadius: 0,
-      tension: 0.3,
-    });
-  }
-  return {
-    type: "line",
-    data: { datasets },
-    options: {
-      animation: false,
-      responsive: true,
-      maintainAspectRatio: false,
-      parsing: false,
-      interaction: { mode: "index", intersect: false },
-      plugins: {
-        legend: {
-          display: true,
-          position: "top",
-          labels: { usePointStyle: true, padding: 14, font: { size: 11 }, color: "#1a1a2e" },
-        },
-        tooltip: {
-          callbacks: {
-            label: ctx => `${ctx.dataset.label}: ${Number(ctx.parsed.y).toFixed(3)} bar`,
-          },
-        },
-      },
-      scales: {
-        x: {
-          type: "linear",
-          title: { display: true, text: "Zyklusfortschritt [%]", font: { size: 11 } },
-          min: 0,
-          ticks: { font: { size: 10 } },
-        },
-        y: {
-          type: "linear",
-          title: { display: true, text: "Δp [bar]", font: { size: 11 } },
-          min: 0,
-          ticks: { font: { size: 10 } },
-        },
-      },
-    },
-  };
-}
-
-function _refDataFromCurve(refCurve) {
-  if (!refCurve?.curve?.length) return [];
-  return refCurve.curve.map(p => ({ x: p.t_pct, y: p.dp }));
-}
-
-function _cycleDataFromSamples(samples, durationSeconds) {
-  if (!samples?.length) return [];
-  // Für abgeschlossene Zyklen: cycle_second / duration → Prozent
-  if (durationSeconds > 0) {
-    return samples.map(s => ({ x: (s.cycle_second / durationSeconds) * 100, y: s.dp_bar }));
-  }
-  // Fallback: cycle_second direkt als x
-  return samples.map(s => ({ x: s.cycle_second, y: s.dp_bar }));
-}
-
-function _activeCycleData(activeCycle) {
-  if (!activeCycle?.samples?.length) return [];
-  // t_pct ist vorhanden wenn Referenz bekannt, sonst cycle_second
-  const hasRef = activeCycle.ref_duration_seconds > 0;
-  return activeCycle.samples.map(s => ({
-    x: hasRef ? (s.t_pct ?? (s.cycle_second / activeCycle.ref_duration_seconds * 100)) : s.cycle_second,
-    y: s.dp_bar,
-  }));
-}
 
 async function _getRefCurve(hetaCode) {
   if (!hetaCode) return null;
@@ -729,125 +665,171 @@ async function _getRefCurve(hetaCode) {
   return null;
 }
 
-function initCycleAnalysisChart() {
-  const ctx = document.getElementById("chart-cycle-analysis");
-  if (!ctx || cycleAnalysisChart) return;
-  cycleAnalysisChart = new Chart(ctx, _buildCycleChartConfig("Aktueller Zyklus Δp", [], []));
-}
-
-async function updateCycleAnalysisChart(status) {
-  if (_activeTab !== "system") return;
-
-  const hetaCode = status?.heta_code;
+async function updateReferenceOverlay(status) {
+  if (!combinedChart) return;
+  const hetaCode    = status?.heta_code;
   const cycleActive = !!status?.cycle_active;
+  const startTime   = status?.cycle_start_time;
+  const ds = combinedChart.data.datasets;
 
-  // Referenzkurve laden (gecacht)
-  const refCurve = hetaCode ? await _getRefCurve(hetaCode) : null;
-  const refData = _refDataFromCurve(refCurve);
-
-  const noDataEl    = document.getElementById("cycle-analysis-no-data");
-  const container   = document.getElementById("cycle-analysis-container");
-  const badge       = document.getElementById("cycle-analysis-badge");
-
-  if (!cycleActive || !refData.length) {
-    if (noDataEl) noDataEl.style.display = "";
-    if (container) container.style.display = "none";
-    if (badge) { badge.style.display = "none"; }
+  if (!cycleActive || !hetaCode || !startTime) {
+    if (ds[9].data.length > 0) {
+      ds[7].data = []; ds[8].data = []; ds[9].data = [];
+      combinedChart.update("none");
+    }
+    _knownCycleStart = null;
     return;
   }
 
-  if (noDataEl) noDataEl.style.display = "none";
-  if (container) container.style.display = "";
+  // Gleicher Zyklus + Referenz schon geladen → nichts tun
+  if (startTime === _knownCycleStart && ds[9].data.length > 0) return;
+  _knownCycleStart = startTime;
 
-  if (!cycleAnalysisChart) initCycleAnalysisChart();
+  const refCurve = await _getRefCurve(hetaCode);
+  if (!refCurve?.curve?.length) return;
 
-  // Aktiven Zyklus fetchen
-  const activeCycle = await apiFetch("/api/active-cycle");
-  const currentData = _activeCycleData(activeCycle);
+  const startMs  = startTime * 1000;
+  const refDurMs = (refCurve.reference_duration_seconds || 300) * 1000;
+  const tol      = refCurve.tolerance_pct ?? 0.25;
 
-  // Chart zurückbauen wenn Zyklus neu gestartet
-  const startTime = activeCycle?.start_time;
-  if (startTime !== _knownCycleStart) {
-    _knownCycleStart = startTime;
-    if (cycleAnalysisChart) { cycleAnalysisChart.destroy(); cycleAnalysisChart = null; }
-    initCycleAnalysisChart();
+  const upper = [], lower = [], center = [];
+  for (const pt of refCurve.curve) {
+    const xMs = startMs + (pt.t_pct / 100) * refDurMs;
+    center.push({ x: xMs, y: pt.dp });
+    upper.push({  x: xMs, y: pt.dp * (1 + tol) });
+    lower.push({  x: xMs, y: Math.max(0, pt.dp * (1 - tol)) });
   }
-
-  if (cycleAnalysisChart) {
-    cycleAnalysisChart.data.datasets[0].data = refData;
-    if (cycleAnalysisChart.data.datasets.length > 1)
-      cycleAnalysisChart.data.datasets[1].data = currentData;
-    else
-      cycleAnalysisChart.data.datasets.push({
-        label: "Aktueller Zyklus Δp",
-        data: currentData,
-        borderColor: "#e07800",
-        backgroundColor: "transparent",
-        borderWidth: 2,
-        pointRadius: 0,
-        tension: 0.3,
-      });
-    cycleAnalysisChart.update("none");
-  }
-
-  const elapsedMin = activeCycle?.elapsed_seconds
-    ? Math.round(activeCycle.elapsed_seconds / 60) : 0;
-  if (badge) {
-    badge.textContent = `Laufzeit: ${elapsedMin} min`;
-    badge.className = "badge badge-ok";
-    badge.style.display = "";
-  }
+  ds[7].data = upper;
+  ds[8].data = lower;
+  ds[9].data = center;
+  combinedChart.update("none");
 }
 
 // ============================================================
 // Zyklus-Diagramm Modal (vergangene Zyklen)
 // ============================================================
 
+function _buildCycleChartConfig(cycleLabel, cycleData, refCurve) {
+  const tolPct = refCurve?.tolerance_pct ?? 0.25;
+  const refCenter = refCurve?.curve?.length
+    ? refCurve.curve.map(p => ({ x: p.t_pct, y: p.dp })) : [];
+  const refUpper  = refCurve?.curve?.length
+    ? refCurve.curve.map(p => ({ x: p.t_pct, y: p.dp * (1 + tolPct) })) : [];
+  const refLower  = refCurve?.curve?.length
+    ? refCurve.curve.map(p => ({ x: p.t_pct, y: Math.max(0, p.dp * (1 - tolPct)) })) : [];
+
+  const pct = tolPct * 100;
+  return {
+    type: "line",
+    data: {
+      datasets: [
+        { label: `Toleranzband ±${pct.toFixed(0)} %`, data: refUpper,
+          borderColor: DS_COLORS.tolEdge, backgroundColor: DS_COLORS.tolBand,
+          borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3,
+          parsing: false, fill: "+1" },
+        { label: "_tol_lower", data: refLower,
+          borderColor: DS_COLORS.tolEdge, backgroundColor: "transparent",
+          borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3,
+          parsing: false, fill: false },
+        { label: "Referenz Δp", data: refCenter,
+          borderColor: DS_COLORS.refLine, backgroundColor: "transparent",
+          borderWidth: 1.5, borderDash: [10, 5], pointRadius: 0, tension: 0.3,
+          parsing: false },
+        { label: cycleLabel, data: cycleData,
+          borderColor: DS_COLORS.dp, backgroundColor: "rgba(0,82,163,0.07)",
+          borderWidth: 2.5, pointRadius: 0, tension: 0.3,
+          parsing: false, fill: "origin" },
+      ],
+    },
+    options: {
+      animation: false, responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          display: true, position: "top",
+          labels: { usePointStyle: true, padding: 14, font: { size: 11 }, color: "#1a1a2e",
+            filter: item => !item.text.startsWith("_") },
+        },
+        tooltip: {
+          backgroundColor: "rgba(12,22,38,0.95)",
+          titleColor: "#a8c8f0", bodyColor: "#dde8f5",
+          borderColor: "#1c3a5c", borderWidth: 1, padding: 9,
+          usePointStyle: true,
+          callbacks: {
+            title: items => items[0] ? `Fortschritt: ${Number(items[0].parsed.x).toFixed(1)} %` : "",
+            label: ctx => {
+              if (ctx.dataset.label.startsWith("_")) return null;
+              const v = ctx.parsed.y;
+              if (v == null || isNaN(v)) return null;
+              return ` ${ctx.dataset.label}: ${v.toFixed(3)} bar`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { type: "linear", min: 0,
+          title: { display: true, text: "Zyklusfortschritt [%]", font: { size: 11 } },
+          ticks: { font: { size: 10 }, color: "#5f6878" },
+          grid: { color: "rgba(100,130,160,0.12)" } },
+        y: { type: "linear", min: 0,
+          title: { display: true, text: "Δp [bar]", font: { size: 11 } },
+          ticks: { font: { size: 10 } },
+          grid: { color: "rgba(100,130,160,0.12)" } },
+      },
+    },
+  };
+}
+
+function _cycleDataFromSamples(samples, durationSeconds) {
+  if (!samples?.length) return [];
+  if (durationSeconds > 0)
+    return samples.map(s => ({ x: (s.cycle_second / durationSeconds) * 100, y: s.dp_bar }));
+  return samples.map(s => ({ x: s.cycle_second, y: s.dp_bar }));
+}
+
 async function openCycleModal(cycleId, cycleNum, dateStr, hetaCode, durationSeconds, eventsJson) {
-  const overlay = document.getElementById("cycle-modal-overlay");
-  const titleEl = document.getElementById("cycle-modal-title");
+  const overlay  = document.getElementById("cycle-modal-overlay");
+  const titleEl  = document.getElementById("cycle-modal-title");
   const eventsEl = document.getElementById("cycle-modal-events");
   if (!overlay) return;
 
   if (titleEl) titleEl.textContent = `Filterzyklus #${cycleNum} – ${dateStr}`;
 
-  // Events anzeigen
   let events = [];
   try { events = JSON.parse(eventsJson || "[]"); } catch (_) {}
   if (eventsEl) {
-    if (events.length === 0) {
+    if (!events.length) {
       eventsEl.innerHTML = '<p style="color:var(--ok-green);margin:0">&#10003; Keine Problemmeldungen in diesem Zyklus.</p>';
     } else {
+      const sevColor = s => s === "FEHLER" ? "var(--alert-red)" : "var(--warn-yellow)";
       const rows = events.map(e => {
         const ts = e.ts ? new Date(e.ts * 1000).toLocaleTimeString("de-DE") : "";
-        const color = e.severity === "FEHLER" ? "var(--alert-red)"
-                    : e.severity === "WECHSEL" ? "var(--warn-yellow)"
-                    : "var(--warn-yellow)";
-        return `<div style="display:flex;gap:0.75rem;padding:0.4rem 0;border-bottom:1px solid var(--border)">
-          <span style="color:${color};font-weight:600;min-width:5rem">${e.severity}</span>
+        return `<div style="display:flex;gap:.75rem;padding:.4rem 0;border-bottom:1px solid var(--border)">
+          <span style="color:${sevColor(e.severity)};font-weight:600;min-width:5rem">${e.severity}</span>
           <span style="color:var(--text-muted);min-width:4rem">${ts}</span>
           <span>${e.message}</span>
         </div>`;
       }).join("");
-      eventsEl.innerHTML = `<h3 style="margin:0 0 0.5rem;font-size:0.9rem">Ereignisse</h3>${rows}`;
+      eventsEl.innerHTML = `<h3 style="margin:0 0 .5rem;font-size:.9rem">Ereignisse</h3>${rows}`;
     }
   }
 
   overlay.classList.remove("hidden");
 
-  // Daten laden
   const [samples, refCurve] = await Promise.all([
     apiFetch(`/api/cycle-samples/${cycleId}`),
     hetaCode ? _getRefCurve(hetaCode) : Promise.resolve(null),
   ]);
 
-  const currentData = _cycleDataFromSamples(samples || [], durationSeconds);
-  const refData = _refDataFromCurve(refCurve);
-
   const ctx = document.getElementById("chart-cycle-modal");
   if (!ctx) return;
   if (cycleModalChart) { cycleModalChart.destroy(); cycleModalChart = null; }
-  cycleModalChart = new Chart(ctx, _buildCycleChartConfig(`Zyklus #${cycleNum} Δp`, currentData, refData));
+  cycleModalChart = new Chart(ctx,
+    _buildCycleChartConfig(
+      `Zyklus #${cycleNum} Δp`,
+      _cycleDataFromSamples(samples || [], durationSeconds),
+      refCurve,
+    ));
 }
 
 function closeCycleModal() {

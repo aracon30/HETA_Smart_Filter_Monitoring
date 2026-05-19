@@ -824,25 +824,10 @@
         <pre id="service-report-text"></pre>
       </section>
 
-      <!-- Analysediagramm: aktueller Zyklus vs. Referenzkurve -->
-      <section class="charts" id="cycle-analysis-section">
-        <div class="section-header">
-          <h2 class="section-title">Analysediagramm – Aktueller Zyklus vs. Referenzkurve</h2>
-          <span id="cycle-analysis-badge" class="badge badge-observe" style="display:none"></span>
-        </div>
-        <div id="cycle-analysis-no-data" class="empty-state" style="padding:1.5rem 0">
-          <p style="margin:0">Kein aktiver Zyklus oder Referenzkurve noch nicht verfügbar.</p>
-          <small>Mindestens 3 bestätigte Filterzyklen mit aktivem HETA-Code erforderlich.</small>
-        </div>
-        <div class="chart-container" id="cycle-analysis-container" style="display:none">
-          <canvas id="chart-cycle-analysis"></canvas>
-        </div>
-      </section>
-
       <!-- Verlaufsdiagramm -->
       <section class="charts">
         <div class="section-header">
-          <h2 class="section-title">Verlaufsdiagramm</h2>
+          <h2 class="section-title">Live-Verlauf &amp; Referenz</h2>
           <div class="chart-controls">
             <span class="chart-hint">Mausrad&nbsp;=&nbsp;Zoom &nbsp;&middot;&nbsp; Ziehen&nbsp;=&nbsp;Verschieben</span>
             <button class="btn btn-ghost btn-sm" onclick="resetChartZoom()">Zoom zurücksetzen</button>
