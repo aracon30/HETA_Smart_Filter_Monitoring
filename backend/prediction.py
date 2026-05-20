@@ -104,9 +104,9 @@ class PredictionEngine:
 
     def update(self, dp_bar: float) -> Optional[float]:
         """
-        Nimmt den aktuellen Differenzdruck entgegen und gibt die
-        Reststandzeit in Sekunden zurück (oder None wenn noch nicht berechenbar).
-        Die Berechnung basiert ausschließlich auf aktuellen Messwerten.
+        Fallback für die Lernphase (kein valides Profil): berechnet Reststandzeit
+        aus der gemessenen Beladungsrate (lineare Regression über dp-Verlauf).
+        Wird nur verwendet solange kein Referenzprofil vorliegt.
         """
         self._dp_history.append(dp_bar)
         if len(self._dp_history) > self._history_window:
@@ -121,16 +121,38 @@ class PredictionEngine:
         if self._last_remaining is None:
             self._last_remaining = raw_remaining
         elif raw_remaining < self._last_remaining:
-            # Abfall: sofort folgen (reale Beladung widerspiegeln)
             self._last_remaining = raw_remaining
         else:
-            # Anstieg dämpfen: max +5 % pro Tick (verhindert Sprünge durch Rauschen)
             capped = min(raw_remaining, self._last_remaining * 1.05)
             self._last_remaining = self._last_remaining + 0.4 * (capped - self._last_remaining)
 
         return self._last_remaining
 
-    # update_curve_based bleibt für Kompatibilität erhalten, leitet aber auf update() um
+    def update_with_reference(self, dp_bar: float, ref_rate: float) -> float:
+        """
+        Berechnet Reststandzeit anhand der gelernten Referenz-Beladungsrate.
+
+        remaining = (dp_limit − dp_bar) / ref_rate
+
+        Eigenschaften:
+        - Ergibt eine Gerade im Diagramm wenn die Beladung der Referenz entspricht
+        - Passt sich automatisch an: mehr Schmutz → dp steigt schneller → Restzeit kürzer
+        - Erreicht natürlich 0 wenn dp_bar = dp_limit, kein harter Sprung
+        - Anstieg wird leicht gedämpft (Messrauschen), Abfall folgt sofort
+        """
+        raw_remaining = max(0.0, (self.dp_limit - dp_bar) / max(ref_rate, self.min_slope))
+
+        if self._last_remaining is None or raw_remaining <= self._last_remaining:
+            # Abfall oder Erstberechnung: sofort folgen
+            self._last_remaining = raw_remaining
+        else:
+            # Anstieg durch Rauschen dämpfen: max +2 %/Tick
+            capped = min(raw_remaining, self._last_remaining * 1.02)
+            self._last_remaining = self._last_remaining + 0.3 * (capped - self._last_remaining)
+
+        return self._last_remaining
+
+    # update_curve_based: Kompatibilitäts-Stub
     def update_curve_based(
         self,
         elapsed_seconds: float,

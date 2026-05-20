@@ -673,9 +673,19 @@ def _measurement_loop():
                 temp_dev           = analysis["temp_deviation"]
 
         # ── Reststandzeit berechnen ───────────────────────────────────────
-        # Immer aus aktuellen Messwerten: (dp_limit − dp_bar) / Beladungsrate.
-        # Nähert sich natürlich 0 wenn dp → dp_limit; kein harter Sprung.
-        remaining_s = predictor.update(fs.dp_bar)
+        if profile_valid and heta_activated and profile:
+            # Referenz-Beladungsrate aus Lernzyklen: gibt eine Gerade im Diagramm.
+            # Passt sich automatisch an wenn dp schneller/langsamer steigt.
+            ref_dp_clean = (profile.get("reference_dp_clean") or 0.0) or settings.get("dp_clean_bar", 0.2)
+            ref_duration = profile.get("reference_duration_seconds") or 0.0
+            if ref_duration > 0:
+                ref_rate = (dp_limit - ref_dp_clean) / ref_duration
+                remaining_s = predictor.update_with_reference(fs.dp_bar, ref_rate)
+            else:
+                remaining_s = predictor.update(fs.dp_bar)
+        else:
+            # Lernphase: Beladungsrate aus aktuellen Messwerten schätzen
+            remaining_s = predictor.update(fs.dp_bar)
 
         # ── Lernwert erfassen (mit Beladungsgrad und Reststandzeit) ───────
         if cycle_active and not sensor_error:
