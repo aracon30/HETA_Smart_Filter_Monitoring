@@ -161,13 +161,13 @@ function buildSummary() {
     ? "Hardwaremodus" : "Simulationsmodus";
   const lines = [
     ["Betriebsart", mode],
-    ["dp-Grenzwert", `${document.getElementById("ob-dp-limit").value} bar`],
-    ["Sauberdruckabfall (dp_clean)", "Wird automatisch aus Lernzyklen berechnet"],
-    ["Max. Durchfluss", `${document.getElementById("ob-flow-max").value} l/min`],
-    ["Druckbereich", `${document.getElementById("ob-pressure-range").value} bar`],
-    ["Temperatur", `${document.getElementById("ob-temp-min").value} – ${document.getElementById("ob-temp-max").value} °C`],
-    ["Toleranz Δp / R_eff", `±${document.getElementById("ob-tol-dp").value} % / ±${document.getElementById("ob-tol-reff").value} %`],
-    ["Toleranz Q / T", `±${document.getElementById("ob-tol-flow").value} % / ±${document.getElementById("ob-tol-temp").value} °C`],
+    ["Grenzwert Filterwechsel (Δp)", `${document.getElementById("ob-dp-limit").value} bar`],
+    ["Druckabfall sauberes Filter", "Wird automatisch aus Lernzyklen berechnet"],
+    ["Maximaler Volumenstrom", `${document.getElementById("ob-flow-max").value} l/min`],
+    ["Messbereich Drucksensoren", `${document.getElementById("ob-pressure-range").value} bar`],
+    ["Messbereich Temperatur", `${document.getElementById("ob-temp-min").value} – ${document.getElementById("ob-temp-max").value} °C`],
+    ["Toleranz Δp / Widerstandsfaktor", `±${document.getElementById("ob-tol-dp").value} % / ±${document.getElementById("ob-tol-reff").value} %`],
+    ["Toleranz Volumenstrom / Temperatur", `±${document.getElementById("ob-tol-flow").value} % / ±${document.getElementById("ob-tol-temp").value} °C`],
     ["Passwort", "••••••"],
   ];
   document.getElementById("ob-summary").innerHTML = lines
@@ -332,6 +332,20 @@ async function loadSettingsIntoForm() {
     // p1-Regler-Maximum synchronisieren
     const slP1 = document.getElementById("sl-p1");
     if (slP1) slP1.max = s.pressure_range_bar ?? 10;
+
+    // dp_clean aus Profil laden (wird aus Lernzyklen berechnet)
+    const hetaCode = window._lastStatus?.heta_code;
+    if (hetaCode) {
+      try {
+        const profile = await apiFetch(`/api/profile?heta_code=${encodeURIComponent(hetaCode)}`);
+        const dpCleanEl = document.getElementById("s-dp-clean-display");
+        if (dpCleanEl) {
+          dpCleanEl.textContent = (profile?.reference_dp_clean > 0)
+            ? fmt(profile.reference_dp_clean, 3)
+            : "–";
+        }
+      } catch (_) { /* Profil noch nicht vorhanden */ }
+    }
   } catch (e) { console.warn("Einstellungen konnten nicht geladen werden.", e); }
 }
 

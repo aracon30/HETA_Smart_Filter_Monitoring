@@ -97,22 +97,22 @@
         <h2>Filterparameter</h2>
         <div class="form-grid">
           <label>
-            Differenzdruck-Grenzwert (dp_limit)
+            Grenzwert Filterwechsel (Δp)
             <div class="input-unit-row">
               <input type="number" id="ob-dp-limit" value="2.5" min="0.1" max="20" step="0.1" />
               <span class="unit-label">bar</span>
             </div>
-            <small>Beim Überschreiten wird Filterwechsel ausgelöst.</small>
+            <small>Filterwechsel wird ausgelöst wenn der Differenzdruck diesen Wert überschreitet.</small>
           </label>
           <label style="color:var(--text-muted)">
-            Sauberdruckabfall (dp_clean)
+            Druckabfall bei sauberem Filterelement
             <div class="input-unit-row" style="opacity:0.6">
               <span style="padding:6px 10px;font-size:0.9rem">Wird automatisch aus den Lernzyklen berechnet</span>
             </div>
             <small>Der Ø Druckabfall des frischen Filters wird aus den Start-dp-Werten der 3 Lernzyklen ermittelt.</small>
           </label>
           <label>
-            Max. Durchfluss (flow_max)
+            Maximaler Volumenstrom (Sensorendwert 20 mA)
             <div class="input-unit-row">
               <input type="number" id="ob-flow-max" value="150" min="1" max="5000" step="1" />
               <span class="unit-label">l/min</span>
@@ -120,7 +120,7 @@
             <small>Entspricht dem 20 mA-Endwert des Durchflusssensors.</small>
           </label>
           <label>
-            Druckbereich Sensoren
+            Messbereich Drucksensoren
             <div class="input-unit-row">
               <input type="number" id="ob-pressure-range" value="10" min="1" max="100" step="1" />
               <span class="unit-label">bar</span>
@@ -133,30 +133,30 @@
         </p>
         <div class="form-grid">
           <label>
-            Δp-Toleranz
+            Toleranz Differenzdruck Δp
             <div class="input-unit-row">
               <input type="number" id="ob-tol-dp" value="25" min="1" max="100" step="1" />
               <span class="unit-label">%</span>
             </div>
-            <small>Toleranz für Differenzdruck – steuert Toleranzband im Diagramm.</small>
+            <small>Erlaubte Abweichung vom Referenzprofil – steuert Toleranzband im Diagramm.</small>
           </label>
           <label>
-            R_eff-Toleranz
+            Toleranz Widerstandsfaktor
             <div class="input-unit-row">
               <input type="number" id="ob-tol-reff" value="25" min="1" max="100" step="1" />
               <span class="unit-label">%</span>
             </div>
-            <small>Toleranz für Filterwiderstand und Startanomalien.</small>
+            <small>Erlaubte Abweichung für Filterwiderstand und Startanomalien.</small>
           </label>
           <label>
-            Durchfluss-Toleranz
+            Toleranz Volumenstrom Q
             <div class="input-unit-row">
               <input type="number" id="ob-tol-flow" value="25" min="1" max="100" step="1" />
               <span class="unit-label">%</span>
             </div>
           </label>
           <label>
-            Temperatur-Toleranz
+            Toleranz Temperatur
             <div class="input-unit-row">
               <input type="number" id="ob-tol-temp" value="10" min="1" max="50" step="1" />
               <span class="unit-label">°C</span>
@@ -171,14 +171,14 @@
         <p>Messbereich des Temperatursensors (ifm TA2405). Standardwerte können übernommen werden.</p>
         <div class="form-grid">
           <label>
-            Temperatur Minimum
+            Untere Messbereichsgrenze Temperatur
             <div class="input-unit-row">
               <input type="number" id="ob-temp-min" value="-50" min="-200" max="0" step="1" />
               <span class="unit-label">°C</span>
             </div>
           </label>
           <label>
-            Temperatur Maximum
+            Obere Messbereichsgrenze Temperatur
             <div class="input-unit-row">
               <input type="number" id="ob-temp-max" value="150" min="50" max="500" step="1" />
               <span class="unit-label">°C</span>
@@ -262,29 +262,30 @@
           <h3>Filterparameter</h3>
           <div class="form-grid">
             <label>
-              dp_limit [bar]
+              Grenzwert Filterwechsel (Δp)
               <div class="input-unit-row">
                 <input type="number" id="s-dp-limit" min="0.1" max="20" step="0.1" />
                 <span class="unit-label">bar</span>
               </div>
+              <small>Filterwechsel wird ausgelöst wenn der Differenzdruck diesen Wert überschreitet.</small>
             </label>
             <label style="color:var(--text-muted)">
-              Sauberdruckabfall dp_clean
+              Druckabfall bei sauberem Filterelement
               <div class="input-unit-row" style="opacity:0.6;pointer-events:none">
                 <span id="s-dp-clean-display" style="padding:6px 10px;font-size:0.9rem">–</span>
                 <span class="unit-label">bar</span>
               </div>
-              <small>Automatisch aus Lernzyklen berechnet (Ø start_dp)</small>
+              <small>Wird automatisch aus den Startwerten der 3 Lernzyklen berechnet.</small>
             </label>
             <label>
-              Durchfluss Maximum
+              Maximaler Volumenstrom (Sensorendwert 20 mA)
               <div class="input-unit-row">
                 <input type="number" id="s-flow-max" min="1" max="5000" step="1" />
                 <span class="unit-label">l/min</span>
               </div>
             </label>
             <label>
-              Druckbereich Sensoren
+              Messbereich Drucksensoren
               <div class="input-unit-row">
                 <input type="number" id="s-pressure-range" min="1" max="100" step="1" />
                 <span class="unit-label">bar</span>
@@ -294,36 +295,36 @@
         </div>
 
         <div class="settings-section">
-          <h3>Toleranzen (Abweichungsgrenzen)</h3>
+          <h3>Toleranzen</h3>
           <p class="settings-hint">Maximale Abweichung vom gelernten Referenzprofil. Bis zur Grenze: OK (grün) – bis 2× Grenze: Warnung (gelb) – darüber: Alarm (rot). Betrifft Diagramm-Toleranzband und Analysetabelle.</p>
           <div class="form-grid">
             <label>
-              Differenzdruck Δp
-              <small>Toleranz in ±%</small>
+              Toleranz Differenzdruck Δp
+              <small>Erlaubte Abweichung in ±%</small>
               <div class="input-unit-row">
                 <input type="number" id="s-tol-dp" min="1" max="100" step="1" />
                 <span class="unit-label">%</span>
               </div>
             </label>
             <label>
-              Filterwiderstand R_eff
-              <small>Toleranz in ±% (auch für Startanomalien)</small>
+              Toleranz Widerstandsfaktor
+              <small>Erlaubte Abweichung in ±% (auch für Startanomalien)</small>
               <div class="input-unit-row">
                 <input type="number" id="s-tol-reff" min="1" max="100" step="1" />
                 <span class="unit-label">%</span>
               </div>
             </label>
             <label>
-              Durchfluss Q
-              <small>Toleranz in ±%</small>
+              Toleranz Volumenstrom Q
+              <small>Erlaubte Abweichung in ±%</small>
               <div class="input-unit-row">
                 <input type="number" id="s-tol-flow" min="1" max="100" step="1" />
                 <span class="unit-label">%</span>
               </div>
             </label>
             <label>
-              Temperatur T
-              <small>Toleranz in ±°C (absolut)</small>
+              Toleranz Temperatur
+              <small>Erlaubte Abweichung in ±°C (absolut)</small>
               <div class="input-unit-row">
                 <input type="number" id="s-tol-temp" min="1" max="50" step="1" />
                 <span class="unit-label">°C</span>
@@ -336,14 +337,14 @@
           <h3>Temperatursensor</h3>
           <div class="form-grid">
             <label>
-              Temp. Minimum
+              Untere Messbereichsgrenze Temperatur
               <div class="input-unit-row">
                 <input type="number" id="s-temp-min" min="-200" max="0" step="1" />
                 <span class="unit-label">°C</span>
               </div>
             </label>
             <label>
-              Temp. Maximum
+              Obere Messbereichsgrenze Temperatur
               <div class="input-unit-row">
                 <input type="number" id="s-temp-max" min="50" max="500" step="1" />
                 <span class="unit-label">°C</span>
@@ -356,11 +357,12 @@
           <h3>Betrieb</h3>
           <div class="form-grid">
             <label>
-              Abtastintervall
+              Messintervall
               <div class="input-unit-row">
                 <input type="number" id="s-interval" min="1" max="60" step="1" />
                 <span class="unit-label">s</span>
               </div>
+              <small>Zeitabstand zwischen zwei Messwerten.</small>
             </label>
             <label class="checkbox-label">
               <input type="checkbox" id="s-simulation-mode" onchange="onSimModeToggle(this)" />
