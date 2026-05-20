@@ -1,31 +1,55 @@
 # HETA Smart Filter Monitoring
 
 Industrielles Filterüberwachungssystem für den **Raspberry Pi 5**. Erfasst 4–20-mA-Sensordaten
-via AnoPi Shield (SPI-ADC), berechnet den Filterzustand und stellt eine lokale Weboberfläche,
-ein OLED-Display mit Encoder-Navigation sowie ein MQTT-Interface bereit.
+via AnoPi Shield (SPI-ADC), berechnet den Filterzustand in Echtzeit und stellt bereit:
+
+- **Weboberfläche** (lokal, kein Internet erforderlich) mit Live-Diagrammen und Reststandzeit
+- **OLED-Display** (Waveshare 2.42") mit Encoder-Navigation für den direkten Einsatz am Gerät
+- **MQTT-Interface** für die optionale Anbindung an übergeordnete Leitsysteme
+- **Lernprofil** – nach 3 Filterzyklen sekundengenaue Reststandzeit-Prognose
 
 **Betriebsmodi:**
-- **Realbetrieb** (Standard) – echte Sensoren via AnoPi Shield
-- **Simulationsmodus** – explizit konfiguriert, nur für Tests
 
-Kein automatischer Simulations-Fallback. Ein Sensorausfall stoppt die Messung und fordert den
-Bediener zur Prüfung auf.
+| Modus | Beschreibung |
+|-------|-------------|
+| Hardware (Standard) | Echte Sensormessung via 4–20 mA / AnoPi Shield |
+| Simulation | Simulierter Filterkreislauf – ausschließlich für Tests und Präsentationen |
+
+Kein automatischer Simulations-Fallback. Ein Sensorausfall stoppt die Messung sofort und
+fordert den Bediener zur Prüfung auf.
+
+---
+
+## Inhaltsverzeichnis
+
+1. [Hardware](#hardware)
+2. [Installation](#installation)
+3. [Ersteinrichtung (Onboarding)](#ersteinrichtung-onboarding)
+4. [HETA-Code und Prognose](#heta-code-und-prognose)
+5. [Konfiguration](#konfiguration)
+6. [Software-Update](#software-update)
+7. [Projektstruktur](#projektstruktur)
+8. [REST-API](#rest-api)
+9. [Fehlersuche](#fehlersuche)
 
 ---
 
 ## Hardware
 
-| Komponente              | Funktion                                      |
-|-------------------------|-----------------------------------------------|
-| Raspberry Pi 5          | Zentrale Recheneinheit                        |
-| AnoPi Raspberry Shield  | 4 × 4–20 mA Analogeingänge (SPI-ADC)         |
-| ifm PL5423 (×2)         | Eintrittsdruck p1 und Austrittsdruck p2       |
-| ifm TA2405              | Temperaturmessung                             |
-| Keyence FD-X            | Durchflussmessung Q                           |
-| Waveshare 2.42" OLED    | Lokale Anzeige (SSD1309, SPI, 128×64 px)      |
-| Adafruit ANO Encoder    | Menünavigation (direktes GPIO, kein I2C)      |
-| 24 V Netzteil           | Sensorversorgung                              |
-| 24 V → 5 V DC/DC-Wandler| Versorgung Raspberry Pi                       |
+| Komponente              | Funktion                                            |
+|-------------------------|-----------------------------------------------------|
+| Raspberry Pi 5          | Zentrale Recheneinheit                              |
+| AnoPi Raspberry Shield  | 4 × 4–20 mA Analogeingänge (SPI-ADC)               |
+| ifm PL5423 (×2)         | Eintrittsdruck p1 und Austrittsdruck p2 (0–10 bar)  |
+| ifm TA2405              | Temperaturmessung (−50–150 °C)                      |
+| Keyence FD-X            | Durchflussmessung Q (0–150 l/min, konfigurierbar)   |
+| Waveshare 2.42" OLED    | Lokale Anzeige (SSD1309, SPI, 128 × 64 px)          |
+| Adafruit ANO Encoder    | Menünavigation (direktes GPIO, kein I2C)             |
+| 24 V Netzteil           | Sensorversorgung                                    |
+| 24 V → 5 V DC/DC-Wandler| Versorgung Raspberry Pi                             |
+
+Vollständige Pinbelegungen, Skalierungsformeln und Anschlussdiagramme:
+[`docs/hardware_mapping.md`](docs/hardware_mapping.md)
 
 ---
 
@@ -34,8 +58,8 @@ Bediener zur Prüfung auf.
 ### Voraussetzungen
 
 - Raspberry Pi 5, Raspberry Pi OS Lite 64-bit (Bookworm)
-- SSH-Zugriff oder Terminal
-- SPI aktiviert (`sudo raspi-config` → Interface Options → SPI)
+- SSH-Zugriff oder direktes Terminal
+- SPI aktiviert: `sudo raspi-config` → Interface Options → SPI → Enable
 
 ### Schnellstart
 
@@ -44,11 +68,12 @@ Bediener zur Prüfung auf.
 git clone https://github.com/aracon30/HETA_Smart_Filter_Monitoring.git
 cd HETA_Smart_Filter_Monitoring
 
-# 2. Installationsskript ausführen (venv, systemd-Service, Verzeichnisse)
+# 2. Installationsskript ausführen
+#    Richtet Python-venv, systemd-Service und Verzeichnisse ein
 chmod +x scripts/install.sh
 ./scripts/install.sh
 
-# 3. Raspberry Pi neu starten (aktiviert SPI/I2C)
+# 3. Raspberry Pi neu starten (aktiviert SPI-Treiber)
 sudo reboot
 
 # 4. Service starten
@@ -57,9 +82,10 @@ sudo systemctl start heta-monitor
 
 Weboberfläche öffnen: `http://<IP-Adresse>:8080`
 
-IP-Adresse ermitteln: `hostname -I`
+IP-Adresse ermitteln: `hostname -I`  
+Alternativ: OLED-Display → Bildschirm 5 (Netzwerk)
 
-### Manueller Start (Entwicklung)
+### Manueller Start (Entwicklung / Debugging)
 
 ```bash
 ./scripts/start.sh
@@ -71,171 +97,284 @@ python3 backend/app.py
 ### Autostart via systemd
 
 ```bash
-sudo systemctl enable heta-monitor   # Autostart aktivieren
-sudo systemctl status heta-monitor   # Status prüfen
-journalctl -u heta-monitor -f        # Logs verfolgen
+sudo systemctl enable heta-monitor    # Autostart beim Boot aktivieren
+sudo systemctl status heta-monitor    # Laufstatus prüfen
+journalctl -u heta-monitor -f         # Log live verfolgen
+journalctl -u heta-monitor -n 50      # Letzte 50 Log-Zeilen
+```
+
+### Abhängigkeiten
+
+```
+flask, flask-cors           – Web-Backend
+luma.oled, Pillow           – OLED-Display
+gpiozero (≥ 2.0)            – Encoder-GPIO
+lgpio                       – GPIO-Backend für Pi 5 (via apt, nicht pip)
+paho-mqtt                   – Optionaler MQTT-Client
+spidev                      – SPI-ADC (AnoPi Shield)
+```
+
+```bash
+# lgpio für Pi 5 (muss via apt installiert werden)
+sudo apt-get install -y python3-lgpio
 ```
 
 ---
 
 ## Ersteinrichtung (Onboarding)
 
-Beim ersten Start öffnet sich automatisch ein 6-stufiger Einrichtungsassistent.
+Beim ersten Start erkennt die Software `onboarding_complete: false` in `config/settings.json`
+und zeigt automatisch einen 6-stufigen Einrichtungsassistenten an.
 Der Messzyklus startet erst nach Abschluss.
 
 | Schritt | Inhalt |
 |---------|--------|
-| 1 | Willkommen |
-| 2 | Betriebsart: **Hardware** (Standard) oder **Simulation** |
-| 3 | Filterparameter: dp-Grenzwert, Sauberwiderstand, max. Durchfluss, Druckbereich |
-| 4 | Temperatursensorbereich (min/max °C) |
-| 5 | Zugriffspasswort (mind. 4 Zeichen) |
-| 6 | Zusammenfassung bestätigen → System startet |
+| 1 | Willkommen – Systemübersicht |
+| 2 | Betriebsart: **Hardware** (Realbetrieb) oder **Simulation** (nur Tests) |
+| 3 | Filterparameter: dp-Grenzwert, Druckabfall sauberer Filter, max. Durchfluss, Druckbereich |
+| 4 | Temperatursensorbereich (Minimum und Maximum in °C) |
+| 5 | Zugriffspasswort festlegen (mind. 4 Zeichen) |
+| 6 | Zusammenfassung – Bestätigen startet das System |
+
+> **Passwort vergessen?**
+> ```bash
+> nano config/settings.local.json
+> # settings_password_hash auf "" setzen, dann:
+> sudo systemctl restart heta-monitor
+> # → Onboarding startet neu
+> ```
 
 ---
 
-## HETA-Code aktivieren
+## HETA-Code und Prognose
+
+### HETA-Code aktivieren
 
 1. Weboberfläche öffnen: `http://<IP>:8080`
 2. HETA-Code eingeben, z. B. `HETA-12345`
-3. „Demo-PIN anzeigen" klicken oder PIN aus dem HETA-PIN-Generator berechnen
+3. Zugehörigen PIN eingeben (oder im Entwicklungsmodus: „Demo-PIN anzeigen")
 4. „Aktivieren" klicken
 
-**Beispiel:** `HETA-12345` → PIN `486082`
+Beispiel: `HETA-12345` → PIN `486082`
 
-Mit aktivem HETA-Code werden Beladungsgrad angezeigt und nach 3 Filterzyklen eine
-sekundengenaue Reststandzeit ausgegeben.
+### Prognosemodi
 
-| Modus | Bedingung | Beispiel |
-|-------|-----------|---------|
-| **BASIS** | Kein HETA-Code | `2–4 Std.` |
-| **HETA-Lernend** | HETA aktiv, < 3 Zyklen | `4–6 Std. (1/3)` |
-| **HETA-Validiert** | 3 Zyklen abgeschlossen | `1 Std. 52 min 30 s` |
+Das System passt die Reststandzeit-Anzeige automatisch an das verfügbare Wissen an:
+
+| Modus | Bedingung | Anzeigebeispiel |
+|-------|-----------|----------------|
+| **BASIS** | Kein HETA-Code aktiv | `2–4 Std.` |
+| **HETA-Lernend** | HETA aktiv, < 3 bestätigte Zyklen | `4–6 Std. (1/3 Zyklen)` |
+| **HETA-Validiert** | HETA aktiv, ≥ 3 vollständige Zyklen | `1 Std. 52 min 30 s` |
+
+Nach 3 Lernzyklen berechnet das System ein Referenzprofil für die nicht-lineare
+dp-Kurve. Die Reststandzeit-Inversion über dieses Profil liefert eine
+präzise lineare Anzeige – auch wenn der Differenzdruck exponentiell steigt.
+
+### Lernphasen-Reset
+
+Folgende Einstellungsänderungen löschen alle Lerndaten (3 neue Zyklen erforderlich):
+`dp_limit_bar`, `dp_clean_bar`, `flow_max_l_min`, `pressure_range_bar`
 
 ---
 
-## Einstellungen
+## Konfiguration
 
-Das Zahnrad-Symbol (⚙) öffnet den passwortgeschützten Einstellungsbereich.
+### Drei-Schicht-System
 
-Bei Änderung dieser Parameter werden alle Lerndaten gelöscht:
-`dp_limit_bar`, `dp_clean_bar`, `flow_max_l_min`, `pressure_range_bar`
+| Priorität | Datei | Beschreibung |
+|-----------|-------|-------------|
+| 1 (niedrigste) | Code-Defaults | Fallback-Werte in `config.py` |
+| 2 | `config/settings.json` | Git-versionierte Standardwerte |
+| 3 (höchste) | `config/settings.local.json` | Lokale Übersteuerungen, **gitignored** |
+
+Alle Änderungen über das Dashboard oder Onboarding werden in `settings.local.json`
+gespeichert. `git pull` überschreibt diese Datei nie.
+
+### Wichtige Parameter
+
+| Parameter | Standard | Lernrelevant ⚠ | Beschreibung |
+|-----------|---------|:--------------:|-------------|
+| `dp_limit_bar` | `2.5` | ✓ | Differenzdruck-Grenzwert für Filterwechsel |
+| `dp_clean_bar` | `0.2` | ✓ | dp-Wert eines fabrikneuen Filters |
+| `flow_max_l_min` | `150` | ✓ | Sensor-Endwert Durchfluss (= 20 mA) |
+| `pressure_range_bar` | `10` | ✓ | Sensor-Endwert Drucksensoren (= 20 mA) |
+| `temperature_min_c` | `-50` | | Sensor-Anfangswert Temperatur (= 4 mA) |
+| `temperature_max_c` | `150` | | Sensor-Endwert Temperatur (= 20 mA) |
+| `simulation_mode` | `true` | | Simulationsmodus aktiv |
+| `sampling_interval_seconds` | `1` | | Messintervall in Sekunden |
+| `required_cycles_for_profile` | `3` | | Zyklen bis valides Profil |
+| `webserver_port` | `8080` | | HTTP-Port der Weboberfläche |
+| `mqtt_enabled` | `false` | | MQTT-Client aktivieren |
+| `display_enabled` | `true` | | OLED-Display aktivieren |
+| `navigation_enabled` | `true` | | Encoder-Navigation aktivieren |
+
+⚠ Änderung löscht alle Lernzyklen und Profile.
+
+Vollständige Parameterliste: [`docs/software_architecture.md`](docs/software_architecture.md)
 
 ---
 
 ## Software-Update
 
-```bash
-# Auf dem Pi (empfohlen):
-./scripts/update.sh
+### Auf dem Raspberry Pi (empfohlen)
 
-# Vom Entwicklungsrechner per SSH:
-./scripts/deploy.sh pi@192.168.1.42
+```bash
+./scripts/update.sh
 ```
 
-Alternativ: Im Dashboard unter ⚙ → „Software-Update" → „Update von GitHub holen".
+### Via Dashboard
+
+Einstellungen (⚙) → „Software-Update" → „Update von GitHub holen"
+
+Erfordert Einstellungspasswort. Das System lädt die Seite nach dem Update automatisch neu.
+
+### Vom Entwicklungsrechner per SSH
+
+```bash
+./scripts/deploy.sh pi@192.168.1.42
+```
 
 ---
 
 ## Projektstruktur
 
 ```
+HETA_Smart_Filter_Monitoring/
 ├── backend/
-│   ├── app.py              Flask-Server, REST-API, Messzyklus, Auth, DisplayController
-│   ├── config.py           Konfigurationsmanagement (3-Schicht: defaults / settings.json / settings.local.json)
+│   ├── app.py              Flask-Server, REST-API, Messzyklus-Thread, Auth
+│   ├── config.py           Konfigurationsmanagement (3-Schicht), Passwort-Hashing
 │   ├── sensors.py          Sensorlesemodul (SPI-ADC) + FilterSimulator
-│   ├── calculations.py     Berechnungen: dp, r_eff, Beladungsgrad, Statuslogik
+│   ├── calculations.py     dp, r_eff, Beladungsgrad, Statuslogik
 │   ├── heta_code.py        HETA-Code-Validierung + PIN-Algorithmus
 │   ├── learning.py         Lernzyklen + zeitbasierte Referenzprofile
-│   ├── prediction.py       Reststandzeit-Prognose (3 Modi)
+│   ├── prediction.py       Reststandzeit-Prognose (3 Modi, Referenzkurven-Inversion)
 │   ├── service_logic.py    Serviceempfehlungen + Berichte
 │   ├── database.py         SQLite-Datenbankmodul
-│   ├── display.py          OLED-Display-Steuerung (luma.oled, PIL)
-│   ├── navigation.py       ANO-Encoder-Navigation (direktes GPIO via gpiozero)
-│   └── mqtt_client.py      Optionaler MQTT-Client
+│   ├── display.py          OLED-Steuerung (luma.oled, PIL, 6 Bildschirme)
+│   ├── navigation.py       ANO-Encoder-Navigation (gpiozero)
+│   └── mqtt_client.py      Optionaler MQTT-Client (paho-mqtt)
 ├── frontend/
 │   ├── index.html          Dashboard, Onboarding, Einstellungs-Modal
-│   ├── style.css           Stylesheet (HETA-Branding, dunkles Industriedesign)
-│   └── app.js              REST-Polling, Chart.js, Onboarding-Zustandsautomat, Auth
+│   ├── style.css           HETA-Industriedesign (dunkles Theme)
+│   └── app.js              REST-Polling, Chart.js 4.x, Onboarding-Automat, Auth
 ├── config/
-│   └── settings.json       Alle Konfigurationsparameter (Standard-/Vorgabewerte)
-│   # settings.local.json   Lokale Überschreibungen – wird von git ignoriert
-├── data/                   SQLite-Datenbank (automatisch erstellt)
-├── logs/                   Log-Dateien (automatisch erstellt)
-├── exports/                CSV-Exporte (automatisch erstellt)
+│   ├── settings.json       Git-versionierte Standardkonfiguration
+│   └── settings.local.json Lokale Übersteuerungen (gitignored, auto-erstellt)
+├── data/                   SQLite-Datenbank (gitignored, auto-erstellt)
+├── logs/                   Log-Dateien (gitignored, auto-erstellt)
+├── exports/                CSV-Exporte (gitignored, auto-erstellt)
 ├── docs/
-│   ├── software_architecture.md   API-Endpunkte, Datenbankschema, Modulbeschreibungen
-│   └── hardware_mapping.md        Sensorkanäle, Skalierungsformeln, Pin-Belegungen
+│   ├── benutzerhandbuch.md Bedienungsanleitung für Endbenutzer
+│   ├── software_architecture.md  API, Datenbankschema, Algorithmen
+│   └── hardware_mapping.md       Pinbelegungen, Skalierungsformeln
 └── scripts/
-    ├── install.sh          Erstinstallation (einmalig)
-    ├── start.sh            Manueller Start
-    ├── update.sh           Update auf dem Pi
+    ├── install.sh          Erstinstallation (einmalig ausführen)
+    ├── start.sh            Manueller Start ohne systemd
+    ├── update.sh           Update auf dem Pi (git pull + Neustart)
     └── deploy.sh           SSH-Deploy vom Entwicklungsrechner
 ```
 
 ---
 
-## REST-API (Überblick)
+## REST-API
+
+Alle Endpunkte antworten mit JSON. Schreibende Endpunkte erfordern den Header
+`X-Auth-Token` (wird nach Login via `POST /api/settings/login` zurückgegeben).
+
+### Öffentliche Endpunkte
 
 | Methode | Endpunkt | Beschreibung |
 |---------|----------|-------------|
-| GET  | `/api/status` | Vollständiger Systemstatus |
-| GET  | `/api/measurements/latest` | Letzte Messwerte |
+| GET | `/api/status` | Vollständiger Systemstatus (wird im 1-s-Takt gepollt) |
+| GET | `/api/measurements/latest` | Letzte N Messwerte (`?limit=100`) |
+| GET | `/api/measurements/history` | Messwerte seit Zeitstempel (`?since=<unix>`) |
+| GET | `/api/cycles` | Filterzyklen für aktiven HETA-Code |
+| GET | `/api/profile` | Lernprofil + Referenzkurve (`?heta_code=`) |
 | POST | `/api/heta/activate` | HETA-Code + PIN aktivieren |
 | POST | `/api/filter/confirm-change` | Filterwechsel bestätigen |
-| POST | `/api/sensor/recheck` | Sensoren erneut prüfen und Messung neu starten |
-| GET  | `/api/settings` | Konfiguration lesen |
-| POST | `/api/settings` | Konfiguration speichern (Auth erforderlich) |
-| POST | `/api/settings/login` | Anmelden, Token erhalten |
-| POST | `/api/update/pull` | git pull + Neustart (Auth erforderlich) |
-| GET  | `/api/diagnostics` | Hardware-Selbstcheck |
-| GET  | `/api/export/csv/download` | Messdaten als CSV herunterladen |
+| POST | `/api/simulation/start` | Messung starten (auch: sensor_fault löschen) |
+| POST | `/api/simulation/stop` | Messung stoppen |
+| POST | `/api/sensor/recheck` | Sensoren nach Fehler erneut prüfen |
+| GET | `/api/export/csv/download` | Messdaten als CSV herunterladen |
+| GET | `/api/diagnostics` | Hardware-Selbstcheck |
 
-Vollständige API-Dokumentation: [`docs/software_architecture.md`](docs/software_architecture.md)
+### Authentifizierte Endpunkte (`X-Auth-Token` erforderlich)
+
+| Methode | Endpunkt | Beschreibung |
+|---------|----------|-------------|
+| POST | `/api/settings/login` | Anmelden, Token erhalten |
+| POST | `/api/settings/logout` | Abmelden |
+| GET | `/api/settings` | Konfiguration lesen |
+| POST | `/api/settings` | Konfiguration speichern |
+| POST | `/api/update/pull` | git pull + Neustart |
+
+Vollständige API-Dokumentation mit Feldbeschreibungen:
+[`docs/software_architecture.md`](docs/software_architecture.md)
 
 ---
 
 ## Fehlersuche
 
-**Software startet nicht:**
+### Software startet nicht
+
 ```bash
 source .venv/bin/activate && python3 backend/app.py   # Fehler direkt sehen
 journalctl -u heta-monitor -n 50 --no-pager           # systemd-Logs
 ```
 
-**Weboberfläche nicht erreichbar:**
+### Weboberfläche nicht erreichbar
+
 ```bash
-hostname -I                           # IP-Adresse ermitteln
+hostname -I                           # IP-Adresse des Pi ermitteln
 sudo systemctl status heta-monitor   # Läuft der Dienst?
-ss -tlnp | grep 8080                  # Port belegt?
+ss -tlnp | grep 8080                  # Port belegt durch anderen Prozess?
 ```
 
-**OLED zeigt nichts:**
+### OLED-Display zeigt nichts
+
 - SPI aktiviert? `ls /dev/spidev*` muss `/dev/spidev0.0` zeigen
-- DC → GPIO 25 (Pin 22), RES → GPIO 27 (Pin 13) – Details: `docs/hardware_mapping.md`
+- DC-Pin → GPIO 25 (Board-Pin 22), RES-Pin → GPIO 27 (Board-Pin 13)
+- Vollständige Belegung: [`docs/hardware_mapping.md`](docs/hardware_mapping.md)
+- Display deaktiviert? `display_enabled: true` in `config/settings.local.json` prüfen
 
-**Encoder reagiert nicht:**
-- COMA und COMB müssen an GND angeschlossen sein
+### Encoder reagiert nicht
+
+- COMA und COMB müssen an **GND** angeschlossen sein (nicht VCC)
+- `pip install gpiozero lgpio` oder `sudo apt-get install python3-lgpio`
 - GPIO-Pins in `config/settings.json` prüfen (`encoder_pin_enca` etc.)
-- `pip install gpiozero lgpio`
 
-**Sensor-Fault (rotes Overlay):**
-1. Verdrahtung der genannten Kanäle prüfen
+### Sensor-Fault (rotes Overlay im Browser)
+
+1. Verdrahtung und Sensorversorgung der genannten Kanäle prüfen
 2. „Alle Sensoren angeschlossen – System prüfen" klicken
-3. Falls Weiterbetrieb nötig: Simulationsmodus über das Dashboard aktivieren
+3. Für Testbetrieb ohne Hardware: Simulationsmodus im Overlay aktivieren (Passwort erforderlich)
 
-**Passwort vergessen:**
+### Passwort vergessen
+
 ```bash
-# settings.local.json bearbeiten und settings_password_hash auf "" setzen
 nano config/settings.local.json
-sudo systemctl restart heta-monitor   # Onboarding startet neu
+# Zeile "settings_password_hash" auf "" setzen
+sudo systemctl restart heta-monitor
+# → Onboarding-Assistent startet neu, neues Passwort festlegen
 ```
 
-**Onboarding erscheint nach jedem Start:**
+### Lerndaten ungewollt zurückgesetzt
+
+Erwartetes Verhalten: Änderung eines lernrelevanten Parameters (`dp_limit_bar`,
+`dp_clean_bar`, `flow_max_l_min`, `pressure_range_bar`) löscht automatisch alle
+Zyklen und Profile. Das System muss erneut 3 Filterzyklen durchlaufen.
+
+### Onboarding erscheint nach jedem Start
+
 ```bash
-grep onboarding_complete config/settings.local.json   # Muss true sein
+grep onboarding_complete config/settings.local.json   # Muss "true" sein
+# Falls Datei fehlt oder Wert false: Onboarding erneut abschließen
 ```
 
-**Lerndaten unerwünscht zurückgesetzt:**
-Erwartetes Verhalten – bei Änderung lernrelevanter Parameter werden alle
-Zyklen und Profile automatisch gelöscht.
+---
+
+## Endbenutzer-Anleitung
+
+Für die Bedienung der Weboberfläche (Dashboard, HETA-Code, Filterwechsel, OLED-Display):
+[`docs/benutzerhandbuch.md`](docs/benutzerhandbuch.md)
