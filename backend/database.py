@@ -317,6 +317,15 @@ class Database:
             conn.execute("DELETE FROM heta_profiles")
         logger.info("Alle Lerndaten, Sample-Zeitreihen und Profile gelöscht (Neukonfiguration).")
 
+    def wipe_all_data(self):
+        """Löscht alle Tabellen vollständig – für Werksreset."""
+        with self._conn() as conn:
+            conn.execute("DELETE FROM cycle_samples")
+            conn.execute("DELETE FROM filter_cycles")
+            conn.execute("DELETE FROM heta_profiles")
+            conn.execute("DELETE FROM service_events")
+        logger.info("Alle Daten in der Datenbank gelöscht (Werksreset).")
+
     # ------------------------------------------------------------------
     # Serviceereignisse
     # ------------------------------------------------------------------

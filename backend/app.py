@@ -1441,6 +1441,67 @@ def api_settings_auth_check():
     return jsonify({"authenticated": _validate_session(token)})
 
 
+@app.route("/api/factory-reset", methods=["POST"])
+def api_factory_reset():
+    """
+    Werksreset: löscht alle Messdaten, Profile und Zyklen, entfernt die lokale
+    Konfigurationsdatei und setzt den gesamten Laufzeitstatus zurück.
+    Das System startet danach im Onboarding-Modus.
+
+    Erfordert gültigen Session-Token UND Passwort-Bestätigung.
+    """
+    ok, err = _require_auth()
+    if not ok:
+        return err
+
+    data = request.get_json(force=True, silent=True) or {}
+    password = data.get("password", "")
+    if not verify_password(password, settings.get("settings_password_hash", "")):
+        return jsonify({"success": False, "message": "Passwort falsch."}), 403
+
+    logger.warning("WERKSRESET ausgeführt.")
+
+    # 1. Alle Datenbankdaten löschen
+    db.wipe_all_data()
+
+    # 2. Lokale Konfigurationsdatei entfernen (setzt auf settings.json-Defaults zurück)
+    local_cfg = get_abs_path("config/settings.local.json")
+    try:
+        import os as _os
+        _os.remove(local_cfg)
+        logger.info("settings.local.json gelöscht.")
+    except FileNotFoundError:
+        pass
+
+    # 3. Laufzeit-Settings auf Defaults zurücksetzen (onboarding_complete=False, kein Passwort)
+    from config import load_settings as _load_settings
+    settings.clear()
+    settings.update(_load_settings())
+
+    # 4. Laufzeitstatus zurücksetzen
+    global _smoothed_health_pct
+    _smoothed_health_pct = None
+    predictor.reset()
+    reset_simulation()
+    learning.tolerance_reff_pct = settings.get("tolerance_reff_pct", 0.25)
+
+    with _state_lock:
+        _state["heta_code"]        = ""
+        _state["activation_status"] = False
+        _state["cycle_active"]     = False
+        _state["cycle_start_time"] = None
+        _state["anomaly_active"]   = False
+        _state["anomaly_percent"]  = 0.0
+        _state["filter_status"]    = "OK"
+        _state["simulation_mode"]  = settings.get("simulation_mode", True)
+
+    # 5. Alle Sessions invalidieren
+    with _sessions_lock:
+        _sessions.clear()
+
+    return jsonify({"success": True, "message": "Werksreset abgeschlossen. Bitte Seite neu laden."})
+
+
 # ---------------------------------------------------------------------------
 # Onboarding
 # ---------------------------------------------------------------------------

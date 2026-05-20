@@ -396,6 +396,33 @@
           <strong>3 Lernphasen neu durchlaufen</strong>. Alle bisherigen Lernzyklen und Profile werden gelöscht.
         </div>
 
+        <div class="settings-section" id="factory-reset-section">
+          <h3>Werksreset</h3>
+          <p class="settings-hint">Setzt das System vollständig zurück: alle Messdaten, Lernzyklen, Profile und die Konfiguration werden unwiderruflich gelöscht. Das System startet danach im Ersteinrichtungs-Modus.</p>
+          <button class="btn btn-danger" onclick="showFactoryResetConfirm()">
+            &#9888; Werksreset durchführen
+          </button>
+          <div id="factory-reset-confirm" class="hidden" style="margin-top:1rem;padding:1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px">
+            <p style="font-weight:700;color:var(--alert-red);margin:0 0 .6rem">Alle Daten werden unwiderruflich gelöscht!</p>
+            <p style="font-size:.86rem;color:var(--text-muted);margin:0 0 .75rem">Tippen Sie <strong style="color:var(--text-main)">RESET</strong> ein und bestätigen Sie mit Ihrem Passwort.</p>
+            <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:.6rem">
+              <label>
+                Bestätigung
+                <input type="text" id="factory-reset-confirm-text" placeholder='Tippen Sie "RESET"' autocomplete="off" />
+              </label>
+              <label>
+                Passwort
+                <input type="password" id="factory-reset-pw" placeholder="Aktuelles Passwort" autocomplete="current-password" />
+              </label>
+            </div>
+            <div style="display:flex;gap:.6rem;margin-top:.75rem;align-items:center">
+              <button class="btn btn-danger" onclick="confirmFactoryReset()">&#9888; Endgültig zurücksetzen</button>
+              <button class="btn btn-ghost" onclick="hideFactoryResetConfirm()">Abbrechen</button>
+              <span id="factory-reset-msg" class="msg" style="margin:0"></span>
+            </div>
+          </div>
+        </div>
+
         <div class="settings-section diag-section">
           <h3>Hardware-Diagnose</h3>
           <p class="settings-hint">Prüft alle angeschlossenen Komponenten und zeigt Fehlerursachen mit Lösungshinweisen.</p>

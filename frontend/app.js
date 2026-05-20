@@ -224,6 +224,50 @@ function closeSettings() {
   document.getElementById("settings-overlay").classList.add("hidden");
   showMsg("settings-login-msg", "", false);
   showMsg("settings-save-msg", "", false);
+  hideFactoryResetConfirm();
+}
+
+function showFactoryResetConfirm() {
+  document.getElementById("factory-reset-confirm").classList.remove("hidden");
+  document.getElementById("factory-reset-confirm-text").value = "";
+  document.getElementById("factory-reset-pw").value = "";
+  showMsg("factory-reset-msg", "", false);
+  document.getElementById("factory-reset-confirm-text").focus();
+}
+
+function hideFactoryResetConfirm() {
+  document.getElementById("factory-reset-confirm").classList.add("hidden");
+  document.getElementById("factory-reset-confirm-text").value = "";
+  document.getElementById("factory-reset-pw").value = "";
+  showMsg("factory-reset-msg", "", false);
+}
+
+async function confirmFactoryReset() {
+  const confirmText = document.getElementById("factory-reset-confirm-text").value.trim();
+  if (confirmText !== "RESET") {
+    showMsg("factory-reset-msg", 'Bitte genau "RESET" eingeben.', true);
+    return;
+  }
+  const password = document.getElementById("factory-reset-pw").value;
+  if (!password) {
+    showMsg("factory-reset-msg", "Passwort eingeben.", true);
+    return;
+  }
+  const token = sessionStorage.getItem(TOKEN_KEY);
+  if (!token) { showSettingsLogin(); return; }
+
+  showMsg("factory-reset-msg", "Wird zurückgesetzt …", false);
+  const result = await apiFetchAuth("/api/factory-reset", "POST", { password }, token);
+  if (result?.success) {
+    showMsg("factory-reset-msg", result.message, false);
+    sessionStorage.removeItem(TOKEN_KEY);
+    setTimeout(() => location.reload(), 1800);
+  } else if (result === null) {
+    sessionStorage.removeItem(TOKEN_KEY);
+    showSettingsLogin();
+  } else {
+    showMsg("factory-reset-msg", result?.message ?? "Fehler.", true);
+  }
 }
 
 function showSettingsLogin() {
