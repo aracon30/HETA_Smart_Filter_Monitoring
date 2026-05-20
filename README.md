@@ -124,17 +124,22 @@ sudo apt-get install -y python3-lgpio
 ## Ersteinrichtung (Onboarding)
 
 Beim ersten Start erkennt die Software `onboarding_complete: false` in `config/settings.json`
-und zeigt automatisch einen 6-stufigen Einrichtungsassistenten an.
+und zeigt automatisch einen 7-stufigen Einrichtungsassistenten an.
 Der Messzyklus startet erst nach Abschluss.
 
 | Schritt | Inhalt |
 |---------|--------|
 | 1 | Willkommen – Systemübersicht |
 | 2 | Betriebsart: **Hardware** (Realbetrieb) oder **Simulation** (nur Tests) |
-| 3 | Filterparameter: dp-Grenzwert, Druckabfall sauberer Filter, max. Durchfluss, Druckbereich |
-| 4 | Temperatursensorbereich (Minimum und Maximum in °C) |
-| 5 | Zugriffspasswort festlegen (mind. 4 Zeichen) |
-| 6 | Zusammenfassung – Bestätigen startet das System |
+| 3 | Betriebsweise: **Dauerbetrieb** (kontinuierlich) oder **Intervallbetrieb** (Batch) |
+| 4 | Filterparameter: dp-Grenzwert, Druckabfall sauberer Filter, max. Durchfluss, Druckbereich |
+| 5 | Temperatursensorbereich (Minimum und Maximum in °C) |
+| 6 | Zugriffspasswort festlegen (mind. 4 Zeichen) |
+| 7 | Zusammenfassung – Bestätigen startet das System |
+
+> **Hinweis:** Nach Abschluss der Einrichtung wartet das System, bis ein **stabiler Durchfluss**
+> erkannt wird, bevor der erste Messzyklus startet. Ein bernsteinfarbenes Overlay im Dashboard
+> zeigt diesen Wartezustand an und verschwindet automatisch, sobald der Durchfluss erkannt wurde.
 
 > **Passwort vergessen?**
 > ```bash
@@ -201,6 +206,11 @@ gespeichert. `git pull` überschreibt diese Datei nie.
 | `pressure_range_bar` | `10` | ✓ | Sensor-Endwert Drucksensoren (= 20 mA) |
 | `temperature_min_c` | `-50` | | Sensor-Anfangswert Temperatur (= 4 mA) |
 | `temperature_max_c` | `150` | | Sensor-Endwert Temperatur (= 20 mA) |
+| `operation_mode` | `"continuous"` | | Betriebsweise: `continuous` oder `batch` |
+| `flow_start_threshold_l_min` | `null` | | Manueller Durchflussschwellwert (null = automatisch) |
+| `flow_stability_seconds` | `null` | | Stabilitätsfenster in Sekunden (null = auto = 10 s) |
+| `flow_pause_tolerance_seconds` | `null` | | Pausentoleranz in Sekunden (null = auto: 30 s continuous / 60 s batch) |
+| `flow_max_pause_days` | `7` | | Maximale Pausendauer bevor Zyklus abgebrochen wird |
 | `simulation_mode` | `true` | | Simulationsmodus aktiv |
 | `sampling_interval_seconds` | `1` | | Messintervall in Sekunden |
 | `required_cycles_for_profile` | `3` | | Zyklen bis valides Profil |
@@ -266,6 +276,7 @@ HETA_Smart_Filter_Monitoring/
 ├── exports/                CSV-Exporte (gitignored, auto-erstellt)
 ├── docs/
 │   ├── benutzerhandbuch.md Bedienungsanleitung für Endbenutzer
+│   │                       (auch erreichbar über den ?-Button im Header der Weboberfläche)
 │   ├── software_architecture.md  API, Datenbankschema, Algorithmen
 │   └── hardware_mapping.md       Pinbelegungen, Skalierungsformeln
 └── scripts/
@@ -298,6 +309,7 @@ Alle Endpunkte antworten mit JSON. Schreibende Endpunkte erfordern den Header
 | POST | `/api/sensor/recheck` | Sensoren nach Fehler erneut prüfen |
 | GET | `/api/export/csv/download` | Messdaten als CSV herunterladen |
 | GET | `/api/diagnostics` | Hardware-Selbstcheck |
+| GET | `/help` | Benutzerhandbuch als HTML (in-app Dokumentation) |
 
 ### Authentifizierte Endpunkte (`X-Auth-Token` erforderlich)
 
@@ -350,6 +362,12 @@ ss -tlnp | grep 8080                  # Port belegt durch anderen Prozess?
 2. „Alle Sensoren angeschlossen – System prüfen" klicken
 3. Für Testbetrieb ohne Hardware: Simulationsmodus im Overlay aktivieren (Passwort erforderlich)
 
+### Bernsteinfarbenes Overlay erscheint nach Start
+
+Das System wartet auf stabilen Durchfluss, bevor der erste Messzyklus startet. Falls das Overlay
+dauerhaft bleibt: Pumpe prüfen, Durchfluss sicherstellen oder den manuellen Durchflussschwellwert
+in den Einstellungen (Betriebsweise & Durchflusserkennung) senken.
+
 ### Passwort vergessen
 
 ```bash
@@ -378,3 +396,6 @@ grep onboarding_complete config/settings.local.json   # Muss "true" sein
 
 Für die Bedienung der Weboberfläche (Dashboard, HETA-Code, Filterwechsel, OLED-Display):
 [`docs/benutzerhandbuch.md`](docs/benutzerhandbuch.md)
+
+Das Benutzerhandbuch ist auch direkt in der Weboberfläche über den **`?`-Button** im Header
+erreichbar – ohne separaten Download oder Dateiöffnung.
