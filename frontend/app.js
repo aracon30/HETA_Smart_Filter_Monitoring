@@ -858,9 +858,9 @@ async function updateReferenceOverlay(status) {
       tpUpper.push({  x: xMs, y: pt.temp + tolTempC });
       tpLower.push({  x: xMs, y: pt.temp - tolTempC });
     }
-    if (pt.reff != null) {
-      // Normieren auf Widerstandsfaktor: pt.reff / reference_r_eff_start
-      const rfNorm = reffStartRef > 0 ? pt.reff / reffStartRef : pt.reff;
+    if (pt.r_eff != null) {
+      // Normieren auf Widerstandsfaktor: pt.r_eff / reference_r_eff_start
+      const rfNorm = reffStartRef > 0 ? pt.r_eff / reffStartRef : pt.r_eff;
       rfCenter.push({ x: xMs, y: rfNorm });
       rfUpper.push({  x: xMs, y: rfNorm * (1 + tolReff) });
       rfLower.push({  x: xMs, y: Math.max(0, rfNorm * (1 - tolReff)) });
