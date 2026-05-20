@@ -674,13 +674,18 @@ def _measurement_loop():
 
         # ── Reststandzeit berechnen ───────────────────────────────────────
         if profile_valid and heta_activated and profile:
-            # Referenz-Beladungsrate aus Lernzyklen: gibt eine Gerade im Diagramm.
-            # Passt sich automatisch an wenn dp schneller/langsamer steigt.
-            ref_dp_clean = (profile.get("reference_dp_clean") or 0.0) or settings.get("dp_clean_bar", 0.2)
             ref_duration = profile.get("reference_duration_seconds") or 0.0
             if ref_duration > 0:
-                ref_rate = (dp_limit - ref_dp_clean) / ref_duration
-                remaining_s = predictor.update_with_reference(fs.dp_bar, ref_rate)
+                # Referenzkurve invertieren: dp → t_pct → lineare Restzeit.
+                # Gleicht die nichtlineare dp-Kurve (clogging^1.8) heraus.
+                curve_json = profile.get("reference_curve_json") or "[]"
+                try:
+                    ref_curve = json.loads(curve_json)
+                except Exception:
+                    ref_curve = []
+                remaining_s = predictor.update_with_reference_curve(
+                    fs.dp_bar, ref_duration, ref_curve
+                )
             else:
                 remaining_s = predictor.update(fs.dp_bar)
         else:

@@ -128,41 +128,73 @@ class PredictionEngine:
 
         return self._last_remaining
 
-    def update_with_reference(self, dp_bar: float, ref_rate: float) -> float:
-        """
-        Berechnet Reststandzeit anhand der gelernten Referenz-Beladungsrate.
-
-        remaining = (dp_limit − dp_bar) / ref_rate
-
-        Eigenschaften:
-        - Ergibt eine Gerade im Diagramm wenn die Beladung der Referenz entspricht
-        - Passt sich automatisch an: mehr Schmutz → dp steigt schneller → Restzeit kürzer
-        - Erreicht natürlich 0 wenn dp_bar = dp_limit, kein harter Sprung
-        - Anstieg wird leicht gedämpft (Messrauschen), Abfall folgt sofort
-        """
-        raw_remaining = max(0.0, (self.dp_limit - dp_bar) / max(ref_rate, self.min_slope))
-
-        if self._last_remaining is None or raw_remaining <= self._last_remaining:
-            # Abfall oder Erstberechnung: sofort folgen
-            self._last_remaining = raw_remaining
-        else:
-            # Anstieg durch Rauschen dämpfen: max +2 %/Tick
-            capped = min(raw_remaining, self._last_remaining * 1.02)
-            self._last_remaining = self._last_remaining + 0.3 * (capped - self._last_remaining)
-
-        return self._last_remaining
-
-    # update_curve_based: Kompatibilitäts-Stub
-    def update_curve_based(
+    def update_with_reference_curve(
         self,
-        elapsed_seconds: float,
+        dp_bar: float,
         ref_duration: float,
-        reff_deviation_pct: float = 0.0,
-        dp_bar: Optional[float] = None,
-    ) -> Optional[float]:
-        if dp_bar is not None:
-            return self.update(dp_bar)
+        ref_curve: list,
+    ) -> float:
+        """
+        Berechnet Reststandzeit durch Invertierung der gelernten Referenzkurve.
+
+        Funktionsprinzip:
+          1. Finde die zeitliche Position t_pct in der Referenzkurve,
+             an der dp_ref ≈ dp_bar (dp → t_pct Inversion)
+          2. remaining = ref_duration × (1 − t_pct / 100)
+
+        Ergebnis:
+          - Gerade Linie im Diagramm wenn Beladung wie Referenz
+            (die Nichtlinearität des dp-Anstiegs ist in der Referenzkurve hinterlegt
+             und wird durch die Inversion herausgerechnet)
+          - Automatische Anpassung: dp steigt schneller → höhere t_pct →
+            weniger Restzeit; kein harter Sprung am dp-Limit
+        """
+        t_pct = self._invert_curve_dp_to_tpct(dp_bar, ref_curve)
+        remaining = max(0.0, ref_duration * (1.0 - t_pct / 100.0))
+
+        if self._last_remaining is None or remaining <= self._last_remaining:
+            self._last_remaining = remaining
+        else:
+            # Dämpfe Anstiege durch Messrauschen: max +2 %/Tick
+            capped = min(remaining, self._last_remaining * 1.02)
+            self._last_remaining += 0.3 * (capped - self._last_remaining)
+
         return self._last_remaining
+
+    def _invert_curve_dp_to_tpct(self, dp_bar: float, curve: list) -> float:
+        """
+        Lineare Interpolation der Referenzkurve: dp → t_pct.
+        Die Kurve ist nach t_pct sortiert; dp steigt mit t_pct.
+        Nicht-monotone Stellen (Rauschen) werden durch Forward-Scan überbrückt.
+        """
+        if not curve:
+            return 0.0
+
+        # Sammle (t_pct, dp) – nur gültige Punkte
+        pts = [(p["t_pct"], p["dp"]) for p in curve
+               if p.get("t_pct") is not None and p.get("dp") is not None]
+        if not pts:
+            return 0.0
+
+        pts.sort(key=lambda x: x[0])   # nach t_pct (aufsteigend)
+
+        # Rand-Clamps
+        if dp_bar <= pts[0][1]:
+            return pts[0][0]
+        if dp_bar >= pts[-1][1]:
+            return pts[-1][0]
+
+        # Vorwärts-Scan: suche ersten Übergang dp_lo ≤ dp_bar ≤ dp_hi
+        for i in range(len(pts) - 1):
+            t_lo, dp_lo = pts[i]
+            t_hi, dp_hi = pts[i + 1]
+            if dp_hi <= dp_lo:          # nicht-monotone Stelle überspringen
+                continue
+            if dp_lo <= dp_bar <= dp_hi:
+                frac = (dp_bar - dp_lo) / (dp_hi - dp_lo)
+                return t_lo + frac * (t_hi - t_lo)
+
+        return pts[-1][0]
 
     def _calculate_slope(self) -> Optional[float]:
         """Lineare Regression über das dp-Messfenster (1 Index = 1 Sekunde)."""
