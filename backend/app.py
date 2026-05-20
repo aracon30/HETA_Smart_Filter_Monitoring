@@ -866,6 +866,182 @@ def index():
     return send_from_directory(app.static_folder, "index.html")
 
 
+@app.route("/help")
+def help_page():
+    """Rendert das Benutzerhandbuch (Markdown → HTML)."""
+    try:
+        import markdown as _md
+    except ImportError:
+        return (
+            "<html><body><h1>Benutzerhandbuch</h1>"
+            "<p>Bitte <code>pip install markdown</code> ausführen, "
+            "um das Handbuch anzuzeigen.</p></body></html>",
+            200,
+            {"Content-Type": "text/html; charset=utf-8"},
+        )
+
+    doc_path = os.path.join(_BASE_DIR, "docs", "benutzerhandbuch.md")
+    try:
+        with open(doc_path, "r", encoding="utf-8") as f:
+            raw = f.read()
+    except FileNotFoundError:
+        raw = "# Benutzerhandbuch\n\nDie Datei `docs/benutzerhandbuch.md` wurde nicht gefunden."
+
+    content_html = _md.markdown(
+        raw,
+        extensions=["tables", "toc", "fenced_code"],
+        extension_configs={"toc": {"title": "Inhalt"}},
+    )
+
+    html = f"""<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bedienungsanleitung – HETA Smart Filter Monitoring</title>
+  <style>
+    :root {{
+      --blue: #0d6efd;
+      --dark: #1a1f2e;
+      --surface: #242938;
+      --border: #2e3550;
+      --text: #e8eaf0;
+      --muted: #8892b0;
+      --code-bg: #1a1f2e;
+    }}
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--dark);
+      color: var(--text);
+      line-height: 1.7;
+    }}
+    .page-header {{
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }}
+    .page-header h1 {{
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--blue);
+    }}
+    .back-btn {{
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--blue);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.45rem 0.9rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+    }}
+    .back-btn:hover {{ background: #0b5ed7; }}
+    .toc-box {{
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.5rem;
+      margin-bottom: 2rem;
+    }}
+    .toc-box .toctitle {{ font-weight: 700; margin-bottom: 0.5rem; color: var(--blue); }}
+    .toc-box ul {{ padding-left: 1.2rem; }}
+    .toc-box a {{ color: var(--muted); text-decoration: none; }}
+    .toc-box a:hover {{ color: var(--text); }}
+    main {{
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }}
+    h1, h2, h3, h4 {{ color: var(--text); margin-top: 2rem; margin-bottom: 0.5rem; }}
+    h1 {{ font-size: 1.8rem; border-bottom: 2px solid var(--blue); padding-bottom: 0.4rem; }}
+    h2 {{ font-size: 1.3rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }}
+    h3 {{ font-size: 1.1rem; color: var(--blue); }}
+    p {{ margin-bottom: 0.9rem; }}
+    a {{ color: var(--blue); }}
+    ul, ol {{ padding-left: 1.5rem; margin-bottom: 0.9rem; }}
+    li {{ margin-bottom: 0.25rem; }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0 1.4rem;
+      font-size: 0.9rem;
+    }}
+    th {{
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+      color: var(--blue);
+    }}
+    td {{
+      border: 1px solid var(--border);
+      padding: 0.5rem 0.75rem;
+    }}
+    tr:nth-child(even) td {{ background: rgba(255,255,255,0.02); }}
+    code {{
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.15em 0.4em;
+      font-size: 0.88em;
+      font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+      color: #a8d8a8;
+    }}
+    pre {{
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      margin: 0.8rem 0 1.2rem;
+    }}
+    pre code {{
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 0.87em;
+    }}
+    blockquote {{
+      border-left: 3px solid var(--blue);
+      margin: 0.8rem 0;
+      padding: 0.5rem 1rem;
+      background: rgba(13,110,253,0.07);
+      border-radius: 0 6px 6px 0;
+      color: var(--muted);
+    }}
+    hr {{
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2rem 0;
+    }}
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <h1>Bedienungsanleitung – HETA Smart Filter Monitoring</h1>
+    <a href="/" class="back-btn">&#8592; Zurück zum Dashboard</a>
+  </div>
+  <main>
+    {content_html}
+  </main>
+</body>
+</html>"""
+
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
 @app.route("/api/status")
 def api_status():
     """Vollständiger Systemstatus."""

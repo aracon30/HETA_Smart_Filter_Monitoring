@@ -2,6 +2,9 @@
 flask>=2.3.0
 flask-cors>=4.0.0
 
+# Benutzerhandbuch-Rendering (Markdown → HTML via /help)
+markdown>=3.5
+
 # OLED-Display (Waveshare 2.42" SSD1309, SPI)
 # Wird bei fehlendem Display sicher übersprungen (Warnung im Log).
 luma.oled>=3.12.0
