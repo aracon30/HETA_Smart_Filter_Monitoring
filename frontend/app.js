@@ -793,9 +793,13 @@ async function updateReferenceOverlay(status) {
   const ds = combinedChart.data.datasets;
 
   if (!cycleActive || !hetaCode || !startTime) {
-    if (ds[9].data.length > 0) {
-      ds[7].data = []; ds[8].data = []; ds[9].data = [];
+    const anyData = ds[9].data.length > 0 || ds[12].data.length > 0 ||
+                    ds[15].data.length > 0 || ds[18].data.length > 0;
+    if (anyData) {
+      // Clear all reference datasets 7-18
+      for (let i = 7; i <= 18; i++) ds[i].data = [];
       combinedChart.update("none");
+      _refreshRefChips();
     }
     _knownCycleStart = null;
     return;
@@ -810,19 +814,52 @@ async function updateReferenceOverlay(status) {
 
   const startMs  = startTime * 1000;
   const refDurMs = (refCurve.reference_duration_seconds || 300) * 1000;
-  const tol      = refCurve.tolerance_dp_pct ?? refCurve.tolerance_pct ?? 0.25;
+  const tolDp    = refCurve.tolerance_dp_pct   ?? refCurve.tolerance_pct ?? 0.25;
+  const tolFlow  = refCurve.tolerance_flow_pct ?? 0.25;
+  const tolReff  = refCurve.tolerance_reff_pct ?? 0.25;
+  const tolTempC = refCurve.tolerance_temp_c   ?? 10.0;
 
-  const upper = [], lower = [], center = [];
+  // Dp datasets (7=upper, 8=lower, 9=center)
+  const dpUpper = [], dpLower = [], dpCenter = [];
+  // Flow datasets (10=upper, 11=lower, 12=center)
+  const flUpper = [], flLower = [], flCenter = [];
+  // Temp datasets (13=upper, 14=lower, 15=center)
+  const tpUpper = [], tpLower = [], tpCenter = [];
+  // Reff datasets (16=upper, 17=lower, 18=center)
+  const rfUpper = [], rfLower = [], rfCenter = [];
+
   for (const pt of refCurve.curve) {
     const xMs = startMs + (pt.t_pct / 100) * refDurMs;
-    center.push({ x: xMs, y: pt.dp });
-    upper.push({  x: xMs, y: pt.dp * (1 + tol) });
-    lower.push({  x: xMs, y: Math.max(0, pt.dp * (1 - tol)) });
+
+    if (pt.dp != null) {
+      dpCenter.push({ x: xMs, y: pt.dp });
+      dpUpper.push({  x: xMs, y: pt.dp * (1 + tolDp) });
+      dpLower.push({  x: xMs, y: Math.max(0, pt.dp * (1 - tolDp)) });
+    }
+    if (pt.flow != null) {
+      flCenter.push({ x: xMs, y: pt.flow });
+      flUpper.push({  x: xMs, y: pt.flow * (1 + tolFlow) });
+      flLower.push({  x: xMs, y: Math.max(0, pt.flow * (1 - tolFlow)) });
+    }
+    if (pt.temp != null) {
+      tpCenter.push({ x: xMs, y: pt.temp });
+      tpUpper.push({  x: xMs, y: pt.temp + tolTempC });
+      tpLower.push({  x: xMs, y: pt.temp - tolTempC });
+    }
+    if (pt.reff != null) {
+      rfCenter.push({ x: xMs, y: pt.reff });
+      rfUpper.push({  x: xMs, y: pt.reff * (1 + tolReff) });
+      rfLower.push({  x: xMs, y: Math.max(0, pt.reff * (1 - tolReff)) });
+    }
   }
-  ds[7].data = upper;
-  ds[8].data = lower;
-  ds[9].data = center;
+
+  ds[7].data = dpUpper;  ds[8].data = dpLower;  ds[9].data = dpCenter;
+  ds[10].data = flUpper; ds[11].data = flLower; ds[12].data = flCenter;
+  ds[13].data = tpUpper; ds[14].data = tpLower; ds[15].data = tpCenter;
+  ds[16].data = rfUpper; ds[17].data = rfLower; ds[18].data = rfCenter;
+
   combinedChart.update("none");
+  _refreshRefChips();
 }
 
 // ============================================================
@@ -964,6 +1001,286 @@ function updateChartDpLimit(dpLimitBar) {
   ann.value = dpLimitBar;
   ann.label.content = `dp-Limit (${Number(dpLimitBar).toFixed(2)} bar)`;
   combinedChart.update("none");
+}
+
+// ============================================================
+// Chart Toggle Buttons & Axis Panel
+// ============================================================
+
+// Dataset metadata for toggle buttons and axis config
+const DS_META = [
+  { label: "p1",           color: DS_COLORS.p1,     live: true,  axisFixed: true,  unit: "bar",          axis: "yPressure" },
+  { label: "p2",           color: DS_COLORS.p2,     live: true,  axisFixed: true,  unit: "bar",          axis: "yPressure" },
+  { label: "Δp",           color: DS_COLORS.dp,     live: true,  axisFixed: true,  unit: "bar",          axis: "yPressure" },
+  { label: "Q",            color: DS_COLORS.flow,   live: true,  axisFixed: false, unit: "l/min",        axis: "yFlow"     },
+  { label: "T",            color: DS_COLORS.temp,   live: true,  axisFixed: false, unit: "°C",           axis: "yTemp"     },
+  { label: "R_eff",        color: DS_COLORS.reff,   live: true,  axisFixed: false, unit: "bar·min/l",    axis: "yReff"     },
+  { label: "Reststandzeit",color: DS_COLORS.remain, live: true,  axisFixed: false, unit: "min",          axis: "yTime"     },
+  // Reference dp (indices 7,8,9)
+  { label: "±Tol Δp",     color: "rgba(0,212,255,0.35)",  ref: true, refGroup: "dp",   groupLabel: "Δp",   isTolerancePair: [7,8], isTolUpper: true },
+  { label: "_tol_dp_lo",  color: "rgba(0,212,255,0.35)",  ref: true, refGroup: "dp",   isToleranceLower: true },
+  { label: "Ref Δp",      color: DS_COLORS.refLine,        ref: true, refGroup: "dp",   refLabel: "Ref Δp"  },
+  // flow group (10, 11, 12)
+  { label: "±Tol Q",      color: "rgba(52,211,153,0.35)",  ref: true, refGroup: "flow", groupLabel: "Q",    isTolerancePair: [10,11], isTolUpper: true },
+  { label: "_tol_fl_lo",  color: "rgba(52,211,153,0.35)",  ref: true, refGroup: "flow", isToleranceLower: true },
+  { label: "Ref Q",       color: DS_COLORS.flow,           ref: true, refGroup: "flow", refLabel: "Ref Q"   },
+  // temp group (13, 14, 15)
+  { label: "±Tol T",      color: "rgba(251,146,60,0.35)",  ref: true, refGroup: "temp", groupLabel: "T",    isTolerancePair: [13,14], isTolUpper: true },
+  { label: "_tol_tp_lo",  color: "rgba(251,146,60,0.35)",  ref: true, refGroup: "temp", isToleranceLower: true },
+  { label: "Ref T",       color: DS_COLORS.temp,           ref: true, refGroup: "temp", refLabel: "Ref T"   },
+  // reff group (16, 17, 18)
+  { label: "±Tol R_eff",  color: "rgba(192,132,252,0.35)", ref: true, refGroup: "reff", groupLabel: "R_eff", isTolerancePair: [16,17], isTolUpper: true },
+  { label: "_tol_rf_lo",  color: "rgba(192,132,252,0.35)", ref: true, refGroup: "reff", isToleranceLower: true },
+  { label: "Ref R_eff",   color: DS_COLORS.reff,           ref: true, refGroup: "reff", refLabel: "Ref R_eff" },
+];
+
+const AXIS_OPTIONS = [
+  { id: "yPressure", label: "Links – Druck [bar]"              },
+  { id: "yFlow",     label: "Rechts 1 – Durchfluss [l/min]"   },
+  { id: "yTemp",     label: "Rechts 2 – Temperatur [°C]"      },
+  { id: "yReff",     label: "Rechts 3 – R_eff [bar·min/l]"    },
+  { id: "yTime",     label: "Rechts 4 – Reststandzeit [min]"  },
+];
+
+function _buildChartToggleButtons() {
+  if (!combinedChart) return;
+
+  // ── Live chips (indices 0-6) ─────────────────────────────────
+  const liveContainer = document.getElementById("chart-live-chips");
+  if (liveContainer) {
+    liveContainer.innerHTML = "";
+    for (let i = 0; i < 7; i++) {
+      const meta = DS_META[i];
+      const btn = document.createElement("button");
+      btn.className = "chart-chip";
+      btn.dataset.dsIndex = i;
+      btn.style.setProperty("--chip-color", meta.color);
+      btn.textContent = meta.label;
+      // Initially active unless the dataset meta says hidden
+      const hidden = combinedChart.getDatasetMeta(i).hidden;
+      if (!hidden) btn.classList.add("active");
+      btn.addEventListener("click", () => toggleChartDs(i));
+      liveContainer.appendChild(btn);
+    }
+  }
+
+  // ── Reference chips (grouped) ────────────────────────────────
+  const refContainer = document.getElementById("chart-ref-chips");
+  if (refContainer) {
+    refContainer.innerHTML = "";
+
+    // Groups: dp(7,8,9), flow(10,11,12), temp(13,14,15), reff(16,17,18)
+    const groups = [
+      { name: "dp",   label: "Δp",     refIdx: 9,  tolIdx: [7,8],   color: DS_COLORS.refLine,  tolColor: "rgba(0,212,255,0.35)"  },
+      { name: "flow", label: "Q",      refIdx: 12, tolIdx: [10,11], color: DS_COLORS.flow,     tolColor: "rgba(52,211,153,0.35)" },
+      { name: "temp", label: "T",      refIdx: 15, tolIdx: [13,14], color: DS_COLORS.temp,     tolColor: "rgba(251,146,60,0.35)" },
+      { name: "reff", label: "R_eff",  refIdx: 18, tolIdx: [16,17], color: DS_COLORS.reff,     tolColor: "rgba(192,132,252,0.35)"},
+    ];
+
+    for (const grp of groups) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "chart-chip-group";
+      wrapper.dataset.refGroup = grp.name;
+
+      // Ref chip
+      const refBtn = document.createElement("button");
+      refBtn.className = "chart-chip";
+      refBtn.dataset.dsIndex = grp.refIdx;
+      refBtn.dataset.refGroup = grp.name;
+      refBtn.style.setProperty("--chip-color", grp.color);
+      refBtn.textContent = `Ref ${grp.label}`;
+      refBtn.classList.add("disabled");
+      refBtn.disabled = true;
+      refBtn.addEventListener("click", () => toggleChartDs(grp.refIdx));
+      wrapper.appendChild(refBtn);
+
+      // Tol chip (toggles both upper and lower together)
+      const tolBtn = document.createElement("button");
+      tolBtn.className = "chart-chip";
+      tolBtn.dataset.dsIndex = grp.tolIdx[0];
+      tolBtn.dataset.refGroup = grp.name;
+      tolBtn.dataset.tolPair = JSON.stringify(grp.tolIdx);
+      tolBtn.style.setProperty("--chip-color", grp.tolColor);
+      tolBtn.textContent = `±Tol ${grp.label}`;
+      tolBtn.classList.add("disabled");
+      tolBtn.disabled = true;
+      tolBtn.addEventListener("click", () => {
+        const indices = JSON.parse(tolBtn.dataset.tolPair);
+        toggleChartDs(indices[0], indices);
+      });
+      wrapper.appendChild(tolBtn);
+
+      refContainer.appendChild(wrapper);
+    }
+  }
+}
+
+function _buildAxisPanel() {
+  if (!combinedChart) return;
+  const panel = document.getElementById("chart-axis-panel");
+  if (!panel) return;
+  panel.innerHTML = "";
+
+  for (let i = 0; i < 7; i++) {
+    const meta = DS_META[i];
+    const row = document.createElement("div");
+    row.className = "chart-axis-row";
+
+    const dot = document.createElement("span");
+    dot.className = "chart-axis-dot";
+    dot.style.background = meta.color;
+    row.appendChild(dot);
+
+    const label = document.createElement("span");
+    label.textContent = meta.label;
+    label.style.flex = "0 0 auto";
+    label.style.minWidth = "5rem";
+    row.appendChild(label);
+
+    if (meta.axisFixed) {
+      // Read-only label for fixed-axis datasets (p1, p2, Δp)
+      const fixedLabel = document.createElement("span");
+      fixedLabel.className = "chart-axis-select";
+      fixedLabel.style.opacity = "0.6";
+      fixedLabel.style.cursor = "default";
+      fixedLabel.textContent = "Links – Druck [bar]";
+      row.appendChild(fixedLabel);
+    } else {
+      const sel = document.createElement("select");
+      sel.className = "chart-axis-select";
+      sel.dataset.dsIndex = i;
+      for (const opt of AXIS_OPTIONS) {
+        const o = document.createElement("option");
+        o.value = opt.id;
+        o.textContent = opt.label;
+        if (opt.id === meta.axis) o.selected = true;
+        sel.appendChild(o);
+      }
+      sel.addEventListener("change", () => setDatasetAxis(i, sel.value));
+      row.appendChild(sel);
+    }
+
+    panel.appendChild(row);
+  }
+}
+
+function toggleChartDs(primaryIndex, allIndices) {
+  if (!combinedChart) return;
+  const indices = allIndices || [primaryIndex];
+
+  // Determine new state based on primary dataset
+  const primaryMeta = combinedChart.getDatasetMeta(primaryIndex);
+  const newHidden = !primaryMeta.hidden;
+
+  for (const idx of indices) {
+    combinedChart.getDatasetMeta(idx).hidden = newHidden;
+  }
+
+  // Update chip button active state
+  // Find all buttons that reference this primary index
+  document.querySelectorAll(`.chart-chip[data-ds-index="${primaryIndex}"]`).forEach(btn => {
+    btn.classList.toggle("active", !newHidden);
+  });
+
+  updateAxisVisibility();
+  combinedChart.update();
+}
+
+function setDatasetAxis(index, axisId) {
+  if (!combinedChart) return;
+  combinedChart.data.datasets[index].yAxisID = axisId;
+  if (DS_META[index]) DS_META[index].axis = axisId;
+  updateAxisVisibility();
+  combinedChart.update();
+}
+
+function updateAxisVisibility() {
+  if (!combinedChart) return;
+  const scales = combinedChart.options.scales;
+  const datasets = combinedChart.data.datasets;
+
+  for (const axisId of Object.keys(scales)) {
+    if (axisId === "x") continue;
+    // yPressure always stays visible (has annotations)
+    if (axisId === "yPressure") {
+      scales[axisId].display = true;
+      continue;
+    }
+    // Check if any dataset assigned to this axis is visible
+    let hasVisible = false;
+    datasets.forEach((ds, idx) => {
+      if (ds.yAxisID === axisId) {
+        const m = combinedChart.getDatasetMeta(idx);
+        if (m.hidden !== true) hasVisible = true;
+      }
+    });
+    scales[axisId].display = hasVisible;
+  }
+}
+
+function toggleAxisPanel() {
+  const panel = document.getElementById("chart-axis-panel");
+  const chevron = document.getElementById("chart-axis-chevron");
+  if (!panel) return;
+  const isHidden = panel.classList.toggle("hidden");
+  if (chevron) chevron.innerHTML = isHidden ? "&#9660;" : "&#9650;";
+}
+
+function _refreshRefChips() {
+  if (!combinedChart) return;
+  const ds = combinedChart.data.datasets;
+  const hasData = ds[9].data.length > 0;
+
+  // Groups and their indices
+  const groupInfo = [
+    { refIdx: 9,  tolIdx: [7,8]   },
+    { refIdx: 12, tolIdx: [10,11] },
+    { refIdx: 15, tolIdx: [13,14] },
+    { refIdx: 18, tolIdx: [16,17] },
+  ];
+
+  for (const grp of groupInfo) {
+    const grpHasData = ds[grp.refIdx].data.length > 0;
+
+    // Find chips for this ref index and tol indices
+    const refChip = document.querySelector(`#chart-ref-chips .chart-chip[data-ds-index="${grp.refIdx}"]`);
+    const tolChip = document.querySelector(`#chart-ref-chips .chart-chip[data-ds-index="${grp.tolIdx[0]}"]`);
+
+    if (refChip) {
+      refChip.disabled = !grpHasData;
+      refChip.classList.toggle("disabled", !grpHasData);
+      if (grpHasData && !combinedChart.getDatasetMeta(grp.refIdx).hidden) {
+        refChip.classList.add("active");
+      } else if (!grpHasData) {
+        refChip.classList.remove("active");
+      }
+    }
+    if (tolChip) {
+      tolChip.disabled = !grpHasData;
+      tolChip.classList.toggle("disabled", !grpHasData);
+      if (grpHasData && !combinedChart.getDatasetMeta(grp.tolIdx[0]).hidden) {
+        tolChip.classList.add("active");
+      } else if (!grpHasData) {
+        tolChip.classList.remove("active");
+      }
+    }
+
+    // When data first becomes available, make visible by default
+    if (grpHasData) {
+      [grp.refIdx, ...grp.tolIdx].forEach(idx => {
+        if (combinedChart.getDatasetMeta(idx).hidden === undefined ||
+            combinedChart.getDatasetMeta(idx).hidden === null) {
+          // leave as is (default visible)
+        }
+      });
+    }
+  }
+
+  // Also update the hint text
+  const hintEl = document.getElementById("chart-ref-hint");
+  if (hintEl) {
+    hintEl.textContent = hasData ? "" : "Kein aktiver Zyklus mit HETA-Code";
+  }
 }
 
 // ============================================================
@@ -1151,7 +1468,11 @@ function clearCharts() {
   if (!combinedChart) return;
   combinedChart.data.labels = [];
   combinedChart.data.datasets.forEach(ds => { ds.data = []; });
+  _knownCycleStart = null;
+  _refCurveCache = null;
+  _refCurveCacheCode = null;
   combinedChart.update("none");
+  _refreshRefChips();
 }
 
 // ---------------------------------------------------------------------------
