@@ -181,6 +181,7 @@ _state = {
     "flow_l_min": 0.0,
     "temperature_c": 0.0,
     "r_eff": 0.0,
+    "r_rel_factor": None,        # r_eff / r_eff_reference_start, None während Lernphase
     "filter_health_percent": 100.0,
     "filter_status": "OK",
     "sensor_error": False,
@@ -811,6 +812,7 @@ def _measurement_loop():
                 "flow_l_min": fs.flow_l_min,
                 "temperature_c": fs.temperature_c,
                 "r_eff": fs.r_eff,
+                "r_rel_factor": round(fs.r_eff / r_eff_clean_ref, 4) if (r_eff_clean_ref and r_eff_clean_ref > 0) else None,
                 "filter_health_percent": smoothed_health,
                 "filter_status": fs.status,
                 "sensor_error": fs.sensor_error,
@@ -2096,6 +2098,7 @@ def api_reference_curve():
         "heta_code":                  heta_code,
         "curve":                      curve,
         "reference_duration_seconds": profile.get("reference_duration_seconds", 0),
+        "reference_r_eff_start":      profile.get("reference_r_eff_start") or profile.get("reference_r_eff") or 0.0,
         "cycles_count":               profile.get("cycles_count", 0),
         "profile_valid":              bool(profile.get("profile_valid")),
         "tolerance_dp_pct":   settings.get("tolerance_dp_pct",   0.25),

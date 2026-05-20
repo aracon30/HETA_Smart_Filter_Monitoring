@@ -444,7 +444,13 @@ function updateDashboard(d) {
   setText("val-dp",    fmt(d.dp_bar, 3));
   setText("val-flow",  fmt(d.flow_l_min, 1));
   setText("val-temp",  fmt(d.temperature_c, 1));
-  setText("val-reff",  fmt(d.r_eff, 5));
+  if (d.r_rel_factor != null) {
+    setText("val-reff",      "×" + d.r_rel_factor.toFixed(2));
+    setText("val-reff-unit", "× Ref.");
+  } else {
+    setText("val-reff",      fmt(d.r_eff * 1000, 1));
+    setText("val-reff-unit", "mbar·min/l");
+  }
 
   // Beladungsgrad – nur bei aktivem HETA-Code anzeigen
   updateFilterHealth(d.filter_health_percent, d.show_filter_health);
@@ -532,7 +538,7 @@ function initCharts() {
         }),
         mkDs("Q [l/min]",           DS_COLORS.flow,   "yFlow"),
         mkDs("Temp [°C]",           DS_COLORS.temp,   "yTemp"),
-        mkDs("R_eff [bar·min/l]",   DS_COLORS.reff,   "yReff",   { borderDash: [5, 3] }),
+        mkDs("Widerstandsfaktor [×]", DS_COLORS.reff,  "yReff",   { borderDash: [5, 3] }),
         mkDs("Reststandzeit [min]", DS_COLORS.remain, "yTime",   { borderDash: [5, 3] }),
         // ── Referenz & Toleranz Δp (Indizes 7–9) ────────────────────────────
         // 7 = Toleranz Δp obere Grenze → füllt bis Dataset 8
@@ -762,7 +768,7 @@ function pushChartData(status) {
   ds[2].data.push({ x: now, y: status.dp_bar ?? null });
   ds[3].data.push({ x: now, y: status.flow_l_min ?? null });
   ds[4].data.push({ x: now, y: status.temperature_c ?? null });
-  ds[5].data.push({ x: now, y: status.r_eff ?? null });
+  ds[5].data.push({ x: now, y: status.r_rel_factor ?? status.r_eff ?? null });
   ds[6].data.push({ x: now, y: remMin });
   for (let i = 0; i < 7; i++) {
     if (ds[i].data.length > MAX_CHART_POINTS) ds[i].data.shift();
@@ -818,11 +824,12 @@ async function updateReferenceOverlay(status) {
   if (!refCurve?.curve?.length) return;
 
   const startMs  = startTime * 1000;
-  const refDurMs = (refCurve.reference_duration_seconds || 300) * 1000;
-  const tolDp    = refCurve.tolerance_dp_pct   ?? refCurve.tolerance_pct ?? 0.25;
-  const tolFlow  = refCurve.tolerance_flow_pct ?? 0.25;
-  const tolReff  = refCurve.tolerance_reff_pct ?? 0.25;
-  const tolTempC = refCurve.tolerance_temp_c   ?? 10.0;
+  const refDurMs       = (refCurve.reference_duration_seconds || 300) * 1000;
+  const tolDp          = refCurve.tolerance_dp_pct   ?? refCurve.tolerance_pct ?? 0.25;
+  const tolFlow        = refCurve.tolerance_flow_pct ?? 0.25;
+  const tolReff        = refCurve.tolerance_reff_pct ?? 0.25;
+  const tolTempC       = refCurve.tolerance_temp_c   ?? 10.0;
+  const reffStartRef   = refCurve.reference_r_eff_start || 0;
 
   // Dp datasets (7=upper, 8=lower, 9=center)
   const dpUpper = [], dpLower = [], dpCenter = [];
@@ -852,9 +859,11 @@ async function updateReferenceOverlay(status) {
       tpLower.push({  x: xMs, y: pt.temp - tolTempC });
     }
     if (pt.reff != null) {
-      rfCenter.push({ x: xMs, y: pt.reff });
-      rfUpper.push({  x: xMs, y: pt.reff * (1 + tolReff) });
-      rfLower.push({  x: xMs, y: Math.max(0, pt.reff * (1 - tolReff)) });
+      // Normieren auf Widerstandsfaktor: pt.reff / reference_r_eff_start
+      const rfNorm = reffStartRef > 0 ? pt.reff / reffStartRef : pt.reff;
+      rfCenter.push({ x: xMs, y: rfNorm });
+      rfUpper.push({  x: xMs, y: rfNorm * (1 + tolReff) });
+      rfLower.push({  x: xMs, y: Math.max(0, rfNorm * (1 - tolReff)) });
     }
   }
 
@@ -1019,7 +1028,7 @@ const DS_META = [
   { label: "Δp",           color: DS_COLORS.dp,     live: true,  axisFixed: true,  unit: "bar",          axis: "yPressure" },
   { label: "Q",            color: DS_COLORS.flow,   live: true,  axisFixed: false, unit: "l/min",        axis: "yFlow"     },
   { label: "T",            color: DS_COLORS.temp,   live: true,  axisFixed: false, unit: "°C",           axis: "yTemp"     },
-  { label: "R_eff",        color: DS_COLORS.reff,   live: true,  axisFixed: false, unit: "bar·min/l",    axis: "yReff"     },
+  { label: "Widerstandsfaktor", color: DS_COLORS.reff, live: true, axisFixed: false, unit: "×",          axis: "yReff"     },
   { label: "Reststandzeit",color: DS_COLORS.remain, live: true,  axisFixed: false, unit: "min",          axis: "yTime"     },
   // Reference dp (indices 7,8,9)
   { label: "±Tol Δp",     color: "rgba(0,212,255,0.35)",  ref: true, refGroup: "dp",   groupLabel: "Δp",   isTolerancePair: [7,8], isTolUpper: true },
@@ -1034,16 +1043,16 @@ const DS_META = [
   { label: "_tol_tp_lo",  color: "rgba(251,146,60,0.35)",  ref: true, refGroup: "temp", isToleranceLower: true },
   { label: "Ref T",       color: DS_COLORS.temp,           ref: true, refGroup: "temp", refLabel: "Ref T"   },
   // reff group (16, 17, 18)
-  { label: "±Tol R_eff",  color: "rgba(192,132,252,0.35)", ref: true, refGroup: "reff", groupLabel: "R_eff", isTolerancePair: [16,17], isTolUpper: true },
+  { label: "±Tol R",      color: "rgba(192,132,252,0.35)", ref: true, refGroup: "reff", groupLabel: "Wid.faktor", isTolerancePair: [16,17], isTolUpper: true },
   { label: "_tol_rf_lo",  color: "rgba(192,132,252,0.35)", ref: true, refGroup: "reff", isToleranceLower: true },
-  { label: "Ref R_eff",   color: DS_COLORS.reff,           ref: true, refGroup: "reff", refLabel: "Ref R_eff" },
+  { label: "Ref R",       color: DS_COLORS.reff,           ref: true, refGroup: "reff", refLabel: "Ref Wid.faktor" },
 ];
 
 const AXIS_OPTIONS = [
   { id: "yPressure", label: "Links – Druck [bar]"              },
   { id: "yFlow",     label: "Rechts 1 – Durchfluss [l/min]"   },
   { id: "yTemp",     label: "Rechts 2 – Temperatur [°C]"      },
-  { id: "yReff",     label: "Rechts 3 – R_eff [bar·min/l]"    },
+  { id: "yReff",     label: "Rechts 3 – Widerstandsfaktor [×]" },
   { id: "yTime",     label: "Rechts 4 – Reststandzeit [min]"  },
 ];
 
@@ -1671,12 +1680,14 @@ function updateAnalysisSection(d) {
   setText("an-dp-cur", fmt(dpCur, 3) + " bar");
   setAnalysisDev("an-dp-dev", dpDev, "%", _tolDp * 100, _tolDp * 200);
 
-  // R_eff vs. Referenzkurve
+  // R_eff vs. Referenzkurve – als Widerstandsfaktor anzeigen
   const reffRef = d.analysis_reff_ref ?? 0;
   const reffCur = d.analysis_reff_cur ?? d.r_eff ?? 0;
   const reffDev = d.analysis_reff_deviation_pct ?? 0;
-  setText("an-reff-ref", fmt(reffRef, 5) + " bar·min/l");
-  setText("an-reff-cur", fmt(reffCur, 5) + " bar·min/l");
+  const reffRefFactor = d.r_rel_factor != null && reffRef > 0 ? reffRef / reffRef : null; // Ref-Punkt = ×1.00
+  const reffCurFactor = d.r_rel_factor != null && reffRef > 0 ? reffCur / reffRef : null;
+  setText("an-reff-ref", reffRefFactor != null ? ("×" + reffRefFactor.toFixed(2)) : (fmt(reffRef * 1000, 1) + " mbar·min/l"));
+  setText("an-reff-cur", reffCurFactor != null ? ("×" + reffCurFactor.toFixed(2)) : (fmt(reffCur * 1000, 1) + " mbar·min/l"));
   setAnalysisDev("an-reff-dev", reffDev, "%", _tolReff * 100, _tolReff * 200);
 
   // Durchfluss Q vs. Referenzkurve
