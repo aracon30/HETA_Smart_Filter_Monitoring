@@ -167,6 +167,11 @@ _dp_rate_buffer: deque = deque(maxlen=60)
 # Geglätteter Beladungsgrad mit Ratchet-Filter (in Prozent, None = nicht initialisiert)
 _smoothed_health_pct: Optional[float] = None
 
+# Zeitstempel seit dem Durchfluss-/dp-Bedingung erstmals erfüllt (Stabilitätsfenster)
+_flow_stable_since: Optional[float] = None
+# Zeitstempel seit dem Durchfluss das erste Mal unter Schwellwert fiel (Pause-Toleranz)
+_flow_below_since: Optional[float] = None
+
 _state = {
     # Betriebsmodus
     "simulation_mode": settings.get("simulation_mode", True),
@@ -229,6 +234,16 @@ _state = {
     "cycle_active": False,
     "cycle_start_time": None,
     "cycle_dp_reached_time": None,  # Zeitpunkt an dem dp-Limit erreicht wurde
+
+    # Zyklusstart-Logik (Durchflusserkennung)
+    "waiting_for_flow": True,        # Wartet auf stabilen Durchfluss vor Zyklusstart
+    "cycle_paused": False,           # Zyklus durch Durchflussausfall pausiert
+    "cycle_active_seconds": 0.0,     # Kumulierte Betriebszeit (ohne Pausen)
+    "cycle_pause_start_time": None,  # Zeitpunkt des letzten Pausenbeginns
+    "flow_check_q": 0.0,             # Aktueller Q-Wert für Overlay-Anzeige
+    "flow_check_dp": 0.0,            # Aktueller dp-Wert für Overlay-Anzeige
+    "flow_threshold": 0.0,           # Effektiver Schwellwert (für Overlay)
+    "flow_stable_pct": 0,            # Fortschritt Stabilitätsfenster 0–100 %
 
     # Prognose
     "remaining_display": "Unbekannt",
@@ -502,6 +517,67 @@ if _display and _navigation:
 # Messzyklus-Thread
 # ---------------------------------------------------------------------------
 
+def _get_flow_thresholds() -> tuple:
+    """
+    Gibt (flow_threshold, stability_secs, pause_tolerance) zurück.
+    Manuelle Einstellungswerte haben Vorrang vor auto-berechneten Werten.
+    """
+    flow_max = settings.get("flow_max_l_min", 150.0)
+    # Durchfluss-Startschwellwert
+    manual_thr = settings.get("flow_start_threshold_l_min")
+    auto_thr   = settings.get("flow_start_threshold_auto") or 0.0
+    threshold  = float(manual_thr) if manual_thr else (auto_thr if auto_thr > 0 else flow_max * 0.10)
+    threshold  = max(threshold, 0.1)
+
+    # Stabilitätsfenster
+    manual_stab = settings.get("flow_stability_seconds")
+    auto_stab   = settings.get("flow_stability_seconds_auto") or 10
+    stability   = float(manual_stab) if manual_stab else float(auto_stab)
+    stability   = max(stability, 3.0)
+
+    # Pause-Toleranz (Batch: 60 s, Kontinuierlich: 30 s)
+    manual_pause = settings.get("flow_pause_tolerance_seconds")
+    auto_pause   = settings.get("flow_pause_tolerance_auto") or 0
+    if manual_pause:
+        pause_tol = float(manual_pause)
+    elif auto_pause > 0:
+        pause_tol = float(auto_pause)
+    else:
+        pause_tol = 60.0 if settings.get("operation_mode") == "batch" else 30.0
+    pause_tol = max(pause_tol, 5.0)
+
+    return threshold, stability, pause_tol
+
+
+def _update_auto_thresholds(active_cycle_samples: list):
+    """
+    Berechnet auto-Schwellwerte aus den Samples des abgeschlossenen Zyklus
+    und speichert sie in settings (werden in settings.local.json persistiert).
+    Läuft nach jedem bestätigten Filterwechsel.
+    """
+    if len(active_cycle_samples) < 10:
+        return
+
+    dp_clean = settings.get("dp_clean_bar", 0.2)
+    # Minimaler Durchfluss in Phasen mit dp > dp_clean (Filter beladen = Anlage läuft)
+    active_flows = [s for s in active_cycle_samples
+                    if s.get("dp_bar", 0) > dp_clean * 0.5 and s.get("flow_l_min", 0) > 0.1]
+    if len(active_flows) < 5:
+        return
+
+    min_flow = min(s["flow_l_min"] for s in active_flows)
+    new_threshold = round(max(min_flow * 0.4, 0.5), 1)
+
+    changed = False
+    if abs(new_threshold - (settings.get("flow_start_threshold_auto") or 0)) > 0.5:
+        settings["flow_start_threshold_auto"] = new_threshold
+        changed = True
+
+    if changed:
+        save_settings(settings)
+        logger.info("Auto-Durchflussschwellwert aktualisiert: %.1f l/min", new_threshold)
+
+
 def _measurement_loop():
     """Haupt-Messzyklus – läuft in einem Hintergrund-Thread."""
     interval = settings.get("sampling_interval_seconds", 1)
@@ -520,11 +596,13 @@ def _measurement_loop():
                     else settings.get("dp_clean_bar", 0.2))
 
         with _state_lock:
-            sim_mode = _state["simulation_mode"]
-            awaiting = _state["awaiting_confirmation"]
-            heta_code = _state["heta_code"]
-            heta_activated = _state["heta_activated"]
-            cycle_active = _state["cycle_active"]
+            sim_mode          = _state["simulation_mode"]
+            awaiting          = _state["awaiting_confirmation"]
+            heta_code         = _state["heta_code"]
+            heta_activated    = _state["heta_activated"]
+            cycle_active      = _state["cycle_active"]
+            waiting_for_flow  = _state["waiting_for_flow"]
+            cycle_paused      = _state["cycle_paused"]
 
         if awaiting:
             time.sleep(interval)
@@ -636,18 +714,149 @@ def _measurement_loop():
 
         smoothed_health = round(_smoothed_health_pct, 1)
 
-        # ── Zyklus starten falls nötig ────────────────────────────────────
-        if not cycle_active and not sensor_error and heta_code:
-            learning.start_cycle(heta_code, fs.r_eff, fs.dp_bar)
+        # ── Durchfluss-Zustandsmaschine ───────────────────────────────────
+        global _flow_stable_since, _flow_below_since
+        flow_thr, stab_secs, pause_tol = _get_flow_thresholds()
+        flow_ok = (fs.flow_l_min >= flow_thr and fs.dp_bar >= dp_clean * 0.5
+                   and not sensor_error)
+        now_ts  = time.time()
+
+        if waiting_for_flow and not awaiting:
+            # Overlay-Werte für Frontend live aktualisieren
+            stable_pct = 0
+            if flow_ok:
+                if _flow_stable_since is None:
+                    _flow_stable_since = now_ts
+                elapsed_stable = now_ts - _flow_stable_since
+                stable_pct = min(100, int(elapsed_stable / max(stab_secs, 1) * 100))
+                if elapsed_stable >= stab_secs:
+                    # Bedingung stabil lang genug → Zyklus starten
+                    _flow_stable_since = None
+                    _flow_below_since  = None
+                    if heta_code:
+                        learning.start_cycle(heta_code, fs.r_eff, fs.dp_bar)
+                    with _state_lock:
+                        _state["waiting_for_flow"]    = False
+                        _state["cycle_active"]        = True if heta_code else False
+                        _state["cycle_start_time"]    = now_ts
+                        _state["cycle_active_seconds"] = 0.0
+                    cycle_active     = bool(heta_code)
+                    waiting_for_flow = False
+                    logger.info("Durchfluss stabil – Zyklus gestartet (Q=%.1f l/min, dp=%.3f bar).",
+                                fs.flow_l_min, fs.dp_bar)
+            else:
+                _flow_stable_since = None  # Stabilitätsfenster zurücksetzen
+
             with _state_lock:
-                _state["cycle_active"] = True
-                _state["cycle_start_time"] = time.time()
-            logger.info("Neuer Filterzyklus gestartet.")
+                _state["flow_check_q"]   = round(fs.flow_l_min, 1)
+                _state["flow_check_dp"]  = round(fs.dp_bar, 3)
+                _state["flow_threshold"] = round(flow_thr, 1)
+                _state["flow_stable_pct"] = stable_pct
+
+            if waiting_for_flow:
+                # Display-Update und Weiter im Loop (keine Messwert-Aufzeichnung)
+                if _display:
+                    _display.show_waiting_for_flow(
+                        fs.flow_l_min, flow_thr, fs.dp_bar, dp_clean * 0.5,
+                        stable_pct, stab_secs,
+                    )
+                with _state_lock:
+                    _state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                time.sleep(interval)
+                continue
+
+        elif cycle_paused and not awaiting:
+            if flow_ok:
+                if _flow_stable_since is None:
+                    _flow_stable_since = now_ts
+                if now_ts - _flow_stable_since >= stab_secs:
+                    # Zyklus fortsetzen
+                    pause_dur = now_ts - (_state.get("cycle_pause_start_time") or now_ts)
+                    _flow_stable_since = None
+                    _flow_below_since  = None
+                    op_label = "Batch-Pause" if settings.get("operation_mode") == "batch" else "Unterbrechung"
+                    learning.add_event("PAUSE_ENDE",
+                                       f"{op_label} beendet nach {pause_dur:.0f} s")
+                    db.insert_service_event("ZYKLUS_PAUSE_ENDE", heta_code,
+                                            f"{op_label} nach {pause_dur:.0f} s beendet")
+                    with _state_lock:
+                        _state["cycle_paused"]           = False
+                        _state["cycle_pause_start_time"] = None
+                    cycle_paused = False
+                    logger.info("Zyklus fortgesetzt nach %.0f s Pause.", pause_dur)
+            else:
+                _flow_stable_since = None
+                # Maximale Pausendauer prüfen
+                pause_start = _state.get("cycle_pause_start_time") or now_ts
+                max_pause   = settings.get("flow_max_pause_days", 7) * 86400
+                if now_ts - pause_start >= max_pause:
+                    logger.warning("Maximale Pausendauer überschritten – Zyklus abgebrochen.")
+                    learning.abort_cycle()
+                    db.insert_service_event("ZYKLUS_ABGEBROCHEN", heta_code,
+                                            f"Kein Durchfluss seit {max_pause/86400:.0f} Tagen")
+                    with _state_lock:
+                        _state["cycle_paused"]           = False
+                        _state["cycle_active"]           = False
+                        _state["cycle_pause_start_time"] = None
+                        _state["waiting_for_flow"]       = True
+                    cycle_paused = False
+                    cycle_active = False
+
+            with _state_lock:
+                _state["flow_check_q"]  = round(fs.flow_l_min, 1)
+                _state["flow_threshold"] = round(flow_thr, 1)
+
+            if cycle_paused:
+                if _display:
+                    pause_secs = now_ts - (_state.get("cycle_pause_start_time") or now_ts)
+                    _display.show_cycle_paused(
+                        _state.get("cycle_active_seconds", 0.0), pause_secs
+                    )
+                with _state_lock:
+                    _state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                time.sleep(interval)
+                continue
+
+        elif cycle_active and not awaiting and not sensor_error:
+            # Zyklus aktiv – Betriebszeit zählen und Pause prüfen
+            if flow_ok:
+                _flow_below_since = None
+                with _state_lock:
+                    _state["cycle_active_seconds"] = (
+                        _state.get("cycle_active_seconds", 0.0) + interval
+                    )
+            else:
+                if _flow_below_since is None:
+                    _flow_below_since = now_ts
+                elif now_ts - _flow_below_since >= pause_tol:
+                    # Zyklus pausieren
+                    op_label = "Batch-Pause" if settings.get("operation_mode") == "batch" else "Unterbrechung"
+                    learning.add_event("PAUSE_START",
+                                       f"{op_label} gestartet – Q={fs.flow_l_min:.1f} l/min")
+                    db.insert_service_event("ZYKLUS_PAUSE_START", heta_code,
+                                            f"Q={fs.flow_l_min:.1f} l/min unter Schwellwert {flow_thr:.1f} l/min")
+                    _flow_below_since  = None
+                    _flow_stable_since = None
+                    with _state_lock:
+                        _state["cycle_paused"]           = True
+                        _state["cycle_pause_start_time"] = now_ts
+                    cycle_paused = True
+                    logger.info("Zyklus pausiert – Q=%.1f l/min < Schwellwert %.1f l/min.",
+                                fs.flow_l_min, flow_thr)
+
+        elif not cycle_active and not waiting_for_flow and not cycle_paused and not awaiting:
+            # Kein Zyklus und nicht wartend → in waiting_for_flow gehen
+            with _state_lock:
+                _state["waiting_for_flow"] = True
+            waiting_for_flow = True
 
         # ── Kurvenbasierter Profilvergleich ───────────────────────────────
         with _state_lock:
-            cycle_start_ts = _state.get("cycle_start_time")
-        elapsed = (time.time() - cycle_start_ts) if cycle_start_ts else 0.0
+            cycle_start_ts    = _state.get("cycle_start_time")
+            cycle_active_secs = _state.get("cycle_active_seconds", 0.0)
+        elapsed = cycle_active_secs if cycle_active_secs > 0 else (
+            (now_ts - cycle_start_ts) if cycle_start_ts else 0.0
+        )
 
         an_active = profile_valid and heta_activated and not sensor_error
         an_ready  = False
@@ -836,6 +1045,7 @@ def _measurement_loop():
                 "service_priority": rec["priority"],
                 "last_update": time.strftime("%Y-%m-%dT%H:%M:%S"),
                 "sim_rates_active": get_simulation_rates_active(),
+                "operation_mode": settings.get("operation_mode", "continuous"),
             })
 
         loop_elapsed = time.time() - t_start
@@ -1143,37 +1353,58 @@ def api_heta_reset_cycles():
 
 def _do_confirm_filter_change():
     """Führt die Filterwechsel-Bestätigung durch (REST-API und Display-Controller)."""
+    global _flow_stable_since, _flow_below_since
+
     with _state_lock:
-        heta_code = _state["heta_code"]
+        heta_code        = _state["heta_code"]
         cycle_was_active = _state["cycle_active"]
+        active_secs      = _state.get("cycle_active_seconds", 0.0)
 
     if cycle_was_active and learning.active_cycle:
         with _state_lock:
             current_r        = _state["r_eff"]
             current_dp       = _state["dp_bar"]
             dp_reached_time  = _state.get("cycle_dp_reached_time")
+        # Auto-Schwellwerte aus Zyklus-Samples aktualisieren
+        if heta_code:
+            try:
+                samples = [{"dp_bar": s, "flow_l_min": f}
+                           for s, f in zip(
+                               learning.active_cycle.dp_samples,
+                               learning.active_cycle.flow_samples,
+                           )]
+                _update_auto_thresholds(samples)
+            except Exception:
+                pass
         learning.end_cycle(confirmed=True,
                            end_r_eff=current_r,
                            end_dp=current_dp,
-                           end_time=dp_reached_time)
+                           end_time=dp_reached_time,
+                           active_seconds=active_secs if active_secs > 0 else None)
 
     global _smoothed_health_pct
     _smoothed_health_pct = None
     predictor.reset()
     _dp_rate_buffer.clear()
+    _flow_stable_since = None
+    _flow_below_since  = None
     reset_simulation()
 
     with _state_lock:
         _state["awaiting_confirmation"]  = False
         _state["cycle_active"]           = False
+        _state["cycle_paused"]           = False
+        _state["waiting_for_flow"]       = True   # Warten auf Durchfluss nach Wechsel
         _state["cycle_start_time"]       = None
         _state["cycle_dp_reached_time"]  = None
+        _state["cycle_active_seconds"]   = 0.0
+        _state["cycle_pause_start_time"] = None
         _state["anomaly_active"]         = False
         _state["anomaly_percent"]        = 0.0
 
     db.insert_service_event("FILTERWECHSEL_BESTAETIGT", heta_code,
                             json.dumps({"timestamp": time.time()}))
-    logger.info("Filterwechsel bestätigt. Neuer Zyklus beginnt.")
+    logger.info("Filterwechsel bestätigt – warte auf Durchfluss für neuen Zyklus.")
 
 
 @app.route("/api/diagnostics", methods=["GET"])
@@ -1855,6 +2086,7 @@ def api_onboarding_complete():
         "sampling_interval_seconds",
         "tolerance_dp_pct", "tolerance_reff_pct",
         "tolerance_flow_pct", "tolerance_temp_c",
+        "operation_mode",
     }
     for k, v in data.items():
         if k in onboarding_fields:

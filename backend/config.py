@@ -55,6 +55,16 @@ _DEFAULTS = {
     "max_increase_percent_per_update": 2,
     "max_decrease_percent_per_update": 8,
     "min_slope": 0.001,
+    # Zyklusstart-Verhalten (Durchflusserkennung)
+    "operation_mode": "continuous",          # "continuous" | "batch"
+    "flow_start_threshold_l_min": None,      # None = automatisch berechnet
+    "flow_stability_seconds": None,          # None = automatisch (Standard: 10 s)
+    "flow_pause_tolerance_seconds": None,    # None = automatisch (30/60 s)
+    "flow_max_pause_days": 7,               # Zyklus-Abbruch nach X Tagen ohne Durchfluss
+    # Auto-berechnete Schwellwerte (werden nach jedem Zyklus aktualisiert):
+    "flow_start_threshold_auto": 0.0,
+    "flow_stability_seconds_auto": 10,
+    "flow_pause_tolerance_auto": 30,
     # MQTT
     "mqtt_broker": "localhost",
     "mqtt_port": 1883,

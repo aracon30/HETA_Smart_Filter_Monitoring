@@ -83,7 +83,7 @@ function switchTab(tabName) {
 // ============================================================
 
 let _wizardStep = 1;
-const WIZARD_TOTAL = 6;
+const WIZARD_TOTAL = 7;
 
 async function checkOnboarding() {
   try {
@@ -127,7 +127,7 @@ function renderWizardStep() {
   const nextBtn = document.getElementById("wizard-next");
   nextBtn.textContent = _wizardStep === WIZARD_TOTAL ? "Einrichtung abschließen" : "Weiter";
 
-  // Schritt 6: Zusammenfassung befüllen
+  // Schritt 7: Zusammenfassung befüllen
   if (_wizardStep === WIZARD_TOTAL) buildSummary();
 }
 
@@ -146,7 +146,7 @@ function wizardBack() {
 }
 
 function validateWizardStep(step) {
-  if (step === 5) {
+  if (step === 6) {
     const pw  = document.getElementById("ob-password").value;
     const pw2 = document.getElementById("ob-password-confirm").value;
     if (pw.length < 4) { showMsg("ob-pw-msg", "Passwort muss mindestens 4 Zeichen haben.", true); return false; }
@@ -159,8 +159,11 @@ function validateWizardStep(step) {
 function buildSummary() {
   const mode = document.querySelector("input[name='op-mode']:checked")?.value === "hardware"
     ? "Hardwaremodus" : "Simulationsmodus";
+  const cycleMode = document.querySelector("input[name='cycle-mode']:checked")?.value === "batch"
+    ? "Intervallbetrieb (Batch)" : "Dauerbetrieb (kontinuierlich)";
   const lines = [
     ["Betriebsart", mode],
+    ["Betriebsweise", cycleMode],
     ["Grenzwert Filterwechsel (Δp)", `${document.getElementById("ob-dp-limit").value} bar`],
     ["Druckabfall sauberes Filter", "Wird automatisch aus Lernzyklen berechnet"],
     ["Maximaler Volumenstrom", `${document.getElementById("ob-flow-max").value} l/min`],
@@ -177,8 +180,10 @@ function buildSummary() {
 
 async function completeOnboarding() {
   const simMode = document.querySelector("input[name='op-mode']:checked")?.value !== "hardware";
+  const cycleMode = document.querySelector("input[name='cycle-mode']:checked")?.value ?? "continuous";
   const payload = {
     simulation_mode:    simMode,
+    operation_mode:     cycleMode,
     dp_limit_bar:       parseFloat(document.getElementById("ob-dp-limit").value),
     flow_max_l_min:     parseFloat(document.getElementById("ob-flow-max").value),
     pressure_range_bar: parseFloat(document.getElementById("ob-pressure-range").value),
@@ -333,6 +338,16 @@ async function loadSettingsIntoForm() {
     const slP1 = document.getElementById("sl-p1");
     if (slP1) slP1.max = s.pressure_range_bar ?? 10;
 
+    // Betriebsweise & Durchflusserkennung
+    const opModeEl = document.getElementById("s-operation-mode");
+    if (opModeEl) opModeEl.value = s.operation_mode ?? "continuous";
+    const thrEl = document.getElementById("s-flow-threshold");
+    if (thrEl) thrEl.value = s.flow_start_threshold_l_min != null ? s.flow_start_threshold_l_min : "";
+    const stabEl = document.getElementById("s-flow-stability");
+    if (stabEl) stabEl.value = s.flow_stability_seconds != null ? s.flow_stability_seconds : "";
+    const tolEl = document.getElementById("s-flow-pause-tol");
+    if (tolEl) tolEl.value = s.flow_pause_tolerance_seconds != null ? s.flow_pause_tolerance_seconds : "";
+
     // dp_clean aus Profil laden (wird aus Lernzyklen berechnet)
     const hetaCode = window._lastStatus?.heta_code;
     if (hetaCode) {
@@ -384,6 +399,13 @@ async function saveSettings() {
     temperature_max_c:         parseFloat(document.getElementById("s-temp-max").value),
     sampling_interval_seconds: parseInt(document.getElementById("s-interval").value, 10),
     simulation_mode:           document.getElementById("s-simulation-mode").checked,
+    operation_mode:            document.getElementById("s-operation-mode")?.value ?? "continuous",
+    flow_start_threshold_l_min: document.getElementById("s-flow-threshold")?.value !== ""
+      ? parseFloat(document.getElementById("s-flow-threshold").value) : null,
+    flow_stability_seconds: document.getElementById("s-flow-stability")?.value !== ""
+      ? parseInt(document.getElementById("s-flow-stability").value, 10) : null,
+    flow_pause_tolerance_seconds: document.getElementById("s-flow-pause-tol")?.value !== ""
+      ? parseInt(document.getElementById("s-flow-pause-tol").value, 10) : null,
     tolerance_dp_pct:   parseFloat(document.getElementById("s-tol-dp").value)   / 100,
     tolerance_reff_pct: parseFloat(document.getElementById("s-tol-reff").value) / 100,
     tolerance_flow_pct: parseFloat(document.getElementById("s-tol-flow").value) / 100,
@@ -449,6 +471,9 @@ function updateDashboard(d) {
   // Sensorfehler-Overlay (Hardwaremodus) hat Vorrang
   handleSensorFault(d);
 
+  // Fluss-Warte- und Pause-Overlays
+  updateFlowOverlays(d);
+
   setText("val-p1",    fmt(d.p1_bar, 3));
   setText("val-p2",    fmt(d.p2_bar, 3));
   setText("val-dp",    fmt(d.dp_bar, 3));
@@ -502,6 +527,49 @@ function updateDashboard(d) {
   _prevAwaiting = !!d.awaiting_confirmation;
   updateSimDemoPanel(d);
   updateAnalysisSection(d);
+}
+
+// ============================================================
+// Fluss-Overlays (Warte auf Durchfluss / Zyklus pausiert)
+// ============================================================
+
+function updateFlowOverlays(d) {
+  const waitEl  = document.getElementById("flow-wait-overlay");
+  const pauseEl = document.getElementById("flow-pause-overlay");
+  if (!waitEl || !pauseEl) return;
+
+  const waiting = !!d.waiting_for_flow;
+  const paused  = !!d.cycle_paused;
+
+  waitEl.classList.toggle("hidden", !waiting);
+  pauseEl.classList.toggle("hidden", paused || waiting ? !paused : true);
+
+  if (waiting) {
+    const q   = d.flow_check_q   ?? 0;
+    const thr = d.flow_threshold  ?? 0;
+    const pct = d.flow_stable_pct ?? 0;
+    document.getElementById("flow-wait-q").textContent   = `${q.toFixed(1)} l/min`;
+    document.getElementById("flow-wait-thr").textContent = `${thr.toFixed(1)} l/min`;
+    document.getElementById("flow-wait-pct").textContent = pct;
+    document.getElementById("flow-wait-bar").style.width = `${Math.min(pct, 100)}%`;
+  }
+
+  if (paused) {
+    const activeSecs = d.cycle_active_seconds ?? 0;
+    const pauseStart = d.cycle_pause_start_time;
+    const pauseSecs  = pauseStart ? (Date.now() / 1000 - pauseStart) : 0;
+    document.getElementById("pause-active-time").textContent = fmtSeconds(activeSecs);
+    document.getElementById("pause-elapsed").textContent     = fmtSeconds(Math.max(0, pauseSecs));
+  }
+}
+
+function fmtSeconds(s) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  if (h > 0) return `${h}h ${m.toString().padStart(2,"0")}m`;
+  if (m > 0) return `${m}m ${sec.toString().padStart(2,"0")}s`;
+  return `${sec}s`;
 }
 
 // ============================================================

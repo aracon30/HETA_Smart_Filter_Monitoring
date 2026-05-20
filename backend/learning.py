@@ -88,11 +88,14 @@ class LearningManager:
         c.remaining_samples.append(remaining_seconds)
 
     def end_cycle(self, confirmed: bool, end_r_eff: float, end_dp: float,
-                  end_time: float = None) -> Optional[dict]:
+                  end_time: float = None,
+                  active_seconds: float = None) -> Optional[dict]:
         """
         Schließt den aktiven Zyklus ab und speichert ihn in der Datenbank.
         end_time: Zeitpunkt an dem dp-Limit erreicht wurde (exkl. Wartezeit auf Bestätigung).
                   Wenn None, wird time.time() verwendet.
+        active_seconds: Kumulierte Betriebszeit (ohne Pausen). Wenn None, wird
+                        duration_seconds (Wanduhrzeit) verwendet – korrekt für Dauerbetrieb.
         Gibt die Zyklus-Daten zurück oder None falls kein Zyklus aktiv war.
         """
         if self._active_cycle is None:
@@ -102,20 +105,22 @@ class LearningManager:
         cycle = self._active_cycle
         now = end_time if end_time is not None else time.time()
         duration = now - cycle.start_time
+        active_secs = active_seconds if active_seconds is not None else duration
 
         avg_flow = (sum(cycle.flow_samples) / len(cycle.flow_samples)
                     if cycle.flow_samples else 0.0)
         avg_temp = (sum(cycle.temp_samples) / len(cycle.temp_samples)
                     if cycle.temp_samples else 0.0)
 
-        # Beladungsrate: dp-Anstieg pro Sekunde
-        loading_rate = (end_dp - cycle.start_dp) / max(duration, 1.0)
+        # Beladungsrate: dp-Anstieg pro aktiver Sekunde
+        loading_rate = (end_dp - cycle.start_dp) / max(active_secs, 1.0)
 
         cycle_data = {
             "heta_code":              cycle.heta_code,
             "start_time":             cycle.start_time,
             "end_time":               now,
             "duration_seconds":       round(duration, 1),
+            "active_seconds":         round(active_secs, 1),
             "start_r_eff":            round(cycle.start_r_eff, 5),
             "end_r_eff":              round(end_r_eff, 5),
             "start_dp":               round(cycle.start_dp, 3),
@@ -227,7 +232,11 @@ class LearningManager:
         ref_loading_rate = sum(c["loading_rate"]                  for c in learning_cycles) / n
         ref_avg_flow     = sum(c.get("average_flow",       0.0)   for c in learning_cycles) / n
         ref_avg_temp     = sum(c.get("average_temperature", 20.0) for c in learning_cycles) / n
-        ref_duration     = sum(c["duration_seconds"]              for c in learning_cycles) / n
+        # Betriebszeit bevorzugen (Batch-Modus: exkl. Pausen); Fallback auf Wanduhrzeit.
+        ref_duration     = sum(
+            c["active_seconds"] if c.get("active_seconds") else c["duration_seconds"]
+            for c in learning_cycles
+        ) / n
         # dp_clean = Ø der start_dp-Werte der Lernzyklen (gemessener Sauberdruckabfall)
         ref_dp_clean     = sum(c.get("start_dp", 0.0)             for c in learning_cycles) / n
 

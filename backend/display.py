@@ -383,6 +383,48 @@ class OLEDDisplay:
 
         self._render(draw_fn, f"{title}: {message}")
 
+    def show_waiting_for_flow(self, q_val: float, q_thr: float,
+                              dp_val: float, dp_thr: float,
+                              stable_pct: int, stab_secs: float):
+        """Wartet auf stabilen Durchfluss nach Filterwechsel / Systemstart."""
+        q_ok  = q_val  >= q_thr
+        dp_ok = dp_val >= dp_thr
+
+        def draw_fn(d):
+            self._draw_header(d, "WARTE AUF DURCHFL.")
+            d.text((0, _LINE1), f"Q:  {q_val:5.1f}/{q_thr:.1f} l/min",
+                   fill="white", font=self._font_sm)
+            d.text((0, _LINE2), f"Qp: {'OK ' if q_ok else 'N  '} | dp {'OK' if dp_ok else 'N '}",
+                   fill="white", font=self._font_sm)
+            self._draw_bar(d, 0, _LINE3, DISPLAY_WIDTH, 6, stable_pct / 100)
+            d.text((0, _LINE4), f"Stabil {stable_pct:3d}% / {stab_secs:.0f}s",
+                   fill="white", font=self._font_sm)
+
+        self._render(draw_fn, f"WaitFlow Q={q_val:.1f}/{q_thr:.1f} stable={stable_pct}%")
+
+    def show_cycle_paused(self, active_seconds: float, pause_seconds: float):
+        """Zyklus pausiert wegen fehlendem Durchfluss."""
+        def _fmt(s: float) -> str:
+            s = int(max(0, s))
+            h, m = divmod(s, 3600)
+            m, sc = divmod(m, 60)
+            if h > 0:
+                return f"{h}h {m:02d}m"
+            return f"{m}m {sc:02d}s"
+
+        def draw_fn(d):
+            self._draw_header(d, "ZYKLUS PAUSIERT")
+            d.text((0, _LINE1), "Kein Durchfluss",
+                   fill="white", font=self._font_sm)
+            d.text((0, _LINE2), f"Betr.: {_fmt(active_seconds)}",
+                   fill="white", font=self._font_sm)
+            d.text((0, _LINE3), f"Pause: {_fmt(pause_seconds)}",
+                   fill="white", font=self._font_sm)
+            d.text((0, _LINE4), "Warte auf Durchfluss",
+                   fill="white", font=self._font_sm)
+
+        self._render(draw_fn, f"CyclePaused active={active_seconds:.0f}s pause={pause_seconds:.0f}s")
+
     # ── Zeichen-Helfer ─────────────────────────────────────────────────────────
 
     def _draw_header(self, draw, title: str):
