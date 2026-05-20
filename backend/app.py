@@ -546,14 +546,17 @@ def _measurement_loop():
             failed_names = readings.get("failed_names", [])
             msg = f"Sensorfehler: {', '.join(failed_names)} – Messung gestoppt."
             logger.error("Messung gestoppt wegen Sensorfehler auf Kanal(en) %s.", failed_ch)
+            learning.abort_cycle()
             with _state_lock:
-                _state["running"] = False
-                _state["sensor_fault"] = True
+                _state["running"]          = False
+                _state["sensor_fault"]     = True
                 _state["sensor_fault_channels"] = failed_ch
-                _state["sensor_fault_message"] = msg
-                _state["filter_status"] = "FEHLER"
-                _state["sensor_error"] = True
-                _state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                _state["sensor_fault_message"]  = msg
+                _state["filter_status"]    = "FEHLER"
+                _state["sensor_error"]     = True
+                _state["cycle_active"]     = False
+                _state["cycle_start_time"] = None
+                _state["last_update"]      = time.strftime("%Y-%m-%dT%H:%M:%S")
             break
 
         sensor_error = not (p1.is_valid and p2.is_valid and temp.is_valid and flow.is_valid)
@@ -1577,14 +1580,22 @@ def api_onboarding_complete():
 
 @app.route("/api/simulation/start", methods=["POST"])
 def api_simulation_start():
-    """Startet den Simulationsmodus und den Messzyklus."""
-    with _state_lock:
-        _state["simulation_mode"] = True
-        _state["sensor_fault"] = False
-        _state["sensor_fault_channels"] = []
-        _state["sensor_fault_message"] = ""
-        _state["sensor_error"] = False
+    """Startet den Simulationsmodus und den Messzyklus. Setzt immer am Zyklusanfang an."""
+    global _smoothed_health_pct
+    learning.abort_cycle()
     reset_simulation()
+    _smoothed_health_pct = None
+    with _state_lock:
+        _state["simulation_mode"]       = True
+        _state["sensor_fault"]          = False
+        _state["sensor_fault_channels"] = []
+        _state["sensor_fault_message"]  = ""
+        _state["sensor_error"]          = False
+        _state["cycle_active"]          = False
+        _state["cycle_start_time"]      = None
+        _state["awaiting_confirmation"] = False
+        _state["anomaly_active"]        = False
+        _state["anomaly_percent"]       = 0.0
     if not _state["running"]:
         _start_measurement_thread()
     return jsonify({"success": True, "message": "Simulation gestartet."})
@@ -1592,11 +1603,19 @@ def api_simulation_start():
 
 @app.route("/api/simulation/stop", methods=["POST"])
 def api_simulation_stop():
-    """Stoppt den Messzyklus."""
+    """Stoppt den Messzyklus und verwirft einen eventuell laufenden Zyklus."""
+    global _smoothed_health_pct
     clear_simulation_rates()
+    learning.abort_cycle()
     with _state_lock:
-        _state["running"] = False
-        _state["sim_rates_active"] = False
+        _state["running"]               = False
+        _state["sim_rates_active"]      = False
+        _state["cycle_active"]          = False
+        _state["cycle_start_time"]      = None
+        _state["awaiting_confirmation"] = False
+        _state["anomaly_active"]        = False
+        _state["anomaly_percent"]       = 0.0
+    _smoothed_health_pct = None
     return jsonify({"success": True, "message": "Simulation gestoppt."})
 
 

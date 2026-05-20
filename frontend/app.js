@@ -477,10 +477,12 @@ function updateDashboard(d) {
   const dpLimit = window._settings?.dp_limit_bar ?? 2.5;
   setText("dp-limit-hint", `Limit: ${Number(dpLimit).toFixed(2)} bar`);
   styleCardByStatus("card-dp", d.filter_status);
-  pushChartData(d);
+  if (d.running && !d.awaiting_confirmation) {
+    pushChartData(d);
+    updateReferenceOverlay(d);
+  }
   updateSimDemoPanel(d);
   updateAnalysisSection(d);
-  updateReferenceOverlay(d);
 }
 
 // ============================================================
@@ -1289,6 +1291,7 @@ function _refreshRefChips() {
 
 async function startSimulation() {
   await apiFetch("/api/simulation/start", "POST");
+  clearCharts();
   showMsg("heta-msg", "Messung gestartet.", false);
 }
 

@@ -53,6 +53,13 @@ class LearningManager:
     # Zyklus-Verwaltung
     # ------------------------------------------------------------------
 
+    def abort_cycle(self):
+        """Verwirft den aktiven Zyklus ohne Speicherung (z. B. nach Stopp)."""
+        if self._active_cycle is not None:
+            logger.info("Aktiver Zyklus für %s verworfen (Messung gestoppt).",
+                        self._active_cycle.heta_code)
+            self._active_cycle = None
+
     def start_cycle(self, heta_code: str, r_eff: float, dp: float):
         """Startet einen neuen Filterzyklus."""
         self._active_cycle = ActiveCycle(
