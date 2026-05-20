@@ -255,7 +255,8 @@ db = Database(get_abs_path(settings.get("db_path", "data/heta_monitor.db")))
 learning = LearningManager(
     db,
     required_cycles=settings.get("required_cycles_for_profile", 3),
-    clean_resistance_tolerance=settings.get("clean_resistance_tolerance", 0.25),
+    tolerance_reff_pct=settings.get("tolerance_reff_pct",
+                                    settings.get("clean_resistance_tolerance", 0.25)),
 )
 predictor = PredictionEngine(
     dp_limit=settings.get("dp_limit_bar", 2.5),
@@ -1364,6 +1365,7 @@ def api_settings_post():
         reset_clogging=sim_params_changed,
     )
     predictor.update_limits(settings["dp_limit_bar"], settings["dp_clean_bar"])
+    learning.tolerance_reff_pct = settings.get("tolerance_reff_pct", 0.25)
     save_settings(settings)
 
     with _state_lock:
@@ -1475,6 +1477,8 @@ def api_onboarding_complete():
         "flow_max_l_min", "pressure_range_bar",
         "temperature_min_c", "temperature_max_c",
         "sampling_interval_seconds",
+        "tolerance_dp_pct", "tolerance_reff_pct",
+        "tolerance_flow_pct", "tolerance_temp_c",
     }
     for k, v in data.items():
         if k in onboarding_fields:
@@ -1494,6 +1498,7 @@ def api_onboarding_complete():
         t_base=settings.get("sim_t_base_c", 25.0),
     )
     predictor.update_limits(settings["dp_limit_bar"], settings["dp_clean_bar"])
+    learning.tolerance_reff_pct = settings.get("tolerance_reff_pct", 0.25)
 
     with _state_lock:
         _state["simulation_mode"] = settings["simulation_mode"]
@@ -1876,7 +1881,10 @@ def api_reference_curve():
         "reference_duration_seconds": profile.get("reference_duration_seconds", 0),
         "cycles_count":               profile.get("cycles_count", 0),
         "profile_valid":              bool(profile.get("profile_valid")),
-        "tolerance_pct":              settings.get("clean_resistance_tolerance", 0.25),
+        "tolerance_dp_pct":   settings.get("tolerance_dp_pct",   0.25),
+        "tolerance_reff_pct": settings.get("tolerance_reff_pct", 0.25),
+        "tolerance_flow_pct": settings.get("tolerance_flow_pct", 0.25),
+        "tolerance_temp_c":   settings.get("tolerance_temp_c",   10.0),
     })
 
 

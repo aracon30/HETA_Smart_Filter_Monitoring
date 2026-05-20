@@ -41,8 +41,10 @@ _DEFAULTS = {
     "db_path": "data/heta_monitor.db",
     "export_path": "exports/",
     "log_path": "logs/",
-    "anomaly_threshold_percent": 25,
-    "clean_resistance_tolerance": 0.25,
+    "tolerance_dp_pct":   0.25,
+    "tolerance_reff_pct": 0.25,
+    "tolerance_flow_pct": 0.25,
+    "tolerance_temp_c":   10.0,
     "required_cycles_for_profile": 3,
     # Simulation – feste Basiswerte
     "sim_p1_base_bar":   4.0,

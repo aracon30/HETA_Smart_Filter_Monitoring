@@ -43,10 +43,10 @@ class LearningManager:
     """
 
     def __init__(self, database, required_cycles: int = 3,
-                 clean_resistance_tolerance: float = 0.25):
+                 tolerance_reff_pct: float = 0.25):
         self.db = database
         self.required_cycles = required_cycles
-        self.clean_resistance_tolerance = clean_resistance_tolerance
+        self.tolerance_reff_pct = tolerance_reff_pct
         self._active_cycle: Optional[ActiveCycle] = None
 
     # ------------------------------------------------------------------
@@ -438,7 +438,7 @@ class LearningManager:
             return False, 0.0
 
         deviation = abs(current_r_eff - ref) / ref
-        anomaly = deviation > self.clean_resistance_tolerance
+        anomaly = deviation > self.tolerance_reff_pct
         return anomaly, round(deviation * 100, 1)
 
     @property

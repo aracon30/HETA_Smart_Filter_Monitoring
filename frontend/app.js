@@ -24,6 +24,12 @@ let _knownCycleStart = null;
 // Session-Token für Einstellungsbereich (wird im sessionStorage gehalten)
 const TOKEN_KEY = "heta_settings_token";
 
+// Aktuelle Toleranzwerte (als Fraktion; werden nach dem Laden der Einstellungen gesetzt)
+let _tolDp   = 0.25;
+let _tolReff = 0.25;
+let _tolFlow = 0.25;
+let _tolTempC = 10.0;
+
 // Tab-Navigation
 let _activeTab = "dashboard";
 let _cyclesPollTick = 0;
@@ -159,6 +165,8 @@ function buildSummary() {
     ["Max. Durchfluss", `${document.getElementById("ob-flow-max").value} l/min`],
     ["Druckbereich", `${document.getElementById("ob-pressure-range").value} bar`],
     ["Temperatur", `${document.getElementById("ob-temp-min").value} – ${document.getElementById("ob-temp-max").value} °C`],
+    ["Toleranz Δp / R_eff", `±${document.getElementById("ob-tol-dp").value} % / ±${document.getElementById("ob-tol-reff").value} %`],
+    ["Toleranz Q / T", `±${document.getElementById("ob-tol-flow").value} % / ±${document.getElementById("ob-tol-temp").value} °C`],
     ["Passwort", "••••••"],
   ];
   document.getElementById("ob-summary").innerHTML = lines
@@ -176,6 +184,10 @@ async function completeOnboarding() {
     pressure_range_bar: parseFloat(document.getElementById("ob-pressure-range").value),
     temperature_min_c:  parseFloat(document.getElementById("ob-temp-min").value),
     temperature_max_c:  parseFloat(document.getElementById("ob-temp-max").value),
+    tolerance_dp_pct:   parseFloat(document.getElementById("ob-tol-dp").value)   / 100,
+    tolerance_reff_pct: parseFloat(document.getElementById("ob-tol-reff").value) / 100,
+    tolerance_flow_pct: parseFloat(document.getElementById("ob-tol-flow").value) / 100,
+    tolerance_temp_c:   parseFloat(document.getElementById("ob-tol-temp").value),
     password:           document.getElementById("ob-password").value,
   };
 
@@ -258,6 +270,14 @@ async function loadSettingsIntoForm() {
     setInputVal("s-temp-min",        s.temperature_min_c);
     setInputVal("s-temp-max",        s.temperature_max_c);
     setInputVal("s-interval",        s.sampling_interval_seconds);
+    setInputVal("s-tol-dp",   Math.round((s.tolerance_dp_pct   ?? 0.25) * 100));
+    setInputVal("s-tol-reff", Math.round((s.tolerance_reff_pct ?? 0.25) * 100));
+    setInputVal("s-tol-flow", Math.round((s.tolerance_flow_pct ?? 0.25) * 100));
+    setInputVal("s-tol-temp", s.tolerance_temp_c ?? 10);
+    _tolDp    = s.tolerance_dp_pct   ?? 0.25;
+    _tolReff  = s.tolerance_reff_pct ?? 0.25;
+    _tolFlow  = s.tolerance_flow_pct ?? 0.25;
+    _tolTempC = s.tolerance_temp_c   ?? 10.0;
     const cb = document.getElementById("s-simulation-mode");
     if (cb) {
       cb.checked = !!s.simulation_mode;
@@ -309,12 +329,20 @@ async function saveSettings() {
     temperature_max_c:         parseFloat(document.getElementById("s-temp-max").value),
     sampling_interval_seconds: parseInt(document.getElementById("s-interval").value, 10),
     simulation_mode:           document.getElementById("s-simulation-mode").checked,
+    tolerance_dp_pct:   parseFloat(document.getElementById("s-tol-dp").value)   / 100,
+    tolerance_reff_pct: parseFloat(document.getElementById("s-tol-reff").value) / 100,
+    tolerance_flow_pct: parseFloat(document.getElementById("s-tol-flow").value) / 100,
+    tolerance_temp_c:   parseFloat(document.getElementById("s-tol-temp").value),
   };
   if (newPw) { payload.new_password = newPw; payload.old_password = oldPw; }
 
   const result = await apiFetchAuth("/api/settings", "POST", payload, token);
   if (result?.success) {
     window._settings = result.settings;
+    _tolDp    = result.settings.tolerance_dp_pct   ?? 0.25;
+    _tolReff  = result.settings.tolerance_reff_pct ?? 0.25;
+    _tolFlow  = result.settings.tolerance_flow_pct ?? 0.25;
+    _tolTempC = result.settings.tolerance_temp_c   ?? 10.0;
     document.getElementById("settings-reset-warning").classList.add("hidden");
     document.getElementById("s-new-pw").value = "";
     document.getElementById("s-old-pw").value = "";
@@ -690,7 +718,7 @@ async function updateReferenceOverlay(status) {
 
   const startMs  = startTime * 1000;
   const refDurMs = (refCurve.reference_duration_seconds || 300) * 1000;
-  const tol      = refCurve.tolerance_pct ?? 0.25;
+  const tol      = refCurve.tolerance_dp_pct ?? refCurve.tolerance_pct ?? 0.25;
 
   const upper = [], lower = [], center = [];
   for (const pt of refCurve.curve) {
@@ -710,7 +738,7 @@ async function updateReferenceOverlay(status) {
 // ============================================================
 
 function _buildCycleChartConfig(cycleLabel, cycleData, refCurve) {
-  const tolPct = refCurve?.tolerance_pct ?? 0.25;
+  const tolPct = refCurve?.tolerance_dp_pct ?? refCurve?.tolerance_pct ?? 0.25;
   const refCenter = refCurve?.curve?.length
     ? refCurve.curve.map(p => ({ x: p.t_pct, y: p.dp })) : [];
   const refUpper  = refCurve?.curve?.length
@@ -1221,7 +1249,7 @@ function updateAnalysisSection(d) {
   const dpDev = d.analysis_dp_deviation_pct ?? 0;
   setText("an-dp-ref", fmt(dpRef, 3) + " bar");
   setText("an-dp-cur", fmt(dpCur, 3) + " bar");
-  setAnalysisDev("an-dp-dev", dpDev, "%", 15, 40);
+  setAnalysisDev("an-dp-dev", dpDev, "%", _tolDp * 100, _tolDp * 200);
 
   // R_eff vs. Referenzkurve
   const reffRef = d.analysis_reff_ref ?? 0;
@@ -1229,7 +1257,7 @@ function updateAnalysisSection(d) {
   const reffDev = d.analysis_reff_deviation_pct ?? 0;
   setText("an-reff-ref", fmt(reffRef, 5) + " bar·min/l");
   setText("an-reff-cur", fmt(reffCur, 5) + " bar·min/l");
-  setAnalysisDev("an-reff-dev", reffDev, "%", 15, 40);
+  setAnalysisDev("an-reff-dev", reffDev, "%", _tolReff * 100, _tolReff * 200);
 
   // Durchfluss Q vs. Referenzkurve
   const flRef = d.analysis_flow_ref ?? 0;
@@ -1237,7 +1265,7 @@ function updateAnalysisSection(d) {
   const flDev = d.analysis_flow_deviation_pct ?? 0;
   setText("an-fl-ref", fmt(flRef, 1) + " l/min");
   setText("an-fl-cur", fmt(flCur, 1) + " l/min");
-  setAnalysisDev("an-fl-dev", flDev, "%", 15, 30);
+  setAnalysisDev("an-fl-dev", flDev, "%", _tolFlow * 100, _tolFlow * 200);
 
   // Temperatur T vs. Referenzkurve
   const tRef = d.analysis_temp_ref      ?? 0;
@@ -1245,7 +1273,7 @@ function updateAnalysisSection(d) {
   const tDev = d.analysis_temp_deviation ?? 0;
   setText("an-tmp-ref", fmt(tRef, 1) + " °C");
   setText("an-tmp-cur", fmt(tCur, 1) + " °C");
-  setAnalysisDev("an-tmp-dev", tDev, "°C", 8, 20, true);
+  setAnalysisDev("an-tmp-dev", tDev, "°C", _tolTempC, _tolTempC * 2, true);
 
   setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev));
 }

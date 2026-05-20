@@ -129,6 +129,42 @@
             <small>Messbereich der Drucksensoren (ifm PL5423).</small>
           </label>
         </div>
+        <p style="font-size:.82rem;color:var(--text-muted);margin:.9rem 0 .5rem;border-top:1px solid var(--border);padding-top:.75rem">
+          <strong style="color:var(--heta-blue-mid)">Toleranzen</strong> – Maximal erlaubte Abweichung vom gelernten Profil (bis Grenze: OK, bis 2×: Warnung, darüber: Alarm)
+        </p>
+        <div class="form-grid">
+          <label>
+            Δp-Toleranz
+            <div class="input-unit-row">
+              <input type="number" id="ob-tol-dp" value="25" min="1" max="100" step="1" />
+              <span class="unit-label">%</span>
+            </div>
+            <small>Toleranz für Differenzdruck – steuert Toleranzband im Diagramm.</small>
+          </label>
+          <label>
+            R_eff-Toleranz
+            <div class="input-unit-row">
+              <input type="number" id="ob-tol-reff" value="25" min="1" max="100" step="1" />
+              <span class="unit-label">%</span>
+            </div>
+            <small>Toleranz für Filterwiderstand und Startanomalien.</small>
+          </label>
+          <label>
+            Durchfluss-Toleranz
+            <div class="input-unit-row">
+              <input type="number" id="ob-tol-flow" value="25" min="1" max="100" step="1" />
+              <span class="unit-label">%</span>
+            </div>
+          </label>
+          <label>
+            Temperatur-Toleranz
+            <div class="input-unit-row">
+              <input type="number" id="ob-tol-temp" value="10" min="1" max="50" step="1" />
+              <span class="unit-label">°C</span>
+            </div>
+            <small>Absolute Abweichung in °C.</small>
+          </label>
+        </div>
       </div>
 
       <div class="wizard-step hidden" data-step="4">
@@ -252,6 +288,45 @@
               <div class="input-unit-row">
                 <input type="number" id="s-pressure-range" min="1" max="100" step="1" />
                 <span class="unit-label">bar</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Toleranzen (Abweichungsgrenzen)</h3>
+          <p class="settings-hint">Maximale Abweichung vom gelernten Referenzprofil. Bis zur Grenze: OK (grün) – bis 2× Grenze: Warnung (gelb) – darüber: Alarm (rot). Betrifft Diagramm-Toleranzband und Analysetabelle.</p>
+          <div class="form-grid">
+            <label>
+              Differenzdruck Δp
+              <small>Toleranz in ±%</small>
+              <div class="input-unit-row">
+                <input type="number" id="s-tol-dp" min="1" max="100" step="1" />
+                <span class="unit-label">%</span>
+              </div>
+            </label>
+            <label>
+              Filterwiderstand R_eff
+              <small>Toleranz in ±% (auch für Startanomalien)</small>
+              <div class="input-unit-row">
+                <input type="number" id="s-tol-reff" min="1" max="100" step="1" />
+                <span class="unit-label">%</span>
+              </div>
+            </label>
+            <label>
+              Durchfluss Q
+              <small>Toleranz in ±%</small>
+              <div class="input-unit-row">
+                <input type="number" id="s-tol-flow" min="1" max="100" step="1" />
+                <span class="unit-label">%</span>
+              </div>
+            </label>
+            <label>
+              Temperatur T
+              <small>Toleranz in ±°C (absolut)</small>
+              <div class="input-unit-row">
+                <input type="number" id="s-tol-temp" min="1" max="50" step="1" />
+                <span class="unit-label">°C</span>
               </div>
             </label>
           </div>
