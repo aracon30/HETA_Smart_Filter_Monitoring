@@ -2203,7 +2203,8 @@ function renderCyclesTable(cycles) {
     countBadge.style.display = "";
   }
 
-  const hetaCode = window._lastStatus?.heta_code || "";
+  const hetaCode  = window._lastStatus?.heta_code || "";
+  const reqCycles = window._lastStatus?.required_cycles ?? 3;
   const rows = cycles.slice().reverse().map((c, idx) => {
     const dt      = new Date((c.start_time ?? 0) * 1000);
     const dateStr = dt.toLocaleDateString("de-DE",  { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -2214,8 +2215,14 @@ function renderCyclesTable(cycles) {
       : `${durMin} min`;
     const rateMs  = ((c.loading_rate ?? 0) * 1000).toFixed(3);
     const ok      = c.confirmed_filter_change;
-    const rowCls  = ok ? "cycle-confirmed" : "";
     const cycleNum = cycles.length - idx;
+    const isLearning = cycleNum <= reqCycles;
+    const rowCls  = ok ? "cycle-confirmed" : "";
+
+    // Lernzyklus-Badge für die ersten reqCycles Zyklen
+    const learningBadge = isLearning
+      ? `<span class="badge badge-learn" title="Dieser Zyklus bildet die Referenz">Lernzyklus</span>`
+      : "";
 
     // Problemmeldungen aus events_json
     let events = [];
@@ -2235,8 +2242,8 @@ function renderCyclesTable(cycles) {
       `data-events='${(c.events_json || "[]").replace(/'/g, "&apos;")}'`,
     ].join(" ");
 
-    return `<tr class="${rowCls}">
-      <td>${cycleNum}</td>
+    return `<tr class="${rowCls}${isLearning ? " cycle-learning" : ""}">
+      <td>${cycleNum} ${learningBadge}</td>
       <td><span class="cycle-date">${dateStr}</span><span class="cycle-time">${timeStr}</span></td>
       <td>${durStr}</td>
       <td>${fmt(c.start_dp, 3)} bar</td>

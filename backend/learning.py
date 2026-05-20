@@ -182,7 +182,11 @@ class LearningManager:
     # ------------------------------------------------------------------
 
     def _update_profile(self, heta_code: str):
-        """Aktualisiert das Referenzprofil aus allen bestätigten Zyklen."""
+        """
+        Aktualisiert das Referenzprofil.
+        Die Referenzwerte werden NUR aus den ersten required_cycles Zyklen berechnet
+        und danach eingefroren. Spätere Zyklen erhöhen nur noch cycles_count.
+        """
         cycles = self.db.get_cycles_for_heta(heta_code)
         confirmed = [c for c in cycles if c["confirmed_filter_change"]]
         count = len(confirmed)
@@ -190,16 +194,42 @@ class LearningManager:
         if count == 0:
             return
 
-        ref_r_eff        = sum(c["start_r_eff"]                  for c in confirmed) / count
-        ref_r_eff_end    = sum(c["end_r_eff"]                    for c in confirmed) / count
-        ref_loading_rate = sum(c["loading_rate"]                  for c in confirmed) / count
-        ref_avg_flow     = sum(c.get("average_flow",       0.0)   for c in confirmed) / count
-        ref_avg_temp     = sum(c.get("average_temperature", 20.0) for c in confirmed) / count
-        ref_duration     = sum(c["duration_seconds"]              for c in confirmed) / count
-        profile_valid    = 1 if count >= self.required_cycles else 0
+        # Referenzprofil ist eingefroren sobald genug Lernzyklen vorliegen
+        profile_valid = 1 if count >= self.required_cycles else 0
 
-        # Zeitbasierte Referenzkurve berechnen
-        curve = self._compute_reference_curve(confirmed)
+        if count > self.required_cycles:
+            # Nur cycles_count aktualisieren, Referenzwerte bleiben unverändert
+            existing = self.db.get_profile(heta_code)
+            if existing and existing.get("profile_valid"):
+                self.db.upsert_profile(heta_code, {
+                    "reference_r_eff":            existing["reference_r_eff"],
+                    "reference_r_eff_end":        existing.get("reference_r_eff_end", 0.0),
+                    "reference_loading_rate":     existing["reference_loading_rate"],
+                    "reference_avg_flow":         existing.get("reference_avg_flow", 0.0),
+                    "reference_avg_temp":         existing.get("reference_avg_temp", 20.0),
+                    "reference_duration_seconds": existing.get("reference_duration_seconds", 0.0),
+                    "reference_r_eff_start":      existing.get("reference_r_eff_start", 0.0),
+                    "reference_curve_json":       existing.get("reference_curve_json"),
+                    "cycles_count":               count,
+                    "profile_valid":              1,
+                })
+                logger.info("Profil eingefroren für %s – Zyklus %d wird nicht in Referenz aufgenommen.",
+                            heta_code, count)
+                return
+
+        # Nur die ersten required_cycles Zyklen für die Referenzberechnung verwenden
+        learning_cycles = confirmed[:self.required_cycles]
+        n = len(learning_cycles)
+
+        ref_r_eff        = sum(c["start_r_eff"]                  for c in learning_cycles) / n
+        ref_r_eff_end    = sum(c["end_r_eff"]                    for c in learning_cycles) / n
+        ref_loading_rate = sum(c["loading_rate"]                  for c in learning_cycles) / n
+        ref_avg_flow     = sum(c.get("average_flow",       0.0)   for c in learning_cycles) / n
+        ref_avg_temp     = sum(c.get("average_temperature", 20.0) for c in learning_cycles) / n
+        ref_duration     = sum(c["duration_seconds"]              for c in learning_cycles) / n
+
+        # Zeitbasierte Referenzkurve nur aus Lernzyklen berechnen
+        curve = self._compute_reference_curve(learning_cycles)
 
         self.db.upsert_profile(heta_code, {
             "reference_r_eff":              round(ref_r_eff, 6),
@@ -213,8 +243,8 @@ class LearningManager:
             "cycles_count":                 count,
             "profile_valid":                profile_valid,
         })
-        logger.info("Profil aktualisiert für %s: %d Zyklen, valide=%s, Kurve=%d Stützpunkte",
-                    heta_code, count, bool(profile_valid), len(curve))
+        logger.info("Profil aktualisiert für %s: %d/%d Lernzyklen, valide=%s, Kurve=%d Stützpunkte",
+                    heta_code, n, self.required_cycles, bool(profile_valid), len(curve))
 
     def _compute_reference_curve(self, confirmed_cycles: list) -> list:
         """
