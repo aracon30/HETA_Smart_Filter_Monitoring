@@ -197,6 +197,7 @@ _state = {
     "sensor_fault_message": "",
 
     # Simulations-Szenario-Parameter
+    "sim_cycle_seconds":       settings.get("sim_cycle_seconds", 300),
     "sim_rates_active":        False,
     "sim_scenario":            "normal",
     "sim_dirt_rate_pct":       100.0,
@@ -272,6 +273,7 @@ update_simulation_params(
     dp_clean=settings.get("dp_clean_bar", 0.2),
     dp_limit=settings.get("dp_limit_bar", 2.5),
     flow_max=settings.get("flow_max_l_min", 150.0),
+    cycle_seconds=settings.get("sim_cycle_seconds", 300),
     p1_base=settings.get("sim_p1_base_bar", 4.0),
     q_base=settings.get("sim_q_base_l_min", 145.0),
     t_base=settings.get("sim_t_base_c", 25.0),
@@ -1493,6 +1495,7 @@ def api_settings_post():
         dp_clean=settings["dp_clean_bar"],
         dp_limit=settings["dp_limit_bar"],
         flow_max=settings["flow_max_l_min"],
+        cycle_seconds=settings.get("sim_cycle_seconds", 300),
         p1_base=settings.get("sim_p1_base_bar", 4.0),
         q_base=settings.get("sim_q_base_l_min", 145.0),
         t_base=settings.get("sim_t_base_c", 25.0),
@@ -1688,6 +1691,7 @@ def api_onboarding_complete():
         dp_clean=settings["dp_clean_bar"],
         dp_limit=settings["dp_limit_bar"],
         flow_max=settings["flow_max_l_min"],
+        cycle_seconds=settings.get("sim_cycle_seconds", 300),
         p1_base=settings.get("sim_p1_base_bar", 4.0),
         q_base=settings.get("sim_q_base_l_min", 145.0),
         t_base=settings.get("sim_t_base_c", 25.0),
@@ -1933,6 +1937,21 @@ def api_simulation_set_rates():
     flow_drop_pct  = max(10.0,  min(float(data.get("flow_drop_pct",  75.0)),  99.0))
     temp_trend     = max(-5.0,  min(float(data.get("temp_trend",     0.0)),   5.0))
     scenario       = str(data.get("scenario", "custom"))
+    cycle_secs     = max(10.0, min(float(data.get("cycle_seconds", settings.get("sim_cycle_seconds", 300))), 86400.0))
+
+    settings["sim_cycle_seconds"] = round(cycle_secs)
+    save_settings(settings)
+
+    update_simulation_params(
+        dp_clean=settings["dp_clean_bar"],
+        dp_limit=settings["dp_limit_bar"],
+        flow_max=settings["flow_max_l_min"],
+        cycle_seconds=cycle_secs,
+        p1_base=settings.get("sim_p1_base_bar", 4.0),
+        q_base=settings.get("sim_q_base_l_min", 145.0),
+        t_base=settings.get("sim_t_base_c", 25.0),
+        reset_clogging=False,
+    )
 
     set_simulation_scenario_params(
         dirt_rate_factor    = dirt_rate_pct / 100.0,
@@ -1946,6 +1965,7 @@ def api_simulation_set_rates():
     temp_dev     = round(temp_trend, 1)
 
     with _state_lock:
+        _state["sim_cycle_seconds"]      = round(cycle_secs)
         _state["sim_rates_active"]       = True
         _state["sim_scenario"]           = scenario
         _state["sim_dirt_rate_pct"]      = round(dirt_rate_pct, 1)
