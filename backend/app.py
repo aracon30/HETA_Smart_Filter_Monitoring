@@ -682,6 +682,10 @@ def _measurement_loop():
         else:
             remaining_s = predictor.update(fs.dp_bar)
 
+        # dp-Limit erreicht → Reststandzeit ist definitiv 0
+        if fs.dp_bar >= dp_limit:
+            remaining_s = 0.0
+
         # ── Lernwert erfassen (mit Beladungsgrad und Reststandzeit) ───────
         if cycle_active and not sensor_error:
             learning.record_sample(
@@ -712,10 +716,6 @@ def _measurement_loop():
             elif fs.status in (STATUS_WECHSEL, STATUS_WECHSEL_BESTAETIGEN):
                 learning.add_event("WECHSEL",
                     f"Filterwechsel erforderlich – Δp={fs.dp_bar:.3f} bar")
-
-        # dp-Limit erreicht → Reststandzeit ist definitiv 0
-        if fs.dp_bar >= dp_limit:
-            remaining_s = 0.0
 
         # ── Prognosestatus ────────────────────────────────────────────────
         req_cycles  = settings.get("required_cycles_for_profile", 3)

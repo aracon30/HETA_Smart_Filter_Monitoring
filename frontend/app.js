@@ -33,6 +33,7 @@ let _tolTempC = 10.0;
 // Tab-Navigation
 let _activeTab = "dashboard";
 let _cyclesPollTick = 0;
+let _prevAwaiting = false;
 
 // ============================================================
 // Init
@@ -477,10 +478,12 @@ function updateDashboard(d) {
   const dpLimit = window._settings?.dp_limit_bar ?? 2.5;
   setText("dp-limit-hint", `Limit: ${Number(dpLimit).toFixed(2)} bar`);
   styleCardByStatus("card-dp", d.filter_status);
-  if (d.running && !d.awaiting_confirmation) {
+  const awaitingJustSet = d.awaiting_confirmation && !_prevAwaiting;
+  if (d.running && (!d.awaiting_confirmation || awaitingJustSet)) {
     pushChartData(d);
     updateReferenceOverlay(d);
   }
+  _prevAwaiting = !!d.awaiting_confirmation;
   updateSimDemoPanel(d);
   updateAnalysisSection(d);
 }
@@ -1292,6 +1295,7 @@ function _refreshRefChips() {
 async function startSimulation() {
   await apiFetch("/api/simulation/start", "POST");
   clearCharts();
+  _prevAwaiting = false;
   showMsg("heta-msg", "Messung gestartet.", false);
 }
 
