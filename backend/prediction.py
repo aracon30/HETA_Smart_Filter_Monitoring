@@ -194,7 +194,9 @@ class PredictionEngine:
                 frac = (dp_bar - dp_lo) / (dp_hi - dp_lo)
                 return t_lo + frac * (t_hi - t_lo)
 
-        return pts[-1][0]
+        # Alle Abschnitte nicht-monoton – nächsten dp-Punkt suchen
+        closest = min(pts, key=lambda p: abs(p[1] - dp_bar))
+        return closest[0]
 
     def _calculate_slope(self) -> Optional[float]:
         """Lineare Regression über das dp-Messfenster (1 Index = 1 Sekunde)."""

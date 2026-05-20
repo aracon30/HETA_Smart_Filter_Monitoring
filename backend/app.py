@@ -239,6 +239,7 @@ _state = {
     "learned_cycles": 0,
     "required_cycles": settings.get("required_cycles_for_profile", 3),
     "profile_status": "LERNEND",
+    "reference_dp_clean": 0.0,
     "anomaly_active": False,
     "anomaly_percent": 0.0,
     # Beladungsgrad nur anzeigen wenn HETA-Code aktiv
@@ -829,6 +830,7 @@ def _measurement_loop():
                 "learned_cycles": cycles_count,
                 "required_cycles": req_cycles,
                 "profile_status": "VALIDIERT" if profile_valid else "LERNEND",
+                "reference_dp_clean": (_loop_profile.get("reference_dp_clean") or 0.0) if _loop_profile else 0.0,
                 "show_filter_health": heta_activated,
                 "service_message": rec["message"],
                 "service_priority": rec["priority"],
@@ -1828,10 +1830,16 @@ def api_simulation_quick_learn():
     start_vals = _sim_step(0)
     end_vals   = _sim_step(cycle_steps)
 
-    # Analytisch: ∫₀¹ (1 - flow_drop * c^1.5) dc = 1 - flow_drop * 2/5 = 1 - 0.4*flow_drop
-    avg_flow = round(sim_q_base * (1.0 - 0.4 * sim_flow_drop), 2)
-    avg_temp = round(sim_t_base + sim_temp_trend * 0.5, 1)
-    loading_rate = round((end_vals["dp"] - dp_clean) / max(cycle_secs, 1.0), 6)
+    # Mittelwerte aus tatsächlichen Samples berechnen (nicht analytisch).
+    # Wichtig bei hohem flow_drop: analytische Formel ignoriert den q_min-Clamp.
+    stride = max(1, cycle_steps // 100)
+    sample_steps = list(range(0, cycle_steps + 1, stride))
+    all_sample_vals = [_sim_step(s) for s in sample_steps]
+    avg_flow = round(sum(sv["flow"] for sv in all_sample_vals) / len(all_sample_vals), 2)
+    avg_temp = round(sum(sv["temp"] for sv in all_sample_vals) / len(all_sample_vals), 1)
+
+    # Beladungsrate: (dp_ende - dp_start) / Zyklusdauer [bar/s]
+    loading_rate = round((end_vals["dp"] - start_vals["dp"]) / max(cycle_secs, 1.0), 6)
 
     existing = db.count_confirmed_cycles(heta_code)
     needed   = max(0, required_cycles - existing)
@@ -1846,7 +1854,7 @@ def api_simulation_quick_learn():
             "duration_seconds":       round(cycle_secs, 1),
             "start_r_eff":            round(start_vals["r_eff"], 6),
             "end_r_eff":              round(end_vals["r_eff"],   6),
-            "start_dp":               round(dp_clean, 3),
+            "start_dp":               round(start_vals["dp"], 4),
             "end_dp":                 round(end_vals["dp"], 3),
             "average_flow":           avg_flow,
             "average_temperature":    avg_temp,
@@ -1854,12 +1862,9 @@ def api_simulation_quick_learn():
             "confirmed_filter_change": 1,
         })
 
-        # Zeitreihe exakt nach Simulator-Formel generieren.
-        # Stride damit maximal ~100 Samples pro Zyklus gespeichert werden.
-        stride  = max(1, cycle_steps // 100)
+        # Zeitreihe aus den bereits berechneten Samples übernehmen.
         samples = []
-        for s in range(0, cycle_steps + 1, stride):
-            sv = _sim_step(s)
+        for s, sv in zip(sample_steps, all_sample_vals):
             t  = t_start + s * sampling_interval
             samples.append({
                 "cycle_id":             cycle_id,

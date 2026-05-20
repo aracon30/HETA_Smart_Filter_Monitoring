@@ -1781,11 +1781,11 @@ let _rateValues = { cycle_seconds: 300, dirt_rate_pct: 100.0, p1_trend_pct: 0.0,
 
 const SIM_SCENARIOS = {
   normal:         { dirt_rate_pct: 100, p1_trend_pct:   0, flow_drop_pct: 75, temp_trend:  0 },
-  high_dirt:      { dirt_rate_pct: 250, p1_trend_pct:   0, flow_drop_pct: 75, temp_trend:  0 },
-  low_p1:         { dirt_rate_pct: 100, p1_trend_pct: -10, flow_drop_pct: 75, temp_trend:  0 },
-  high_flow_drop: { dirt_rate_pct: 100, p1_trend_pct:   0, flow_drop_pct: 90, temp_trend:  0 },
-  rising_temp:    { dirt_rate_pct: 100, p1_trend_pct:   0, flow_drop_pct: 75, temp_trend:  5 },
-  atypical:       { dirt_rate_pct: 180, p1_trend_pct: -10, flow_drop_pct: 90, temp_trend:  3 },
+  high_dirt:      { dirt_rate_pct: 150, p1_trend_pct:   0, flow_drop_pct: 75, temp_trend:  0 },
+  low_p1:         { dirt_rate_pct: 100, p1_trend_pct:  -5, flow_drop_pct: 75, temp_trend:  0 },
+  high_flow_drop: { dirt_rate_pct: 100, p1_trend_pct:   0, flow_drop_pct: 85, temp_trend:  0 },
+  rising_temp:    { dirt_rate_pct: 100, p1_trend_pct:   0, flow_drop_pct: 75, temp_trend:  3 },
+  atypical:       { dirt_rate_pct: 130, p1_trend_pct:  -5, flow_drop_pct: 85, temp_trend:  2 },
 };
 
 function _syncCycleDurSlider(cycleSecs) {
@@ -1846,12 +1846,11 @@ function updateComparison(d) {
   cmpEl.classList.toggle("hidden", !active);
   if (!active) return;
 
-  const s       = window._settings || {};
-  const dp_clean = s.dp_clean_bar ?? 0.2;
+  const s        = window._settings || {};
+  const dp_clean = d.reference_dp_clean || s.dp_clean_bar || 0.2;
   const dp_limit = s.dp_limit_bar ?? 2.5;
-  const samp     = parseFloat(s.sampling_interval_seconds ?? 1);
-  const cyc_steps = s.cycle_steps ?? 300;
-  const ref_rate  = (dp_limit - dp_clean) / Math.max(samp * cyc_steps, 1);
+  const cyc_secs = d.sim_cycle_seconds ?? 300;
+  const ref_rate  = (dp_limit - dp_clean) / Math.max(cyc_secs, 1);
 
   const dirt_pct     = d.sim_dirt_rate_pct      ?? 100.0;
   const dp_dev       = d.sim_dp_deviation_pct   ?? 0.0;
