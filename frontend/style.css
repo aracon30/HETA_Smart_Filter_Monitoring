@@ -825,6 +825,119 @@ main {
   color: var(--text-muted);
 }
 
+.chart-toggle-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .45rem;
+  padding: .45rem .25rem;
+}
+.chart-toggle-label {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-right: .25rem;
+}
+.chart-toggle-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .35rem;
+}
+.chart-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  padding: .22rem .7rem;
+  border-radius: 20px;
+  font-size: .77rem;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid var(--chip-color, var(--border));
+  background: transparent;
+  color: var(--text-muted);
+  transition: background .15s, color .15s, opacity .15s;
+  white-space: nowrap;
+}
+.chart-chip::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--chip-color, var(--border));
+  flex-shrink: 0;
+}
+.chart-chip.active {
+  background: var(--chip-color, var(--heta-accent));
+  color: #0a1628;
+  border-color: var(--chip-color);
+}
+.chart-chip.active::before { background: rgba(0,0,0,0.3); }
+.chart-chip:disabled, .chart-chip.disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+.chart-chip-group {
+  display: flex;
+  gap: .2rem;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  padding: .05rem .15rem;
+}
+.chart-chip-group .chart-chip {
+  border-radius: 18px;
+}
+.chart-axis-config {
+  padding: .3rem .25rem 0;
+}
+.chart-axis-config-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: .78rem;
+  cursor: pointer;
+  padding: .2rem .1rem;
+  font-weight: 600;
+  letter-spacing: .03em;
+  transition: color .15s;
+}
+.chart-axis-config-toggle:hover { color: var(--heta-blue-mid); }
+.chart-axis-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: .4rem .75rem;
+  padding: .65rem .1rem .3rem;
+}
+.chart-axis-row {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-size: .82rem;
+  color: var(--text-main);
+}
+.chart-axis-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.chart-axis-select {
+  flex: 1;
+  background: rgba(255,255,255,0.05);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .22rem .5rem;
+  font-size: .8rem;
+  cursor: pointer;
+  outline: none;
+}
+.chart-axis-select:focus { border-color: var(--heta-accent); }
+
 .chart-container {
   background: rgba(10,15,30,0.6);
   border: 1px solid var(--border);

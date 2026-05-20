@@ -529,19 +529,19 @@ function initCharts() {
         mkDs("Temp [°C]",           DS_COLORS.temp,   "yTemp"),
         mkDs("R_eff [bar·min/l]",   DS_COLORS.reff,   "yReff",   { borderDash: [5, 3] }),
         mkDs("Reststandzeit [min]", DS_COLORS.remain, "yTime",   { borderDash: [5, 3] }),
-        // ── Referenz & Toleranz (Indizes 7–9) ────────────────────────────
-        // 7 = Toleranz obere Grenze → füllt bis Dataset 8
+        // ── Referenz & Toleranz Δp (Indizes 7–9) ────────────────────────────
+        // 7 = Toleranz Δp obere Grenze → füllt bis Dataset 8
         {
-          label: "Toleranzband",
+          label: "±Tol Δp",
           yAxisID: "yPressure", data: [], parsing: false,
           borderColor: DS_COLORS.tolEdge,
           backgroundColor: DS_COLORS.tolBand,
           borderWidth: 1, borderDash: [3, 4],
           pointRadius: 0, tension: 0.3, fill: "+1",
         },
-        // 8 = Toleranz untere Grenze (aus Legende ausgeblendet)
+        // 8 = Toleranz Δp untere Grenze
         {
-          label: "_tol_lower",
+          label: "_tol_dp_lower",
           yAxisID: "yPressure", data: [], parsing: false,
           borderColor: DS_COLORS.tolEdge,
           backgroundColor: "transparent",
@@ -549,7 +549,76 @@ function initCharts() {
           pointRadius: 0, tension: 0.3, fill: false,
         },
         // 9 = Referenz Δp-Linie
-        mkDs("Referenz Δp", DS_COLORS.refLine, "yPressure", {
+        mkDs("Ref Δp", DS_COLORS.refLine, "yPressure", {
+          borderWidth: 1.5, borderDash: [10, 5],
+        }),
+        // ── Referenz & Toleranz Q (Indizes 10–12) ───────────────────────────
+        // 10 = Toleranz Q obere Grenze → füllt bis Dataset 11
+        {
+          label: "±Tol Q",
+          yAxisID: "yFlow", data: [], parsing: false,
+          borderColor: "rgba(52,211,153,0.35)",
+          backgroundColor: "rgba(52,211,153,0.08)",
+          borderWidth: 1, borderDash: [3, 4],
+          pointRadius: 0, tension: 0.3, fill: "+1",
+        },
+        // 11 = Toleranz Q untere Grenze
+        {
+          label: "_tol_flow_lower",
+          yAxisID: "yFlow", data: [], parsing: false,
+          borderColor: "rgba(52,211,153,0.35)",
+          backgroundColor: "transparent",
+          borderWidth: 1, borderDash: [3, 4],
+          pointRadius: 0, tension: 0.3, fill: false,
+        },
+        // 12 = Referenz Q-Linie
+        mkDs("Ref Q", DS_COLORS.flow, "yFlow", {
+          borderWidth: 1.5, borderDash: [10, 5],
+        }),
+        // ── Referenz & Toleranz Temp (Indizes 13–15) ────────────────────────
+        // 13 = Toleranz T obere Grenze → füllt bis Dataset 14
+        {
+          label: "±Tol T",
+          yAxisID: "yTemp", data: [], parsing: false,
+          borderColor: "rgba(251,146,60,0.35)",
+          backgroundColor: "rgba(251,146,60,0.08)",
+          borderWidth: 1, borderDash: [3, 4],
+          pointRadius: 0, tension: 0.3, fill: "+1",
+        },
+        // 14 = Toleranz T untere Grenze
+        {
+          label: "_tol_temp_lower",
+          yAxisID: "yTemp", data: [], parsing: false,
+          borderColor: "rgba(251,146,60,0.35)",
+          backgroundColor: "transparent",
+          borderWidth: 1, borderDash: [3, 4],
+          pointRadius: 0, tension: 0.3, fill: false,
+        },
+        // 15 = Referenz T-Linie
+        mkDs("Ref T", DS_COLORS.temp, "yTemp", {
+          borderWidth: 1.5, borderDash: [10, 5],
+        }),
+        // ── Referenz & Toleranz R_eff (Indizes 16–18) ───────────────────────
+        // 16 = Toleranz R_eff obere Grenze → füllt bis Dataset 17
+        {
+          label: "±Tol R_eff",
+          yAxisID: "yReff", data: [], parsing: false,
+          borderColor: "rgba(192,132,252,0.35)",
+          backgroundColor: "rgba(192,132,252,0.08)",
+          borderWidth: 1, borderDash: [3, 4],
+          pointRadius: 0, tension: 0.3, fill: "+1",
+        },
+        // 17 = Toleranz R_eff untere Grenze
+        {
+          label: "_tol_reff_lower",
+          yAxisID: "yReff", data: [], parsing: false,
+          borderColor: "rgba(192,132,252,0.35)",
+          backgroundColor: "transparent",
+          borderWidth: 1, borderDash: [3, 4],
+          pointRadius: 0, tension: 0.3, fill: false,
+        },
+        // 18 = Referenz R_eff-Linie
+        mkDs("Ref R_eff", DS_COLORS.reff, "yReff", {
           borderWidth: 1.5, borderDash: [10, 5],
         }),
       ],
@@ -561,31 +630,7 @@ function initCharts() {
       interaction: { mode: "index", intersect: false },
       plugins: {
         legend: {
-          display: true,
-          position: "top",
-          labels: {
-            usePointStyle: true,
-            padding: 14,
-            font: { size: 11 },
-            color: "#cbd5e1",
-            filter: item => !item.text.startsWith("_"),
-          },
-          onClick(e, legendItem, legend) {
-            // Standard-Toggle; Toleranz oben+unten gemeinsam schalten
-            const idx = legendItem.datasetIndex;
-            const chart = legend.chart;
-            const meta7 = chart.getDatasetMeta(7);
-            const meta8 = chart.getDatasetMeta(8);
-            if (idx === 7) {
-              const hidden = !meta7.hidden;
-              meta7.hidden = hidden;
-              meta8.hidden = hidden;
-            } else {
-              const meta = chart.getDatasetMeta(idx);
-              meta.hidden = !meta.hidden;
-            }
-            chart.update();
-          },
+          display: false,
         },
         tooltip: {
           mode: "index",
@@ -697,6 +742,9 @@ function initCharts() {
       },
     },
   });
+
+  _buildChartToggleButtons();
+  _buildAxisPanel();
 }
 
 function pushChartData(status) {

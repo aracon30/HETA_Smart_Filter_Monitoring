@@ -935,8 +935,27 @@
             <button class="btn btn-ghost btn-sm" onclick="resetChartZoom()">Zoom zurücksetzen</button>
           </div>
         </div>
+        <!-- Live toggles - ABOVE chart -->
+        <div class="chart-toggle-bar">
+          <span class="chart-toggle-label">Messwerte</span>
+          <div id="chart-live-chips" class="chart-toggle-chips"></div>
+        </div>
+        <!-- Chart -->
         <div class="chart-container">
           <canvas id="chart-combined"></canvas>
+        </div>
+        <!-- Reference toggles - BELOW chart -->
+        <div class="chart-toggle-bar">
+          <span class="chart-toggle-label">Referenz &amp; Toleranz</span>
+          <div id="chart-ref-chips" class="chart-toggle-chips"></div>
+          <span id="chart-ref-hint" class="chart-hint" style="font-size:.73rem;margin-left:.25rem"></span>
+        </div>
+        <!-- Y-axis assignment panel -->
+        <div class="chart-axis-config">
+          <button class="chart-axis-config-toggle" onclick="toggleAxisPanel()">
+            Achsenzuordnung <span id="chart-axis-chevron">&#9660;</span>
+          </button>
+          <div id="chart-axis-panel" class="hidden chart-axis-panel"></div>
         </div>
       </section>
 
