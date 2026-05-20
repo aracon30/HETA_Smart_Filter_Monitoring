@@ -87,9 +87,12 @@ class LearningManager:
         c.health_samples.append(filter_health_percent)
         c.remaining_samples.append(remaining_seconds)
 
-    def end_cycle(self, confirmed: bool, end_r_eff: float, end_dp: float) -> Optional[dict]:
+    def end_cycle(self, confirmed: bool, end_r_eff: float, end_dp: float,
+                  end_time: float = None) -> Optional[dict]:
         """
         Schließt den aktiven Zyklus ab und speichert ihn in der Datenbank.
+        end_time: Zeitpunkt an dem dp-Limit erreicht wurde (exkl. Wartezeit auf Bestätigung).
+                  Wenn None, wird time.time() verwendet.
         Gibt die Zyklus-Daten zurück oder None falls kein Zyklus aktiv war.
         """
         if self._active_cycle is None:
@@ -97,7 +100,7 @@ class LearningManager:
             return None
 
         cycle = self._active_cycle
-        now = time.time()
+        now = end_time if end_time is not None else time.time()
         duration = now - cycle.start_time
 
         avg_flow = (sum(cycle.flow_samples) / len(cycle.flow_samples)

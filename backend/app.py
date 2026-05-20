@@ -226,6 +226,7 @@ _state = {
     "awaiting_confirmation": False,
     "cycle_active": False,
     "cycle_start_time": None,
+    "cycle_dp_reached_time": None,  # Zeitpunkt an dem dp-Limit erreicht wurde
 
     # Prognose
     "remaining_display": "Unbekannt",
@@ -548,15 +549,16 @@ def _measurement_loop():
             logger.error("Messung gestoppt wegen Sensorfehler auf Kanal(en) %s.", failed_ch)
             learning.abort_cycle()
             with _state_lock:
-                _state["running"]          = False
-                _state["sensor_fault"]     = True
+                _state["running"]               = False
+                _state["sensor_fault"]          = True
                 _state["sensor_fault_channels"] = failed_ch
                 _state["sensor_fault_message"]  = msg
-                _state["filter_status"]    = "FEHLER"
-                _state["sensor_error"]     = True
-                _state["cycle_active"]     = False
-                _state["cycle_start_time"] = None
-                _state["last_update"]      = time.strftime("%Y-%m-%dT%H:%M:%S")
+                _state["filter_status"]         = "FEHLER"
+                _state["sensor_error"]          = True
+                _state["cycle_active"]          = False
+                _state["cycle_start_time"]      = None
+                _state["cycle_dp_reached_time"] = None
+                _state["last_update"]           = time.strftime("%Y-%m-%dT%H:%M:%S")
             break
 
         sensor_error = not (p1.is_valid and p2.is_valid and temp.is_valid and flow.is_valid)
@@ -730,7 +732,8 @@ def _measurement_loop():
             logger.warning("Filterwechsel-Grenzwert überschritten! dp=%.3f >= %.2f",
                            fs.dp_bar, dp_limit)
             with _state_lock:
-                _state["awaiting_confirmation"] = True
+                _state["awaiting_confirmation"]  = True
+                _state["cycle_dp_reached_time"]  = time.time()
             if _display_ctrl:
                 _display_ctrl.navigate_to_filter_change()
                 _display.show_filter_change(fs.dp_bar, dp_limit, armed=False, awaiting=True)
@@ -931,13 +934,14 @@ def api_heta_reset_cycles():
 
     # Zustandsvariablen zurücksetzen
     with _state_lock:
-        _state["cycle_active"]      = False
-        _state["cycle_start_time"]  = None
+        _state["cycle_active"]          = False
+        _state["cycle_start_time"]      = None
+        _state["cycle_dp_reached_time"] = None
         _state["awaiting_confirmation"] = False
-        _state["anomaly_active"]    = False
-        _state["anomaly_percent"]   = 0.0
-        _state["analysis_active"]   = False
-        _state["analysis_ready"]    = False
+        _state["anomaly_active"]        = False
+        _state["anomaly_percent"]       = 0.0
+        _state["analysis_active"]       = False
+        _state["analysis_ready"]        = False
 
     db.insert_service_event("LERNZYKLEN_RESET", heta_code,
                             json.dumps({"timestamp": time.time()}))
@@ -958,11 +962,13 @@ def _do_confirm_filter_change():
 
     if cycle_was_active and learning.active_cycle:
         with _state_lock:
-            current_r = _state["r_eff"]
-            current_dp = _state["dp_bar"]
+            current_r        = _state["r_eff"]
+            current_dp       = _state["dp_bar"]
+            dp_reached_time  = _state.get("cycle_dp_reached_time")
         learning.end_cycle(confirmed=True,
                            end_r_eff=current_r,
-                           end_dp=current_dp)
+                           end_dp=current_dp,
+                           end_time=dp_reached_time)
 
     global _smoothed_health_pct
     _smoothed_health_pct = None
@@ -982,11 +988,12 @@ def _do_confirm_filter_change():
             predictor.seed(seed_secs)
 
     with _state_lock:
-        _state["awaiting_confirmation"] = False
-        _state["cycle_active"] = False
-        _state["cycle_start_time"] = None
-        _state["anomaly_active"] = False
-        _state["anomaly_percent"] = 0.0
+        _state["awaiting_confirmation"]  = False
+        _state["cycle_active"]           = False
+        _state["cycle_start_time"]       = None
+        _state["cycle_dp_reached_time"]  = None
+        _state["anomaly_active"]         = False
+        _state["anomaly_percent"]        = 0.0
 
     db.insert_service_event("FILTERWECHSEL_BESTAETIGT", heta_code,
                             json.dumps({"timestamp": time.time()}))
@@ -1591,11 +1598,12 @@ def api_simulation_start():
         _state["sensor_fault_channels"] = []
         _state["sensor_fault_message"]  = ""
         _state["sensor_error"]          = False
-        _state["cycle_active"]          = False
-        _state["cycle_start_time"]      = None
-        _state["awaiting_confirmation"] = False
-        _state["anomaly_active"]        = False
-        _state["anomaly_percent"]       = 0.0
+        _state["cycle_active"]           = False
+        _state["cycle_start_time"]       = None
+        _state["cycle_dp_reached_time"]  = None
+        _state["awaiting_confirmation"]  = False
+        _state["anomaly_active"]         = False
+        _state["anomaly_percent"]        = 0.0
     if not _state["running"]:
         _start_measurement_thread()
     return jsonify({"success": True, "message": "Simulation gestartet."})
@@ -1608,13 +1616,14 @@ def api_simulation_stop():
     clear_simulation_rates()
     learning.abort_cycle()
     with _state_lock:
-        _state["running"]               = False
-        _state["sim_rates_active"]      = False
-        _state["cycle_active"]          = False
-        _state["cycle_start_time"]      = None
-        _state["awaiting_confirmation"] = False
-        _state["anomaly_active"]        = False
-        _state["anomaly_percent"]       = 0.0
+        _state["running"]                = False
+        _state["sim_rates_active"]       = False
+        _state["cycle_active"]           = False
+        _state["cycle_start_time"]       = None
+        _state["cycle_dp_reached_time"]  = None
+        _state["awaiting_confirmation"]  = False
+        _state["anomaly_active"]         = False
+        _state["anomaly_percent"]        = 0.0
     _smoothed_health_pct = None
     return jsonify({"success": True, "message": "Simulation gestoppt."})
 
