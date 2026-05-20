@@ -263,9 +263,6 @@ learning = LearningManager(
 predictor = PredictionEngine(
     dp_limit=settings.get("dp_limit_bar", 2.5),
     dp_clean=settings.get("dp_clean_bar", 0.2),
-    smoothing_factor=settings.get("smoothing_factor", 0.15),
-    max_increase_pct=settings.get("max_increase_percent_per_update", 2.0),
-    max_decrease_pct=settings.get("max_decrease_percent_per_update", 8.0),
     min_slope=settings.get("min_slope", 0.001),
 )
 
@@ -676,19 +673,9 @@ def _measurement_loop():
                 temp_dev           = analysis["temp_deviation"]
 
         # ── Reststandzeit berechnen ───────────────────────────────────────
-        if profile_valid and heta_activated and cycle_active:
-            ref_dur = profile.get("reference_duration_seconds", 0) if profile else 0
-            # Reststandzeit aus tatsächlich verstrichener Zeit; R_eff-Abweichung
-            # korrigiert die Rate (bei +100 % R_eff-Abw. → Filter lädt doppelt so
-            # schnell → Restzeit halbiert sich via predictor-internem factor).
-            reff_dev_for_pred = reff_dev if analysis else 0.0
-            remaining_s = predictor.update_curve_based(elapsed, ref_dur, reff_dev_for_pred)
-        else:
-            remaining_s = predictor.update(fs.dp_bar)
-
-        # dp-Limit erreicht → Reststandzeit ist definitiv 0
-        if fs.dp_bar >= dp_limit:
-            remaining_s = 0.0
+        # Immer aus aktuellen Messwerten: (dp_limit − dp_bar) / Beladungsrate.
+        # Nähert sich natürlich 0 wenn dp → dp_limit; kein harter Sprung.
+        remaining_s = predictor.update(fs.dp_bar)
 
         # ── Lernwert erfassen (mit Beladungsgrad und Reststandzeit) ───────
         if cycle_active and not sensor_error:
@@ -980,18 +967,6 @@ def _do_confirm_filter_change():
     predictor.reset()
     _dp_rate_buffer.clear()
     reset_simulation()
-
-    # Startwert aus dem validierten Lernprofil setzen, damit die Reststandzeit
-    # nach dem Filterwechsel sofort einen sinnvollen Wert zeigt.
-    if heta_code:
-        profile = learning.get_profile(heta_code)
-        if (profile and profile.get("profile_valid")
-                and profile.get("reference_loading_rate", 0) > 0):
-            # Gemessenen dp_clean aus Profil bevorzugen
-            dp_start = (profile.get("reference_dp_clean") or 0.0) or settings.get("dp_clean_bar", 0.2)
-            dp_lim   = settings.get("dp_limit_bar", 2.5)
-            seed_secs = (dp_lim - dp_start) / profile["reference_loading_rate"]
-            predictor.seed(seed_secs)
 
     with _state_lock:
         _state["awaiting_confirmation"]  = False
@@ -1725,6 +1700,7 @@ def api_simulation_start():
     global _smoothed_health_pct
     learning.abort_cycle()
     reset_simulation()
+    predictor.reset()
     _smoothed_health_pct = None
     with _state_lock:
         _state["simulation_mode"]       = True

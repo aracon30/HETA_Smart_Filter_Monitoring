@@ -78,75 +78,35 @@ def _format_validated(seconds: float) -> str:
 
 class PredictionEngine:
     """
-    Berechnet und glättet die Reststandzeit des Filters.
+    Berechnet die Reststandzeit des Filters direkt aus dem aktuellen
+    Differenzdruck und der gemessenen Beladungsrate.
 
-    Große Sprünge nach oben werden stark gedämpft (max. +2 %/Update),
-    fallende Werte dürfen schneller reagieren (max. -8 %/Update).
+    Formel: remaining = (dp_limit − dp_bar) / slope
+    → nähert sich natürlich 0 wenn dp → dp_limit, kein Sprung.
+
+    Sprünge nach OBEN werden gedämpft (max. +5 %/Tick),
+    Abfall folgt sofort den tatsächlichen Messwerten.
     """
 
     def __init__(
         self,
         dp_limit: float,
         dp_clean: float,
-        smoothing_factor: float = 0.15,
-        max_increase_pct: float = 2.0,
-        max_decrease_pct: float = 8.0,
         min_slope: float = 0.001,
     ):
         self.dp_limit = dp_limit
         self.dp_clean = dp_clean
-        self.smoothing_factor = smoothing_factor
-        self.max_increase_pct = max_increase_pct / 100.0
-        self.max_decrease_pct = max_decrease_pct / 100.0
         self.min_slope = min_slope
 
-        self._smoothed_remaining: Optional[float] = None
+        self._last_remaining: Optional[float] = None
         self._dp_history: list[float] = []
         self._history_window: int = 30
-
-    def update_curve_based(
-        self,
-        elapsed_seconds: float,
-        ref_duration: float,
-        reff_deviation_pct: float = 0.0,
-    ) -> Optional[float]:
-        """
-        Berechnet die Reststandzeit anhand der gelernten Referenzkurve.
-
-        - Basiswert: verbleibender Anteil der Referenzdauer
-        - Korrektur: R_eff-Abweichung vom Referenzprofil (schnellere/langsamere Beladung)
-        - Asymmetrische Glättung: Sprünge nach oben stark gedämpft, Abfall schnell
-
-        Liefert geglättete Reststandzeit in Sekunden.
-        """
-        if ref_duration <= 0 or elapsed_seconds < 0:
-            return self._smoothed_remaining
-
-        t_pct = min(100.0, elapsed_seconds / ref_duration * 100.0)
-        remaining_fraction = 1.0 - t_pct / 100.0
-        base_remaining = ref_duration * remaining_fraction
-
-        # R_eff +15 % → Filter belädt schneller → Restzeit 13 % kürzer
-        if abs(reff_deviation_pct) > 0.5:
-            factor = clamp(1.0 / (1.0 + reff_deviation_pct / 100.0), 0.25, 4.0)
-            adjusted = base_remaining * factor
-        else:
-            adjusted = base_remaining
-
-        if self._smoothed_remaining is None:
-            if adjusted >= 0:
-                self._smoothed_remaining = adjusted
-        else:
-            self._smoothed_remaining = self._apply_smoothing(
-                self._smoothed_remaining, adjusted
-            )
-
-        return self._smoothed_remaining
 
     def update(self, dp_bar: float) -> Optional[float]:
         """
         Nimmt den aktuellen Differenzdruck entgegen und gibt die
-        geglättete Reststandzeit in Sekunden zurück (oder None wenn nicht berechenbar).
+        Reststandzeit in Sekunden zurück (oder None wenn noch nicht berechenbar).
+        Die Berechnung basiert ausschließlich auf aktuellen Messwerten.
         """
         self._dp_history.append(dp_bar)
         if len(self._dp_history) > self._history_window:
@@ -154,22 +114,33 @@ class PredictionEngine:
 
         slope = self._calculate_slope()
         if slope is None or slope <= 0:
-            return self._smoothed_remaining
+            return self._last_remaining
 
-        raw_remaining = (self.dp_limit - dp_bar) / max(slope, self.min_slope)
+        raw_remaining = max(0.0, (self.dp_limit - dp_bar) / max(slope, self.min_slope))
 
-        if self._smoothed_remaining is None:
-            # Startwert nur übernehmen wenn plausibel (≥ 60 s),
-            # um ein "Stuck near zero" nach Reset durch Rauschen zu vermeiden.
-            if raw_remaining >= 60:
-                self._smoothed_remaining = raw_remaining
-            return self._smoothed_remaining
+        if self._last_remaining is None:
+            self._last_remaining = raw_remaining
+        elif raw_remaining < self._last_remaining:
+            # Abfall: sofort folgen (reale Beladung widerspiegeln)
+            self._last_remaining = raw_remaining
         else:
-            self._smoothed_remaining = self._apply_smoothing(
-                self._smoothed_remaining, raw_remaining
-            )
+            # Anstieg dämpfen: max +5 % pro Tick (verhindert Sprünge durch Rauschen)
+            capped = min(raw_remaining, self._last_remaining * 1.05)
+            self._last_remaining = self._last_remaining + 0.4 * (capped - self._last_remaining)
 
-        return self._smoothed_remaining
+        return self._last_remaining
+
+    # update_curve_based bleibt für Kompatibilität erhalten, leitet aber auf update() um
+    def update_curve_based(
+        self,
+        elapsed_seconds: float,
+        ref_duration: float,
+        reff_deviation_pct: float = 0.0,
+        dp_bar: Optional[float] = None,
+    ) -> Optional[float]:
+        if dp_bar is not None:
+            return self.update(dp_bar)
+        return self._last_remaining
 
     def _calculate_slope(self) -> Optional[float]:
         """Lineare Regression über das dp-Messfenster (1 Index = 1 Sekunde)."""
@@ -184,28 +155,14 @@ class PredictionEngine:
             return None
         return max(numerator / denominator, 0.0)
 
-    def _apply_smoothing(self, current: float, new_raw: float) -> float:
-        """Exponentielle Glättung mit asymmetrischer Sprungbegrenzung."""
-        if new_raw > current:
-            new_raw = min(new_raw, current * (1.0 + self.max_increase_pct))
-        else:
-            new_raw = max(new_raw, current * (1.0 - self.max_decrease_pct))
-        return current + self.smoothing_factor * (new_raw - current)
-
     def reset(self):
         """Setzt die Prognose zurück (z.B. nach Filterwechsel oder Neukonfiguration)."""
-        self._smoothed_remaining = None
+        self._last_remaining = None
         self._dp_history.clear()
 
     def seed(self, initial_seconds: float):
-        """
-        Setzt einen Startwert direkt nach dem Reset, wenn ein valides Lernprofil
-        vorliegt. Verhindert 'Wird berechnet…' und ermöglicht sofortige Anzeige.
-        """
-        if initial_seconds > 60:
-            self._smoothed_remaining = initial_seconds
-            self._dp_history.clear()
-            logger.info("Prognose-Startwert aus Profil: %.0f s", initial_seconds)
+        """Kompatibilitäts-Stub – wird nicht mehr verwendet."""
+        pass
 
     def update_limits(self, dp_limit: float, dp_clean: float):
         """Aktualisiert die Grenzwerte ohne Neustart."""
@@ -242,7 +199,7 @@ class PredictionEngine:
             "remaining_seconds": round(remaining_seconds, 0) if remaining_seconds is not None else None,
             "remaining_display": display,
             "prediction_mode": mode,
-            "smoothed": self._smoothed_remaining is not None,
+            "smoothed": self._last_remaining is not None,
             "learned_cycles": learned_cycles,
             "required_cycles": required_cycles,
         }
