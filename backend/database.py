@@ -118,6 +118,7 @@ class Database:
                 ("reference_duration_seconds", "REAL", "0.0"),
                 ("reference_r_eff_start",      "REAL", "0.0"),
                 ("reference_r_eff_end",        "REAL", "0.0"),
+                ("reference_dp_clean",         "REAL", "0.0"),
             ]:
                 if col not in existing:
                     conn.execute(f"ALTER TABLE heta_profiles ADD COLUMN {col} {typ} DEFAULT {default}")

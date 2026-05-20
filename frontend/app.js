@@ -7,7 +7,7 @@ const API_BASE = "";
 const POLL_INTERVAL_MS = 1500;
 
 // Lernrelevante Parameter – Änderung löst Reset der Lernphasen aus
-const LEARNING_SENSITIVE = ["dp_limit_bar", "dp_clean_bar", "flow_max_l_min", "pressure_range_bar"];
+const LEARNING_SENSITIVE = ["dp_limit_bar", "flow_max_l_min", "pressure_range_bar"];
 
 // Chart.js Instanzen
 const MAX_CHART_POINTS = 300;
@@ -162,7 +162,7 @@ function buildSummary() {
   const lines = [
     ["Betriebsart", mode],
     ["dp-Grenzwert", `${document.getElementById("ob-dp-limit").value} bar`],
-    ["Sauberwiderstand", `${document.getElementById("ob-dp-clean").value} bar`],
+    ["Sauberdruckabfall (dp_clean)", "Wird automatisch aus Lernzyklen berechnet"],
     ["Max. Durchfluss", `${document.getElementById("ob-flow-max").value} l/min`],
     ["Druckbereich", `${document.getElementById("ob-pressure-range").value} bar`],
     ["Temperatur", `${document.getElementById("ob-temp-min").value} – ${document.getElementById("ob-temp-max").value} °C`],
@@ -180,7 +180,6 @@ async function completeOnboarding() {
   const payload = {
     simulation_mode:    simMode,
     dp_limit_bar:       parseFloat(document.getElementById("ob-dp-limit").value),
-    dp_clean_bar:       parseFloat(document.getElementById("ob-dp-clean").value),
     flow_max_l_min:     parseFloat(document.getElementById("ob-flow-max").value),
     pressure_range_bar: parseFloat(document.getElementById("ob-pressure-range").value),
     temperature_min_c:  parseFloat(document.getElementById("ob-temp-min").value),
@@ -309,7 +308,6 @@ async function loadSettingsIntoForm() {
     if (!s) return;
     window._settings = s;
     setInputVal("s-dp-limit",       s.dp_limit_bar);
-    setInputVal("s-dp-clean",        s.dp_clean_bar);
     setInputVal("s-flow-max",        s.flow_max_l_min);
     setInputVal("s-pressure-range",  s.pressure_range_bar);
     setInputVal("s-temp-min",        s.temperature_min_c);
@@ -341,7 +339,6 @@ function watchSettingsChanges() {
   const warnEl = document.getElementById("settings-reset-warning");
   const sensitiveIds = {
     "s-dp-limit": "dp_limit_bar",
-    "s-dp-clean": "dp_clean_bar",
     "s-flow-max": "flow_max_l_min",
     "s-pressure-range": "pressure_range_bar",
   };
@@ -367,7 +364,6 @@ async function saveSettings() {
 
   const payload = {
     dp_limit_bar:              parseFloat(document.getElementById("s-dp-limit").value),
-    dp_clean_bar:              parseFloat(document.getElementById("s-dp-clean").value),
     flow_max_l_min:            parseFloat(document.getElementById("s-flow-max").value),
     pressure_range_bar:        parseFloat(document.getElementById("s-pressure-range").value),
     temperature_min_c:         parseFloat(document.getElementById("s-temp-min").value),
@@ -2174,10 +2170,15 @@ function renderProfileStats(profile) {
   }
   if (profileContent) profileContent.classList.remove("hidden");
 
+  const dpClean = profile.reference_dp_clean;
+  setText("prof-dp-clean",     dpClean > 0 ? fmt(dpClean, 3) : "–");
   setText("prof-r-eff",        fmt(profile.reference_r_eff, 5));
   setText("prof-loading-rate", ((profile.reference_loading_rate ?? 0) * 1000).toFixed(3));
   setText("prof-avg-flow",     fmt(profile.reference_avg_flow, 1));
   setText("prof-avg-temp",     fmt(profile.reference_avg_temp, 1));
+  // Berechneten dp_clean auch in der Einstellungs-Anzeige zeigen
+  const dpCleanDisplay = document.getElementById("s-dp-clean-display");
+  if (dpCleanDisplay) dpCleanDisplay.textContent = dpClean > 0 ? fmt(dpClean, 3) : "–";
 
   const count = profile.cycles_count ?? 0;
   const req   = window._lastStatus?.required_cycles ?? 3;

@@ -76,7 +76,7 @@ _sessions_lock = threading.Lock()
 
 # Kritische Parameter – bei Änderung muss der Lernprozess neu starten
 _LEARNING_SENSITIVE_KEYS = {
-    "dp_limit_bar", "dp_clean_bar", "flow_max_l_min",
+    "dp_limit_bar", "flow_max_l_min",
     "pressure_range_bar", "temperature_min_c", "temperature_max_c",
 }
 
@@ -511,10 +511,13 @@ def _measurement_loop():
 
     while _state["running"]:
         t_start = time.time()
-        # Grenzwerte je Iteration aus den aktuellen Einstellungen lesen,
-        # damit Änderungen via UI sofort wirksam werden.
+        # dp_limit aus Einstellungen; dp_clean aus gemessenem Profil (Ø start_dp
+        # der Lernzyklen), Fallback auf Einstellungswert solange kein Profil.
         dp_limit = settings.get("dp_limit_bar", 2.5)
-        dp_clean = settings.get("dp_clean_bar", 0.2)
+        _loop_profile = learning.get_profile(_state.get("heta_code", ""))
+        dp_clean = ((_loop_profile.get("reference_dp_clean") or 0.0)
+                    if _loop_profile and (_loop_profile.get("reference_dp_clean") or 0.0) > 0
+                    else settings.get("dp_clean_bar", 0.2))
 
         with _state_lock:
             sim_mode = _state["simulation_mode"]
@@ -984,7 +987,8 @@ def _do_confirm_filter_change():
         profile = learning.get_profile(heta_code)
         if (profile and profile.get("profile_valid")
                 and profile.get("reference_loading_rate", 0) > 0):
-            dp_start = settings.get("dp_clean_bar", 0.2)
+            # Gemessenen dp_clean aus Profil bevorzugen
+            dp_start = (profile.get("reference_dp_clean") or 0.0) or settings.get("dp_clean_bar", 0.2)
             dp_lim   = settings.get("dp_limit_bar", 2.5)
             seed_secs = (dp_lim - dp_start) / profile["reference_loading_rate"]
             predictor.seed(seed_secs)
@@ -2099,6 +2103,7 @@ def api_reference_curve():
         "curve":                      curve,
         "reference_duration_seconds": profile.get("reference_duration_seconds", 0),
         "reference_r_eff_start":      profile.get("reference_r_eff_start") or profile.get("reference_r_eff") or 0.0,
+        "reference_dp_clean":         profile.get("reference_dp_clean") or 0.0,
         "cycles_count":               profile.get("cycles_count", 0),
         "profile_valid":              bool(profile.get("profile_valid")),
         "tolerance_dp_pct":   settings.get("tolerance_dp_pct",   0.25),

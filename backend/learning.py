@@ -210,6 +210,7 @@ class LearningManager:
                     "reference_duration_seconds": existing.get("reference_duration_seconds", 0.0),
                     "reference_r_eff_start":      existing.get("reference_r_eff_start", 0.0),
                     "reference_curve_json":       existing.get("reference_curve_json"),
+                    "reference_dp_clean":         existing.get("reference_dp_clean", 0.0),
                     "cycles_count":               count,
                     "profile_valid":              1,
                 })
@@ -227,6 +228,8 @@ class LearningManager:
         ref_avg_flow     = sum(c.get("average_flow",       0.0)   for c in learning_cycles) / n
         ref_avg_temp     = sum(c.get("average_temperature", 20.0) for c in learning_cycles) / n
         ref_duration     = sum(c["duration_seconds"]              for c in learning_cycles) / n
+        # dp_clean = Ø der start_dp-Werte der Lernzyklen (gemessener Sauberdruckabfall)
+        ref_dp_clean     = sum(c.get("start_dp", 0.0)             for c in learning_cycles) / n
 
         # Zeitbasierte Referenzkurve nur aus Lernzyklen berechnen
         curve = self._compute_reference_curve(learning_cycles)
@@ -240,11 +243,14 @@ class LearningManager:
             "reference_duration_seconds":   round(ref_duration, 1),
             "reference_r_eff_start":        round(ref_r_eff, 6),
             "reference_curve_json":         json.dumps(curve),
+            "reference_dp_clean":           round(ref_dp_clean, 4),
             "cycles_count":                 count,
             "profile_valid":                profile_valid,
         })
-        logger.info("Profil aktualisiert für %s: %d/%d Lernzyklen, valide=%s, Kurve=%d Stützpunkte",
-                    heta_code, n, self.required_cycles, bool(profile_valid), len(curve))
+        logger.info("Profil aktualisiert für %s: %d/%d Lernzyklen, valide=%s, "
+                    "dp_clean_gemessen=%.4f bar, Kurve=%d Stützpunkte",
+                    heta_code, n, self.required_cycles, bool(profile_valid),
+                    ref_dp_clean, len(curve))
 
     def _compute_reference_curve(self, confirmed_cycles: list) -> list:
         """
