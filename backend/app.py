@@ -911,25 +911,10 @@ def _measurement_loop():
                 temp_dev           = analysis["temp_deviation"]
 
         # ── Reststandzeit berechnen ───────────────────────────────────────
-        if profile_valid and heta_activated and profile:
-            ref_duration = profile.get("reference_duration_seconds") or 0.0
-            if ref_duration > 0:
-                # Referenzkurve invertieren: dp → t_pct → lineare Restzeit.
-                # Gleicht die nichtlineare dp-Kurve (clogging^1.8) heraus.
-                curve_json = profile.get("reference_curve_json") or "[]"
-                try:
-                    ref_curve = json.loads(curve_json)
-                except Exception:
-                    ref_curve = []
-                remaining_s = predictor.update_with_reference_curve(
-                    fs.dp_bar, ref_duration, ref_curve,
-                    elapsed_seconds=cycle_active_secs,
-                )
-            else:
-                remaining_s = predictor.update(fs.dp_bar)
-        else:
-            # Lernphase: Beladungsrate aus aktuellen Messwerten schätzen
-            remaining_s = predictor.update(fs.dp_bar)
+        # Immer aus dem aktuell laufenden Zyklus (dp-Steigung), niemals aus
+        # den Referenzzyklen – damit passt sich die Anzeige sofort an
+        # veränderte Prozessbedingungen an.
+        remaining_s = predictor.update(fs.dp_bar)
 
         # ── Lernwert erfassen (mit Beladungsgrad und Reststandzeit) ───────
         if cycle_active and not sensor_error:

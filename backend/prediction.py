@@ -121,10 +121,15 @@ class PredictionEngine:
         if self._last_remaining is None:
             self._last_remaining = raw_remaining
         elif raw_remaining < self._last_remaining:
+            # Abfall sofort übernehmen
             self._last_remaining = raw_remaining
         else:
-            capped = min(raw_remaining, self._last_remaining * 1.05)
-            self._last_remaining = self._last_remaining + 0.4 * (capped - self._last_remaining)
+            # Anstieg > 5 %: sofort übernehmen (echte Lastreduktion);
+            # kleinere Schwankungen sanft glätten.
+            if raw_remaining > self._last_remaining * 1.05:
+                self._last_remaining = raw_remaining
+            else:
+                self._last_remaining += 0.4 * (raw_remaining - self._last_remaining)
 
         return self._last_remaining
 
