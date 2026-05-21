@@ -42,16 +42,17 @@ HETA_Smart_Filter_Monitoring/
 ## Ersteinrichtung (Onboarding)
 
 Beim ersten Start erkennt die Software `onboarding_complete: false` in `settings.json`
-und zeigt automatisch einen 6-stufigen Einrichtungsassistenten an.
+und zeigt automatisch einen 7-stufigen Einrichtungsassistenten an.
 
 | Schritt | Inhalt |
 |---------|--------|
 | 1 | Willkommen – Erklärung des Ablaufs |
 | 2 | Betriebsart – Simulation oder Hardware |
-| 3 | Filterparameter – dp_limit, dp_clean, flow_max, Druckbereich |
-| 4 | Temperatursensor – Messbereich min/max |
-| 5 | Zugriffspasswort festlegen (mind. 4 Zeichen) |
-| 6 | Zusammenfassung und Abschluss |
+| 3 | Betriebsweise – Dauerbetrieb (kontinuierlich) oder Intervallbetrieb (Batch) |
+| 4 | Filterparameter – dp_limit, dp_clean, flow_max, Druckbereich |
+| 5 | Temperatursensor – Messbereich min/max |
+| 6 | Zugriffspasswort festlegen (mind. 4 Zeichen) |
+| 7 | Zusammenfassung und Abschluss |
 
 Der Messzyklus startet erst nach erfolgreich abgeschlossenem Onboarding.
 
@@ -168,6 +169,74 @@ filter_health_percent = 100 × (1 − clamp(usage, 0, 1))
 
 ---
 
+## Flow-Detection-Zustandsautomat
+
+### Zustandsdiagramm
+
+```
+[waiting_for_flow]
+     |
+     | Q > flow_thr AND dp > dp_clean×0.5 stabil für stability_secs
+     ↓
+[cycle_active]  ←──────────────────────────────────────────────
+     |                                                          |
+     | Q == 0 für > 1 s                                        | Q > flow_thr wieder stabil
+     ↓                                                          |
+[cycle_paused] ──────────────────────────────────────────────→─┘
+     |
+     | Pause > pause_tolerance_seconds
+     ↓
+ZYKLUS_ABGEBROCHEN → [waiting_for_flow]
+```
+
+### Zustandsvariablen in `_state`
+
+| Feld | Typ | Beschreibung |
+|------|-----|-------------|
+| `waiting_for_flow` | bool | System wartet auf stabilen Durchfluss |
+| `cycle_paused` | bool | Zyklus pausiert durch Durchflussausfall |
+| `cycle_active_seconds` | float | Kumulierte Betriebszeit (ohne Pausen) |
+| `cycle_pause_start_time` | float / null | Unix-Zeitstempel des Pausenbeginns |
+| `flow_check_q` | float | Aktueller Q-Wert (für Overlay-Anzeige) |
+| `flow_check_dp` | float | Aktueller dp-Wert (für Overlay-Anzeige) |
+| `flow_threshold` | float | Effektiver Schwellwert (auto oder manuell) |
+| `flow_stable_pct` | int | Stabilitätsfenster-Fortschritt 0–100 % |
+
+### Schwellwert-Logik (`_get_flow_thresholds()`)
+
+- Manueller Override in `flow_start_threshold_l_min` hat Vorrang
+- Sonst: `flow_start_threshold_auto` (aus Zyklusdaten berechnet)
+- Initialer Fallback: `flow_max_l_min × 0.10`
+- `_update_auto_thresholds()`: Berechnet min. operativen Q (dp > dp_clean×0.5) × 0.4
+
+### Pausentoleranz nach Betriebsweise
+
+- `continuous`: 30 s (auto) oder `flow_pause_tolerance_seconds`
+- `batch`: 60 s (auto) oder `flow_pause_tolerance_seconds`
+
+Max. Pausendauer: `flow_max_pause_days × 86400` Sekunden → dann `ZYKLUS_ABGEBROCHEN`
+
+### Simulationsmodus – Bypass
+
+Im Simulationsmodus wird die gesamte Flow-Detection-Zustandsmaschine **deaktiviert**:
+
+- `waiting_for_flow` wird sofort auf `False` gesetzt; der Zyklus startet ohne Stabilitätsfenster
+- `cycle_paused`-Zustand wird verhindert – kein Pause/Resume bei fehlendem Durchfluss
+- Die Bedingungen `elif not sim_mode and cycle_paused` und `elif not sim_mode and cycle_active`
+  sorgen dafür, dass die Fluss-Überwachungslogik im Sim-Modus komplett übersprungen wird
+
+Grund: Die Simulation steuert Durchfluss und Druckverlauf intern. Eine externe Flussüberwachung
+würde Schnellstart (`POST /api/simulation/start`) und automatische Lernzyklen blockieren.
+
+### Modul-Variablen
+
+```python
+_flow_stable_since: Optional[float] = None  # Zeitpunkt stabile Fluss-Bedingung
+_flow_below_since: Optional[float]  = None  # Zeitpunkt Fluss < Schwellwert
+```
+
+---
+
 ## Datenbankstruktur (SQLite)
 
 ### Tabelle: measurements
@@ -195,7 +264,8 @@ filter_health_percent = 100 × (1 − clamp(usage, 0, 1))
 | heta_code | TEXT | HETA-Code |
 | start_time | REAL | Zyklusstart |
 | end_time | REAL | Zyklusende |
-| duration_seconds | REAL | Dauer in Sekunden |
+| duration_seconds | REAL | Dauer in Sekunden (Wall-Clock) |
+| active_seconds | REAL | Kumulierte Betriebszeit (excl. Pausen) |
 | start_r_eff | REAL | Startwiderstand |
 | end_r_eff | REAL | Endwiderstand |
 | start_dp | REAL | Start-Differenzdruck |
@@ -204,6 +274,7 @@ filter_health_percent = 100 × (1 − clamp(usage, 0, 1))
 | average_temperature | REAL | Mittlere Temperatur |
 | loading_rate | REAL | Beladungsrate (bar/s) |
 | confirmed_filter_change | INT | 1 = bestätigt |
+| events_json | TEXT | JSON-Array mit Pausen-/Unterbrechungsereignissen |
 
 Relevante Abfragen:
 - `get_cycles_for_heta(heta_code)` – alle Zyklen eines HETA-Codes
@@ -221,12 +292,39 @@ Relevante Abfragen:
 | cycles_count | INT | Anzahl bestätigter Zyklen |
 | profile_valid | INT | 1 = valides Profil (≥ 3 Zyklen) |
 | last_updated | REAL | Letzte Aktualisierung |
+| reference_avg_flow | REAL | Referenz-Mitteldurchfluss |
+| reference_avg_temp | REAL | Referenz-Mitteltemperatur |
+| reference_curve_json | TEXT | Referenzkurve als JSON (dp über Zeit in %) |
+| reference_duration_seconds | REAL | Mittlere Zyklusdauer (active_seconds) |
+| reference_r_eff_start | REAL | Referenz r_eff zu Beginn |
+| reference_r_eff_end | REAL | Referenz r_eff am Ende |
+| reference_dp_clean | REAL | Mittlerer Start-dp (Sauberfilter-Referenz) |
+
+### Tabelle: cycle_samples
+
+| Feld | Typ | Beschreibung |
+|------|-----|-------------|
+| id | INT | Primärschlüssel |
+| cycle_id | INT | Fremdschlüssel auf filter_cycles |
+| timestamp | REAL | Unix-Zeitstempel der Messung |
+| dp_bar | REAL | Differenzdruck zum Zeitpunkt der Messung |
+| flow_l_min | REAL | Durchfluss zum Zeitpunkt der Messung |
+| r_eff | REAL | Filterwiderstand zum Zeitpunkt der Messung |
+| filter_health_percent | REAL | Beladungsgrad zum Zeitpunkt der Messung |
+| remaining_seconds | REAL | Reststandzeit zum Zeitpunkt der Messung |
 
 ### Tabelle: service_events
 
 Protokolliert systemrelevante Ereignisse:
 `HETA_AKTIVIERT`, `FILTERWECHSEL_BESTAETIGT`, `SERVICE_ANFRAGE`,
-`LERNDATEN_RESET`, `ONBOARDING_ABGESCHLOSSEN`
+`LERNDATEN_RESET`, `ONBOARDING_ABGESCHLOSSEN`,
+`ZYKLUS_ABGEBROCHEN`, `ZYKLUS_PAUSE`, `ZYKLUS_FORTGESETZT`
+
+| Ereignis | Beschreibung |
+|----------|-------------|
+| `ZYKLUS_ABGEBROCHEN` | Zyklus durch max. Pausendauer (7 Tage) abgebrochen |
+| `ZYKLUS_PAUSE` | Zyklus pausiert (Durchfluss weggefallen) |
+| `ZYKLUS_FORTGESETZT` | Zyklus nach Pause fortgesetzt |
 
 ---
 
@@ -285,11 +383,16 @@ smoothed = current + 0.15 × (new_raw - current)
 
 ## Lernlogik
 
-1. **Zyklus starten** – beim ersten gültigen Messwert nach Filterwechsel (mit aktivem HETA-Code)
+1. **Zyklus starten** – wenn `waiting_for_flow` → `cycle_active` wechselt (Dual-Kondition: Q > flow_thr AND dp > dp_clean×0.5, stabil für stability_secs, mit aktivem HETA-Code)
 2. **Messwerte sammeln** – flow, temperature, dp, r_eff je Sekunde
 3. **Zyklus beenden** – wenn Benutzer den Filterwechsel bestätigt (Dashboard oder Encoder)
 4. **Profil berechnen** – Mittelwert aller bestätigten Zyklen
 5. **Validierung** – Profil gilt nach ≥ 3 vollständigen, bestätigten Zyklen
+
+`end_cycle()` akzeptiert den `active_seconds`-Parameter. Die Beladungsrate und Referenzdauer
+basieren auf `active_seconds` (kumulierte Betriebszeit ohne Pausen), nicht auf dem
+Wall-Clock-Wert `duration_seconds`. Dies sorgt dafür, dass die Prognose im Batch-Betrieb
+korrekt auf Betriebsstunden basiert.
 
 ### Startverhalten-Prüfung
 
@@ -322,6 +425,16 @@ y = 60..62  Navigationspunkte (● aktiv / □ inaktiv)
 
 Auf jedem Bildschirm zeigen 6 Punkte am unteren Rand die aktuelle Position:
 `●` = aktiv, `□` = inaktiv.
+
+### Display-Methoden
+
+```python
+show_waiting_for_flow(q_val, q_thr, dp_val, dp_thr, stable_pct, stab_secs)
+# Zeigt bernsteinfarbenes Warte-Overlay auf OLED (wenn vorhanden)
+
+show_cycle_paused(active_seconds, pause_seconds)
+# Zeigt blaues Pause-Overlay auf OLED (wenn vorhanden)
+```
 
 ### _DisplayController (backend/app.py)
 
@@ -373,16 +486,23 @@ dp ≥ dp_limit
 - **Sim-Mode-Warnung in Einstellungen:** Sobald die Simulation-Checkbox aktiviert wird,
   erscheint eine gelbe Warnbox: „Im Simulationsmodus werden keine echten Sensordaten erfasst –
   nur für Tests."
+- **Amber Overlay** (`flow-wait-overlay`): Erscheint wenn `d.waiting_for_flow === true`. Zeigt Q,
+  Schwellwert und Stabilitäts-Fortschrittsbalken. Verschwindet automatisch bei Zyklusstart.
+- **Blau Overlay** (`flow-pause-overlay`): Erscheint wenn `d.cycle_paused === true`. Zeigt aktive
+  Messzeit und Pausendauer.
 
 ### _do_confirm_filter_change()
 
 Zentrale Funktion, die sowohl vom REST-API-Endpunkt als auch vom
 `_DisplayController` aufgerufen wird:
 
-1. Aktiven Lernzyklus mit `learning.end_cycle(confirmed=True)` abschließen
+0. `_update_auto_thresholds()` aus den aktuellen Zyklusproben aufrufen
+1. Aktiven Lernzyklus mit `learning.end_cycle(confirmed=True, active_seconds=_state["cycle_active_seconds"])` abschließen
 2. `predictor.reset()` und `reset_simulation()` aufrufen
 3. `_state["awaiting_confirmation"] = False`, Zyklusdaten zurücksetzen
 4. Ereignis `FILTERWECHSEL_BESTAETIGT` in Datenbank protokollieren
+5. Flow-Detection-State zurücksetzen: `waiting_for_flow=True`, `cycle_paused=False`, `cycle_active_seconds=0.0`, `cycle_pause_start_time=None`
+6. Modul-Variablen zurücksetzen: `_flow_stable_since=None`, `_flow_below_since=None`
 
 ---
 
@@ -407,6 +527,7 @@ Zentrale Funktion, die sowohl vom REST-API-Endpunkt als auch vom
 | GET | `/api/export/csv` | CSV-Export-Info |
 | GET | `/api/export/csv/download` | CSV-Download |
 | POST | `/api/service/request` | Servicebericht erzeugen |
+| GET | `/help` | Benutzerhandbuch als HTML (in-app Dokumentation, kein Auth erforderlich) |
 
 ### Display & Navigation
 
@@ -481,6 +602,14 @@ Bei `"restarting": true` startet der systemd-Service `heta-monitor` automatisch 
 | `sensor_fault` | bool | Mindestens ein Sensor nicht erreichbar (Messung gestoppt) |
 | `sensor_fault_channels` | list | Kanal-Nummern ausgefallener Sensoren |
 | `sensor_fault_message` | string | Lesbare Fehlerbeschreibung |
+| `waiting_for_flow` | bool | System wartet auf stabilen Durchfluss |
+| `cycle_paused` | bool | Zyklus pausiert durch Durchflussausfall |
+| `cycle_active_seconds` | float | Kumulierte Betriebszeit (ohne Pausen) |
+| `cycle_pause_start_time` | float / null | Unix-Zeitstempel des Pausenbeginns |
+| `flow_check_q` | float | Aktueller Q-Wert (für Overlay-Anzeige) |
+| `flow_check_dp` | float | Aktueller dp-Wert (für Overlay-Anzeige) |
+| `flow_threshold` | float | Effektiver Schwellwert (auto oder manuell) |
+| `flow_stable_pct` | int | Stabilitätsfenster-Fortschritt 0–100 % |
 
 ---
 
@@ -579,6 +708,19 @@ read_sensors() → Kanal nicht lesbar
 | `temperature_min_c` | `-50` | Messbereich Temperatursensor Minimum |
 | `temperature_max_c` | `150` | Messbereich Temperatursensor Maximum |
 | `flow_max_l_min` | `150` | Maximaler Durchfluss (20 mA-Endwert) ⚠ |
+
+**Durchflusserkennung & Betriebsweise**
+
+| Parameter | Standard | Beschreibung |
+|-----------|---------|-------------|
+| `operation_mode` | `"continuous"` | Betriebsweise: `continuous` oder `batch` |
+| `flow_start_threshold_l_min` | `null` | Manueller Schwellwert (null = auto) |
+| `flow_stability_seconds` | `null` | Stabilitätsfenster (null = auto = 10 s) |
+| `flow_pause_tolerance_seconds` | `null` | Pausentoleranz (null = auto: 30/60 s) |
+| `flow_max_pause_days` | `7` | Max. Pause bis Zyklusabbruch |
+| `flow_start_threshold_auto` | `0.0` | Intern: auto-berechneter Schwellwert |
+| `flow_stability_seconds_auto` | `10` | Intern: auto-berechnetes Stabilitätsfenster |
+| `flow_pause_tolerance_auto` | `30` | Intern: auto-berechnete Pausentoleranz |
 
 **Lern- und Prognosealgorithmus**
 

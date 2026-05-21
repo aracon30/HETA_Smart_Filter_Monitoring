@@ -9,15 +9,16 @@ Sie benötigen keine Programmierkenntnisse.
 
 1. [System starten und aufrufen](#1-system-starten-und-aufrufen)
 2. [Ersteinrichtung (Onboarding)](#2-ersteinrichtung-onboarding)
-3. [Das Dashboard](#3-das-dashboard)
-4. [HETA-Code aktivieren](#4-heta-code-aktivieren)
-5. [Filterwechsel bestätigen](#5-filterwechsel-bestätigen)
-6. [Einstellungen ändern](#6-einstellungen-ändern)
-7. [Simulationsmodus](#7-simulationsmodus)
-8. [OLED-Display und Encoder](#8-oled-display-und-encoder)
-9. [Systemmeldungen im Detail](#9-systemmeldungen-im-detail)
-10. [Fehlermeldungen](#10-fehlermeldungen)
-11. [Häufige Fragen](#11-häufige-fragen)
+3. [Betriebsweise und Durchflusserkennung](#3-betriebsweise-und-durchflusserkennung)
+4. [Das Dashboard](#4-das-dashboard)
+5. [HETA-Code aktivieren](#5-heta-code-aktivieren)
+6. [Filterwechsel bestätigen](#6-filterwechsel-bestätigen)
+7. [Einstellungen ändern](#7-einstellungen-ändern)
+8. [Simulationsmodus](#8-simulationsmodus)
+9. [OLED-Display und Encoder](#9-oled-display-und-encoder)
+10. [Systemmeldungen im Detail](#10-systemmeldungen-im-detail)
+11. [Fehlermeldungen](#11-fehlermeldungen)
+12. [Häufige Fragen](#12-häufige-fragen)
 
 ---
 
@@ -47,12 +48,15 @@ Webseite im lokalen Netzwerk bereit.
 > **Kein OLED-Display vorhanden?** Verbinden Sie eine Tastatur und ein Monitor
 > direkt am Pi und geben Sie `hostname -I` ein.
 
+Das **`?`-Symbol** im oberen rechten Bereich des Dashboards öffnet dieses Benutzerhandbuch
+direkt im Browser – ohne separaten Download oder Dateiöffnung.
+
 ---
 
 ## 2. Ersteinrichtung (Onboarding)
 
 Beim allerersten Start des Systems erscheint automatisch der **Einrichtungsassistent**.
-Er führt Sie in 6 Schritten durch die Grundkonfiguration.
+Er führt Sie in 7 Schritten durch die Grundkonfiguration.
 
 ### Schritt 1 – Willkommen
 
@@ -70,7 +74,33 @@ Wählen Sie, wie das System Messwerte erfasst:
 > Wenn Sie unsicher sind, wählen Sie **Hardware**. Der Simulationsmodus kann
 > jederzeit nachträglich in den Einstellungen aktiviert werden.
 
-### Schritt 3 – Filterparameter
+### Schritt 3 – Betriebsweise (NEU)
+
+Wählen Sie, wie Ihre Anlage betrieben wird:
+
+| Option | Wann wählen |
+|--------|-------------|
+| **Dauerbetrieb (kontinuierlich)** | Die Pumpe läuft nahezu ununterbrochen |
+| **Intervallbetrieb (Batch)** | Die Pumpe schaltet regelmäßig ab und an (z. B. täglich mehrfach) |
+
+#### Dauerbetrieb (kontinuierlich)
+
+Das System läuft ununterbrochen. Bei kurzen Unterbrechungen (Pumpe kurz aus) wird
+der Zyklus für bis zu **30 Sekunden** pausiert und dann automatisch fortgesetzt.
+Bleibt die Pumpe länger als 30 Sekunden aus, wird der Zyklus abgebrochen und das
+System kehrt in den Wartezustand zurück.
+
+#### Intervallbetrieb (Batch)
+
+Der Filter läuft in regelmäßigen Zyklen – die Pumpe geht täglich mehrfach an und aus.
+Pausen bis zu **60 Sekunden** werden toleriert. Die Reststandzeit basiert auf der
+**kumulierten Betriebszeit** (nicht der Wanduhrzeit), sodass Stillstandzeiten die
+Prognose nicht verfälschen.
+
+> **Hinweis:** Die Betriebsweise beeinflusst, wie Pausen behandelt werden.
+> Bei Unsicherheit wählen Sie **Dauerbetrieb**.
+
+### Schritt 4 – Filterparameter
 
 Tragen Sie die Kenndaten Ihres Filterkreislaufs ein:
 
@@ -83,12 +113,12 @@ Tragen Sie die Kenndaten Ihres Filterkreislaufs ein:
 
 > Diese Werte stehen im Datenblatt Ihres Filters und Ihrer Sensoren.
 
-### Schritt 4 – Temperatursensorbereich
+### Schritt 5 – Temperatursensorbereich
 
 Tragen Sie den Messbereich Ihres Temperatursensors ein (Minimum und Maximum in °C).
 Standardwert: −50 °C bis +150 °C.
 
-### Schritt 5 – Passwort festlegen
+### Schritt 6 – Passwort festlegen
 
 Legen Sie ein Passwort für den geschützten Einstellungsbereich fest.
 Das Passwort muss **mindestens 4 Zeichen** lang sein.
@@ -96,14 +126,56 @@ Das Passwort muss **mindestens 4 Zeichen** lang sein.
 > Notieren Sie das Passwort. Falls Sie es vergessen, muss ein Administrator
 > es über die Konsole zurücksetzen.
 
-### Schritt 6 – Zusammenfassung
+### Schritt 7 – Zusammenfassung
 
-Prüfen Sie alle Angaben. Klicken Sie auf **„Einrichtung abschließen"** –
-das System startet die Messung.
+Prüfen Sie alle Angaben – einschließlich der gewählten Betriebsweise.
+Klicken Sie auf **„Einrichtung abschließen"** – das System startet die Messung.
 
 ---
 
-## 3. Das Dashboard
+## 3. Betriebsweise und Durchflusserkennung
+
+### Automatischer Zyklusstart
+
+Das System startet einen Messzyklus **nicht** sofort nach dem Einschalten oder nach
+einem Filterwechsel. Es wartet, bis folgende Bedingungen gleichzeitig erfüllt sind:
+
+1. Durchfluss Q liegt über dem Schwellwert (automatisch berechnet, typisch 10–40 % des maximalen Durchflusses)
+2. Differenzdruck dp liegt über 50 % des Druckabfalls bei sauberem Filter (Zeichen: Fluss läuft durch den Filter)
+3. Beide Bedingungen sind **stabil** für mindestens 10 Sekunden (Standard)
+
+Während des Wartens erscheint ein **bernsteinfarbenes Overlay** im Dashboard mit:
+- Aktuellem Durchfluss Q und dem Schwellwert
+- Fortschrittsbalken der Stabilitätsprüfung
+- Hinweis: System startet automatisch, sobald Durchfluss stabil erkannt wurde
+
+### Zykluspause bei Durchflussausfall
+
+Fällt der Durchfluss während eines laufenden Zyklus auf 0 (Pumpe aus), pausiert das
+System den Zyklus und speichert einen Ereignis-Eintrag. Ein **blaues Overlay** erscheint
+mit:
+- Bisher aktiver Messzeit
+- Pausendauer
+
+Kehrt der Durchfluss zurück, wird der Zyklus **automatisch fortgesetzt**. Die Messzeit
+(aktive Sekunden) wird nur während des Flusses gezählt.
+
+### Maximale Pausendauer
+
+Bleibt der Durchfluss länger als **7 Tage** aus, wird der Zyklus abgebrochen und als
+`ZYKLUS_ABGEBROCHEN` in der Datenbank protokolliert. Das System wechselt zurück in
+den Wartezustand.
+
+### Schwellwerte (automatisch vs. manuell)
+
+- **Automatisch** (Standard): Nach dem ersten Zyklus berechnet das System den Schwellwert
+  aus den gesammelten Messdaten (min. Betriebsdurchfluss × 0,4). Kein Eingriff nötig.
+- **Manuell** (Einstellungen → Betriebsweise & Durchflusserkennung): Fester Wert in l/min,
+  der den automatisch berechneten Wert überschreibt.
+
+---
+
+## 4. Das Dashboard
 
 Nach der Einrichtung sehen Sie das Haupt-Dashboard.
 
@@ -152,9 +224,16 @@ Oben rechts im Dashboard:
 | `SIM` (grau) | Simulationsmodus aktiv |
 | `FEHLER` (rot) | Sensor ausgefallen – Messung gestoppt |
 
+#### Betriebszustand-Overlays
+
+| Overlay | Farbe | Bedeutung |
+|---------|-------|-----------|
+| Warte auf stabilen Durchfluss | Bernstein (amber) | System bereit, wartet auf Durchfluss |
+| Messzyklus pausiert | Blau | Zyklus läuft, Durchfluss kurz unterbrochen |
+
 ---
 
-## 4. HETA-Code aktivieren
+## 5. HETA-Code aktivieren
 
 Mit einem HETA-Code schaltet das System erweiterte Funktionen frei:
 
@@ -188,7 +267,7 @@ Referenzprofils – präzise und selbst-adaptierend bei Prozessänderungen.
 
 ---
 
-## 5. Filterwechsel bestätigen
+## 6. Filterwechsel bestätigen
 
 Wenn der Filter sein Limit erreicht hat, zeigt das System den Status **„Wechsel"** an.
 
@@ -209,7 +288,7 @@ Nach der Bestätigung:
 
 ---
 
-## 6. Einstellungen ändern
+## 7. Einstellungen ändern
 
 Klicken Sie auf das **Zahnrad-Symbol (⚙)** oben rechts im Dashboard.
 
@@ -235,6 +314,15 @@ Umschaltung zwischen Hardware (echte Sensoren) und Simulation.
 #### Toleranzen
 Prozentuale Abweichung, ab der eine Warnung ausgelöst wird (Standard: 25 %).
 
+#### Betriebsweise & Durchflusserkennung
+
+- **Betriebsweise**: Dauerbetrieb (kontinuierlich) oder Intervallbetrieb (Batch)
+- **Durchflussschwellwert (Überschreibung)**: Fester Wert in l/min – leer lassen für automatische Berechnung
+- **Stabilitätsfenster (Überschreibung)**: Sekunden stabilen Durchflusses vor Zyklusstart – leer lassen für auto (10 s)
+- **Pausentoleranz (Überschreibung)**: Max. Pause in Sekunden – leer lassen für auto (30 s im Dauerbetrieb / 60 s im Intervallbetrieb)
+
+> Änderungen dieser Werte erfordern **kein** Zurücksetzen der Lerndaten.
+
 #### Systemparameter
 Messintervall, Sitzungs-Timeout, Log-Level.
 
@@ -250,10 +338,14 @@ Altes Passwort eingeben, neues Passwort zweimal bestätigen.
 
 ---
 
-## 7. Simulationsmodus
+## 8. Simulationsmodus
 
 Der Simulationsmodus ermöglicht eine vollständige Vorführung des Systems **ohne
 angeschlossene Sensoren** – ideal für Messen, Schulungen und Entwicklungstests.
+
+> **Hinweis:** Im Simulationsmodus ist die Durchflusserkennung vollständig deaktiviert.
+> Das bernsteinfarbene Overlay „Warte auf stabilen Durchfluss" erscheint **nicht**.
+> Der Messzyklus startet sofort nach dem Klick auf „Simulation starten".
 
 ### Simulation starten
 
@@ -299,7 +391,7 @@ Klicken Sie auf **„Zurücksetzen"**, um die Simulation von vorne zu beginnen.
 
 ---
 
-## 8. OLED-Display und Encoder
+## 9. OLED-Display und Encoder
 
 Das OLED-Display am Gerät zeigt dieselben Messwerte wie das Browser-Dashboard –
 ohne Computer oder Smartphone.
@@ -335,7 +427,7 @@ Kleine Punkte am unteren Rand zeigen, auf welchem Bildschirm Sie sich befinden.
 
 ---
 
-## 9. Systemmeldungen im Detail
+## 10. Systemmeldungen im Detail
 
 Das System gibt kontinuierlich Rückmeldung über den Zustand des Filters und der Anlage.
 Dieser Abschnitt erklärt jede mögliche Meldung, welche Messwerte dazu geführt haben und
@@ -343,7 +435,7 @@ was Sie als Bediener konkret tun sollten.
 
 ---
 
-### 9.1 Filterstatus-Meldungen
+### 10.1 Filterstatus-Meldungen
 
 Der Filterstatus ist die zentrale Statusanzeige im Dashboard. Er fasst alle Messwerte
 zu einer klaren Handlungsempfehlung zusammen.
@@ -492,11 +584,11 @@ Mögliche Ursachen je nach betroffenem Kanal:
 | **Bedeutung** | Kabelbruch | Unterbereich | Überbereich / Kurzschluss |
 
 **Was Sie tun sollten:**
-→ Siehe [Abschnitt 10 – Fehlermeldungen: Sensor ausgefallen](#rotes-overlay-sensor-ausgefallen)
+→ Siehe [Abschnitt 11 – Fehlermeldungen: Sensor ausgefallen](#rotes-overlay-sensor-ausgefallen)
 
 ---
 
-### 9.2 Prognosemeldungen
+### 10.2 Prognosemeldungen
 
 Die Reststandzeit-Anzeige zeigt je nach verfügbarem Wissensstand unterschiedliche
 Meldungen. Alle Angaben beziehen sich auf den aktuellen Messwert und das gelernte
@@ -563,7 +655,7 @@ veränderter Prozess): Lerndaten zurücksetzen, damit das System neu lernt.
 
 ---
 
-### 9.3 Lernphasen-Meldungen
+### 10.3 Lernphasen-Meldungen
 
 ---
 
@@ -602,7 +694,7 @@ Die Grobprognose (Bereichsanzeige) ist weiterhin aktiv.
 
 ---
 
-### 9.4 Analyse-Meldungen (Simulationsmodus)
+### 10.4 Analyse-Meldungen (Simulationsmodus)
 
 Diese Meldungen erscheinen im Simulationsbereich, wenn ein abweichendes Szenario
 aktiv ist und das System das laufende Verhalten mit dem Referenzprofil vergleicht.
@@ -652,7 +744,36 @@ Differenzdruck beeinflussen.
 
 ---
 
-## 10. Fehlermeldungen
+### 10.5 Overlay: Warte auf stabilen Durchfluss
+
+**Wann:** Nach Systemstart, nach einem Filterwechsel oder nach Abbruch eines Zyklus.
+
+**Relevante Messwerte:** Q (l/min), Schwellwert (l/min), Stabilitäts-Fortschritt (%)
+
+**Was tun:** Nichts – das System startet automatisch, sobald Durchfluss stabil erkannt
+wurde. Falls das Overlay dauerhaft bleibt:
+
+1. Prüfen Sie, ob die Pumpe läuft und Durchfluss tatsächlich fließt
+2. Schwellwert in den Einstellungen manuell senken, falls der automatisch berechnete Wert zu hoch ist (Einstellungen → Betriebsweise & Durchflusserkennung)
+3. Im Simulationsmodus: Simulation starten
+
+---
+
+### 10.6 Overlay: Messzyklus pausiert
+
+**Wann:** Durchfluss ist während eines aktiven Zyklus auf 0 gefallen (Pumpe aus).
+
+**Relevante Werte:** Aktive Messzeit, Pausendauer
+
+**Was tun:** Pumpe prüfen und wieder einschalten. Der Zyklus setzt automatisch fort,
+sobald der Durchfluss zurückkehrt.
+
+Bei dauerhafter Pause über 7 Tage: Der Zyklus wird abgebrochen und das System kehrt
+in den Wartezustand zurück.
+
+---
+
+## 11. Fehlermeldungen
 
 ### Rotes Overlay: Sensor ausgefallen {#rotes-overlay-sensor-ausgefallen}
 
@@ -694,7 +815,7 @@ wenigen Sekunden.
 
 ---
 
-## 11. Häufige Fragen
+## 12. Häufige Fragen
 
 **Wie lange dauert die Lernphase?**
 
@@ -736,3 +857,24 @@ alle Messdaten als Datei herunter. Alternativ können Sie Daten via MQTT in ein
 Im Simulationsmodus werden keine echten Sensoren benötigt. Das System simuliert
 einen realistischen Filterkreislauf und demonstriert alle Funktionen – Lernphase,
 Reststandzeit, Warnungen und Filterwechsel – vollständig ohne Hardware.
+
+**Was ist der Unterschied zwischen Dauerbetrieb und Intervallbetrieb?**
+
+Im Dauerbetrieb erwartet das System, dass die Pumpe fast ununterbrochen läuft –
+kurze Pausen bis 30 s werden toleriert. Im Intervallbetrieb (Batch) schaltet die
+Pumpe regelmäßig ab; Pausen bis 60 s sind normal. Die Reststandzeit im Intervallbetrieb
+basiert auf der kumulierten Betriebszeit, nicht auf der Wanduhrzeit.
+
+**Das bernsteinfarbene Overlay erscheint, obwohl die Pumpe läuft – was tun?**
+
+Das System erwartet, dass der Durchfluss über dem automatisch berechneten Schwellwert
+liegt UND der Differenzdruck über 50 % des Sauberfilter-Druckabfalls. Mögliche Ursachen:
+zu hoher Schwellwert → manuellen Wert in Einstellungen setzen (Einstellungen →
+Betriebsweise & Durchflusserkennung); dp zu niedrig → Filter läuft noch nicht unter Last.
+
+**Wie lange darf die Pumpe zwischen den Messzyklen abgeschaltet sein?**
+
+Bis zur eingestellten Pausentoleranz (Standard: 30 s im Dauerbetrieb, 60 s im
+Intervallbetrieb). Danach wird der Zyklus abgebrochen. Für regelmäßig längere Pausen:
+Intervallbetrieb wählen und die manuelle Pausentoleranz entsprechend setzen
+(Einstellungen → Betriebsweise & Durchflusserkennung).

@@ -721,7 +721,30 @@ def _measurement_loop():
                    and not sensor_error)
         now_ts  = time.time()
 
-        if waiting_for_flow and not awaiting:
+        # Im Simulationsmodus: Durchflussprüfung komplett deaktivieren.
+        # Die Simulation steuert den Durchfluss intern – das Warten auf
+        # stabilen Fluss würde Schnellstart und Lernzyklen blockieren.
+        if sim_mode:
+            if waiting_for_flow:
+                _flow_stable_since = None
+                if heta_code:
+                    learning.start_cycle(heta_code, fs.r_eff, fs.dp_bar)
+                with _state_lock:
+                    _state["waiting_for_flow"]     = False
+                    _state["cycle_active"]         = bool(heta_code)
+                    _state["cycle_start_time"]     = now_ts
+                    _state["cycle_active_seconds"] = 0.0
+                    _state["cycle_paused"]         = False
+                waiting_for_flow = False
+                cycle_active     = bool(heta_code)
+                cycle_paused     = False
+            elif cycle_paused:
+                with _state_lock:
+                    _state["cycle_paused"]           = False
+                    _state["cycle_pause_start_time"] = None
+                cycle_paused = False
+
+        elif waiting_for_flow and not awaiting:
             # Overlay-Werte für Frontend live aktualisieren
             stable_pct = 0
             if flow_ok:
@@ -765,7 +788,7 @@ def _measurement_loop():
                 time.sleep(interval)
                 continue
 
-        elif cycle_paused and not awaiting:
+        elif not sim_mode and cycle_paused and not awaiting:
             if flow_ok:
                 if _flow_stable_since is None:
                     _flow_stable_since = now_ts
@@ -817,7 +840,7 @@ def _measurement_loop():
                 time.sleep(interval)
                 continue
 
-        elif cycle_active and not awaiting and not sensor_error:
+        elif not sim_mode and cycle_active and not awaiting and not sensor_error:
             # Zyklus aktiv – Betriebszeit zählen und Pause prüfen
             if flow_ok:
                 _flow_below_since = None
