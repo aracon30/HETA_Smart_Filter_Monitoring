@@ -467,16 +467,22 @@ main {
   text-align: right;
 }
 
+.analysis-rate-wrap,
 .analysis-elapsed-wrap {
   display: flex;
   align-items: center;
   gap: .5rem;
-  margin-bottom: .5rem;
+  margin-bottom: .4rem;
   font-size: .82rem;
 }
+.analysis-rate-label,
 .analysis-elapsed-label {
   color: var(--text-muted);
   flex-shrink: 0;
+}
+.analysis-rate-val {
+  font-weight: 700;
+  font-size: .88rem;
 }
 .analysis-elapsed-val {
   font-weight: 600;
