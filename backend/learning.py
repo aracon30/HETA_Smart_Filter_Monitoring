@@ -434,12 +434,10 @@ class LearningManager:
                 return round((cur / ref_val - 1.0) * 100.0, 1)
             return 0.0
 
-        # dp-Steigung: mittlere Referenzsteigung (dp_range / ref_duration) statt
-        # lokaler Kurvenableitung — gleiche Mittelungsebene wie die 30-s-Regression
-        # der aktuellen Steigung, damit kein systematischer Versatz entsteht.
-        dp_start     = curve[0].get("dp")  or 0.0
-        dp_end       = curve[-1].get("dp") or 0.0
-        ref_dp_slope = (dp_end - dp_start) / ref_dur if ref_dur > 0 else 0.0
+        # dp-Steigung: Referenz über dasselbe 30-s-Fenster wie die aktuelle Regression.
+        # Beide Steigungen nutzen denselben Mittelungshorizont → kein Versatz.
+        # Referenzfenster: 30 s um aktuelle t_pct-Position in der Referenzkurve.
+        ref_dp_slope = self._slope_windowed(curve, t_pct, ref_dur, field="dp", window_s=30)
         dp_slope_dev = pct_dev(current_dp_slope, ref_dp_slope) if current_dp_slope is not None and abs(ref_dp_slope) > 1e-9 else 0.0
 
         return {
@@ -508,6 +506,40 @@ class LearningManager:
 
         closest = min(pts, key=lambda p: abs(p[1] - dp_bar))
         return closest[0]
+
+    @staticmethod
+    def _slope_windowed(curve: list, t_pct: float, ref_duration: float,
+                        field: str = "dp", window_s: float = 30.0) -> float:
+        """
+        Referenzsteigung über ein window_s-Fenster um t_pct (in Sekunden).
+        Gleiche Mittelungsbreite wie die aktuelle Regression → direkt vergleichbar.
+        Die Referenz aktualisiert sich mit t_pct (= mit dp).
+        """
+        if not curve or ref_duration <= 0:
+            return 0.0
+        half_pct = (window_s / ref_duration) * 50.0   # halbes Fenster in t_pct-Einheiten
+        t_lo = max(0.0,   t_pct - half_pct)
+        t_hi = min(100.0, t_pct + half_pct)
+
+        def interp_val(t):
+            if t <= curve[0].get("t_pct", 0):
+                return curve[0].get(field) or 0.0
+            if t >= curve[-1].get("t_pct", 100):
+                return curve[-1].get(field) or 0.0
+            for i in range(len(curve) - 1):
+                t0 = curve[i].get("t_pct", 0)
+                t1 = curve[i + 1].get("t_pct", 0)
+                if t0 <= t <= t1 and (t1 - t0) > 1e-6:
+                    alpha = (t - t0) / (t1 - t0)
+                    v0 = curve[i].get(field) or 0.0
+                    v1 = curve[i + 1].get(field) or 0.0
+                    return v0 + alpha * (v1 - v0)
+            return curve[-1].get(field) or 0.0
+
+        v_lo = interp_val(t_lo)
+        v_hi = interp_val(t_hi)
+        actual_window_s = (t_hi - t_lo) / 100.0 * ref_duration
+        return (v_hi - v_lo) / actual_window_s if actual_window_s > 0 else 0.0
 
     @staticmethod
     def _slope_at_tpct(curve: list, t_pct: float, ref_duration: float,

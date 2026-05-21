@@ -1819,18 +1819,13 @@ function updateAnalysisSection(d) {
     ? `${elapsedMin} min ${String(elapsedS).padStart(2,"0")} s`
     : `${elapsedS} s`);
 
-  // Beladungsrate: nur Abweichung % anzeigen (kein Ref/Aktuell-Vergleich,
-  // da Referenzsteigung ein fixer Ø-Wert ist — kein sekündlicher Vergleich möglich)
-  const dpDev = d.analysis_dp_deviation_pct ?? 0;
-  const dpRateEl = document.getElementById("an-dp-dev");
-  if (dpRateEl) {
-    const sign = dpDev > 0 ? "+" : "";
-    dpRateEl.textContent = `${sign}${Math.round(dpDev)} %`;
-    dpRateEl.className = "analysis-rate-val " + (
-      Math.abs(dpDev) < _tolDp * 100  ? "dev-ok"   :
-      Math.abs(dpDev) < _tolDp * 200  ? "dev-warn"  : "dev-crit"
-    );
-  }
+  // Δp-Steigung: 30-s-gefensterte Referenzsteigung vs. aktuelle 30-s-Regression
+  const dpSlopeRef = d.analysis_dp_rate_ref     ?? 0;
+  const dpSlopeCur = d.analysis_dp_rate_current ?? 0;
+  const dpDev      = d.analysis_dp_deviation_pct ?? 0;
+  setText("an-dp-ref", fmt(dpSlopeRef * 1000, 3) + " mbar/s");
+  setText("an-dp-cur", fmt(dpSlopeCur * 1000, 3) + " mbar/s");
+  setAnalysisDev("an-dp-dev", dpDev, "%", _tolDp * 100, _tolDp * 200);
 
   // R_eff: Absolutwert am gleichen dp-Punkt (sekündlich aktuell)
   const reffRef = d.analysis_reff_ref ?? 0;
