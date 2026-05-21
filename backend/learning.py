@@ -434,9 +434,13 @@ class LearningManager:
                 return round((cur / ref_val - 1.0) * 100.0, 1)
             return 0.0
 
-        # dp-Steigung: Referenz aus Kurvenableitung, Aktuell aus Regression
-        ref_dp_slope  = self._slope_at_tpct(curve, t_pct, ref_dur, "dp")
-        dp_slope_dev  = pct_dev(current_dp_slope, ref_dp_slope) if current_dp_slope is not None and abs(ref_dp_slope) > 1e-9 else 0.0
+        # dp-Steigung: mittlere Referenzsteigung (dp_range / ref_duration) statt
+        # lokaler Kurvenableitung — gleiche Mittelungsebene wie die 30-s-Regression
+        # der aktuellen Steigung, damit kein systematischer Versatz entsteht.
+        dp_start     = curve[0].get("dp")  or 0.0
+        dp_end       = curve[-1].get("dp") or 0.0
+        ref_dp_slope = (dp_end - dp_start) / ref_dur if ref_dur > 0 else 0.0
+        dp_slope_dev = pct_dev(current_dp_slope, ref_dp_slope) if current_dp_slope is not None and abs(ref_dp_slope) > 1e-9 else 0.0
 
         return {
             "cycle_progress_pct":   cycle_progress_pct,
