@@ -2200,6 +2200,8 @@ def api_onboarding_complete():
 @app.route("/api/simulation/start", methods=["POST"])
 def api_simulation_start():
     """Startet den Simulationsmodus und den Messzyklus. Setzt immer am Zyklusanfang an."""
+    if not settings.get("onboarding_complete", False):
+        return jsonify({"success": False, "message": "Onboarding nicht abgeschlossen."}), 403
     global _smoothed_health_pct
     learning.abort_cycle()
     reset_simulation()

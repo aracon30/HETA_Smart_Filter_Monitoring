@@ -42,8 +42,8 @@ let _prevAwaiting = false;
 document.addEventListener("DOMContentLoaded", async () => {
   initCharts();
   initTabs();
-  await checkOnboarding();
-  startPolling();
+  const onboardingDone = await checkOnboarding();
+  if (onboardingDone) startPolling();
   loadSettingsIntoForm();
 
   // Betriebsart-Karten koppeln
@@ -91,10 +91,12 @@ async function checkOnboarding() {
     const data = await apiFetch("/api/onboarding/status");
     if (data && !data.onboarding_complete) {
       showOnboarding();
+      return false;  // Polling noch nicht starten
     }
   } catch (e) {
     console.warn("Onboarding-Status konnte nicht abgerufen werden.", e);
   }
+  return true;
 }
 
 function showOnboarding() {
@@ -238,6 +240,7 @@ async function completeOnboarding() {
   if (result?.success) {
     document.getElementById("onboarding-overlay").classList.add("hidden");
     window._settings = { ...window._settings, ...payload };
+    startPolling();  // Polling jetzt erst starten
     showMsg("heta-msg", "Einrichtung abgeschlossen. System startet.", false);
     setTimeout(() => location.reload(), 1500);
   } else {
