@@ -99,6 +99,7 @@ class PredictionEngine:
         self.min_slope = min_slope
 
         self._last_remaining: Optional[float] = None
+        self._seeded_ceiling: Optional[float] = None  # verhindert Sprünge nach dem Seed
         self._dp_history: list[float] = []
         self._history_window: int = 30
 
@@ -128,10 +129,12 @@ class PredictionEngine:
         elif raw_remaining < self._last_remaining:
             # Abfall sofort übernehmen
             self._last_remaining = raw_remaining
+            self._seeded_ceiling = None  # Ceiling aufheben sobald Wert erstmals sinkt
         else:
-            # Anstieg > 5 %: sofort übernehmen (echte Lastreduktion);
-            # kleinere Schwankungen sanft glätten.
-            if raw_remaining > self._last_remaining * 1.05:
+            # Upward-Sprünge verhindern solange der Seed-Ceiling aktiv ist
+            if self._seeded_ceiling is not None and raw_remaining > self._seeded_ceiling:
+                pass  # ignorieren – Steigung noch nicht stabil
+            elif raw_remaining > self._last_remaining * 1.05:
                 self._last_remaining = raw_remaining
             else:
                 self._last_remaining += 0.4 * (raw_remaining - self._last_remaining)
@@ -263,6 +266,7 @@ class PredictionEngine:
     def reset(self):
         """Setzt die Prognose zurück (z.B. nach Filterwechsel oder Neukonfiguration)."""
         self._last_remaining = None
+        self._seeded_ceiling  = None
         self._dp_history.clear()
         self._flow_history.clear()
         self._temp_history.clear()
@@ -271,7 +275,8 @@ class PredictionEngine:
     def seed(self, initial_seconds: float):
         """Setzt den Startwert der Reststandzeit aus der Referenzdauer."""
         if initial_seconds > 0:
-            self._last_remaining = float(initial_seconds)
+            self._last_remaining  = float(initial_seconds)
+            self._seeded_ceiling  = float(initial_seconds)  # kein Sprung über diesen Wert
 
     def update_limits(self, dp_limit: float, dp_clean: float):
         """Aktualisiert die Grenzwerte ohne Neustart."""
