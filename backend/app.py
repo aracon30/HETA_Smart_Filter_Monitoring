@@ -892,7 +892,7 @@ def _measurement_loop():
         if an_active and cycle_active:
             try:
                 analysis = learning.get_curve_analysis(
-                    heta_code, elapsed,
+                    heta_code, 0.0,
                     fs.dp_bar, fs.r_eff, fs.flow_l_min, fs.temperature_c,
                 )
             except Exception as _e:

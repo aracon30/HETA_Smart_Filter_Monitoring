@@ -387,7 +387,13 @@ class LearningManager:
                            current_flow: float, current_temp: float) -> Optional[dict]:
         """
         Vergleicht aktuelle Messwerte mit der gelernten Referenzkurve am
-        entsprechenden Zeitpunkt im Zyklus.
+        dp-äquivalenten Punkt der Kurve.
+
+        Zyklusfortschritt = dp-basiert (0 % = sauber, 100 % = dp_limit):
+        Die Referenzkurve wird nach dp invertiert (dp → t_pct), sodass der
+        Vergleich immer am physikalisch passenden Kurvenabschnitt stattfindet –
+        unabhängig davon ob der aktuelle Zyklus schneller oder langsamer läuft
+        als die Lernzyklen.
 
         Rückgabe: dict mit Referenzwerten und Abweichungen, oder None.
         """
@@ -412,19 +418,19 @@ class LearningManager:
             logger.debug("get_curve_analysis: leere Kurve nach JSON-Parse für %s", heta_code)
             return None
 
-        # Zyklusfortschritt zeitbasiert – konsistent mit Reststandzeit-Anzeige.
-        # Die R_eff-Abweichung (schnellere/langsamere Beladung) wird separat als
-        # r_eff_deviation_pct ausgegeben und fließt in die Reststandzeit-Korrektur ein.
-        t_pct = max(0.0, min(100.0, elapsed_seconds / ref_dur * 100.0))
+        # dp-basierter Zyklusfortschritt: Referenzkurve nach dp invertieren.
+        # Damit bleibt der Vergleich immer im gültigen Bereich, auch wenn der
+        # aktuelle Zyklus länger oder kürzer als die Referenz dauert.
+        t_pct = self._invert_dp_to_tpct(curve, current_dp)
         cycle_progress_pct = round(t_pct, 1)
-        ref   = self._interpolate_curve(curve, t_pct)
+        ref = self._interpolate_curve(curve, t_pct)
         if not ref:
             return None
 
-        ref_dp   = ref.get("dp")   or 0.0
+        ref_dp   = ref.get("dp")    or 0.0
         ref_reff = ref.get("r_eff") or 0.0
-        ref_flow = ref.get("flow") or 0.0
-        ref_temp = ref.get("temp") or 0.0
+        ref_flow = ref.get("flow")  or 0.0
+        ref_temp = ref.get("temp")  or 0.0
 
         def pct_dev(cur, ref_val):
             if ref_val and abs(ref_val) > 1e-9:
@@ -463,6 +469,36 @@ class LearningManager:
                     for k in ("dp", "r_eff", "flow", "temp")
                 }
         return dict(curve[-1])
+
+    @staticmethod
+    def _invert_dp_to_tpct(curve: list, dp_bar: float) -> float:
+        """
+        Invertiert die Referenzkurve: dp → t_pct.
+        Gibt zurück wo dp_bar in der Kurve liegt (0–100 %).
+        Nicht-monotone Stellen (Messrauschen) werden überbrückt.
+        """
+        pts = [(p["t_pct"], p.get("dp") or 0.0) for p in curve
+               if p.get("t_pct") is not None]
+        if not pts:
+            return 0.0
+        pts.sort(key=lambda x: x[0])
+
+        if dp_bar <= pts[0][1]:
+            return pts[0][0]
+        if dp_bar >= pts[-1][1]:
+            return pts[-1][0]
+
+        for i in range(len(pts) - 1):
+            t_lo, dp_lo = pts[i]
+            t_hi, dp_hi = pts[i + 1]
+            if dp_hi <= dp_lo:
+                continue
+            if dp_lo <= dp_bar <= dp_hi:
+                frac = (dp_bar - dp_lo) / (dp_hi - dp_lo)
+                return t_lo + frac * (t_hi - t_lo)
+
+        closest = min(pts, key=lambda p: abs(p[1] - dp_bar))
+        return closest[0]
 
     def get_profile(self, heta_code: str) -> Optional[dict]:
         """Gibt das Referenzprofil zurück oder None."""
