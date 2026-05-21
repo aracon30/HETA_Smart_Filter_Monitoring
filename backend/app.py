@@ -890,10 +890,14 @@ def _measurement_loop():
         temp_ref = temp_dev = 0.0
 
         if an_active and cycle_active:
-            analysis = learning.get_curve_analysis(
-                heta_code, elapsed,
-                fs.dp_bar, fs.r_eff, fs.flow_l_min, fs.temperature_c,
-            )
+            try:
+                analysis = learning.get_curve_analysis(
+                    heta_code, elapsed,
+                    fs.dp_bar, fs.r_eff, fs.flow_l_min, fs.temperature_c,
+                )
+            except Exception as _e:
+                logger.warning("Kurvenanalyse-Fehler: %s", _e, exc_info=True)
+                analysis = None
             if analysis:
                 an_ready           = True
                 cycle_progress_pct = analysis["cycle_progress_pct"]
@@ -2330,8 +2334,15 @@ def api_simulation_quick_learn():
     reset_simulation()
     learning._active_cycle = None   # laufenden Zyklus verwerfen (Daten vor Quick-Learn)
     with _state_lock:
-        _state["cycle_active"]     = False   # Messzyklus neu starten
-        _state["cycle_start_time"] = None
+        # awaiting_confirmation MUSS zurückgesetzt werden: war es True als Quick-Learn
+        # aufgerufen wurde, schläft der Messzyklus-Thread sonst dauerhaft und die
+        # Prozessanalyse startet nie (analysis_ready bleibt False).
+        _state["awaiting_confirmation"]  = False
+        _state["cycle_active"]           = False
+        _state["cycle_start_time"]       = None
+        _state["cycle_dp_reached_time"]  = None
+        _state["cycle_active_seconds"]   = 0.0
+        _state["waiting_for_flow"]       = True   # Zyklus sauber neu starten
 
     db.insert_service_event("SIM_SCHNELLLERN", heta_code,
                             json.dumps({"simulated_cycles": needed, "loading_rate": loading_rate}))

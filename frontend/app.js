@@ -2049,6 +2049,10 @@ async function quickLearn() {
   }
   if (res.success) {
     showMsg("sim-learn-msg", res.message, false);
+    // Cache invalidieren damit die neue Referenzkurve sofort geladen wird
+    _refCurveCache = null;
+    _refCurveCacheCode = null;
+    _knownCycleStart = null;
   } else {
     showMsg("sim-learn-msg", res.message, true);
     btn.disabled = false;

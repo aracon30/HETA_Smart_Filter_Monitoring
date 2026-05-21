@@ -393,19 +393,23 @@ class LearningManager:
         """
         profile = self.get_profile(heta_code)
         if not profile or not profile.get("profile_valid"):
+            logger.debug("get_curve_analysis: kein valides Profil für %s", heta_code)
             return None
 
         curve_json = profile.get("reference_curve_json")
         ref_dur    = profile.get("reference_duration_seconds", 0)
         if not curve_json or ref_dur <= 0:
+            logger.debug("get_curve_analysis: curve_json leer oder ref_dur=%s für %s", ref_dur, heta_code)
             return None
 
         try:
             curve = json.loads(curve_json)
-        except Exception:
+        except Exception as e:
+            logger.warning("get_curve_analysis: JSON-Fehler für %s: %s", heta_code, e)
             return None
 
         if not curve:
+            logger.debug("get_curve_analysis: leere Kurve nach JSON-Parse für %s", heta_code)
             return None
 
         # Zyklusfortschritt zeitbasiert – konsistent mit Reststandzeit-Anzeige.
