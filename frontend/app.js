@@ -1908,7 +1908,7 @@ function buildDiagnosis(dpDevPct, flowDevPct, tempDev) {
 // ============================================================
 
 let _sliderDebounce = null;
-let _rateValues = { cycle_seconds: 300, dirt_rate_pct: 100.0, p1_trend_pct: 0.0, flow_drop_pct: 75.0, temp_trend: 0.0 };
+let _rateValues = { dirt_rate_pct: 100.0, p1_trend_pct: 0.0, flow_drop_pct: 75.0, temp_trend: 0.0 };
 
 const SIM_SCENARIOS = {
   normal:         { dirt_rate_pct: 100, p1_trend_pct:   0, flow_drop_pct: 75, temp_trend:  0 },
@@ -1919,14 +1919,6 @@ const SIM_SCENARIOS = {
   atypical:       { dirt_rate_pct: 130, p1_trend_pct:  -5, flow_drop_pct: 85, temp_trend:  2 },
 };
 
-function _syncCycleDurSlider(cycleSecs) {
-  const secs = Math.round(cycleSecs ?? 300);
-  _rateValues.cycle_seconds = secs;
-  const el = document.getElementById("sl-cycle-dur");
-  if (el && el.dataset.userSet !== "1") el.value = secs;
-  setText("sv-cycle-dur", _fmtCycleDur(secs));
-}
-
 function updateSimDemoPanel(d) {
   const panel = document.getElementById("sim-demo-panel");
   if (!panel) return;
@@ -1935,8 +1927,8 @@ function updateSimDemoPanel(d) {
   panel.classList.toggle("hidden", !simMode);
   if (!simMode) return;
 
-  // Zyklusdauer aus Status übernehmen (sofern Benutzer den Slider nicht gerade bedient)
-  if (d.sim_cycle_seconds != null) _syncCycleDurSlider(d.sim_cycle_seconds);
+  // Geschätzte Zyklusdauer (read-only, aus Physik berechnet)
+  setText("sv-est-cycle-dur", _fmtCycleDur(d.sim_estimated_cycle_secs ?? 300));
 
   const profileValid = d.profile_status === "VALIDIERT" && d.heta_activated;
   const learnArea    = document.getElementById("sim-learn-area");
@@ -1980,7 +1972,7 @@ function updateComparison(d) {
   const s        = window._settings || {};
   const dp_clean = d.reference_dp_clean || s.dp_clean_bar || 0.2;
   const dp_limit = s.dp_limit_bar ?? 2.5;
-  const cyc_secs = d.sim_cycle_seconds ?? 300;
+  const cyc_secs = d.sim_estimated_cycle_secs ?? 300;
   const ref_rate  = (dp_limit - dp_clean) / Math.max(cyc_secs, 1);
 
   const dirt_pct     = d.sim_dirt_rate_pct      ?? 100.0;
@@ -2076,12 +2068,7 @@ function _fmtCycleDur(secs) {
 
 function onSliderInput(which, rawVal) {
   const v = parseFloat(rawVal);
-  if (which === "cycle_dur") {
-    _rateValues.cycle_seconds = Math.round(v);
-    setText("sv-cycle-dur", _fmtCycleDur(v));
-    const el = document.getElementById("sl-cycle-dur");
-    if (el) el.dataset.userSet = "1";
-  } else if (which === "dirt_rate") {
+  if (which === "dirt_rate") {
     _rateValues.dirt_rate_pct = v;
     setText("sv-dirt-rate", Math.round(v) + " %");
   } else if (which === "p1_trend") {
@@ -2110,22 +2097,17 @@ async function sendSliderValues(scenario) {
   await apiFetch("/api/simulation/set-rates", "POST", {
     active:         true,
     scenario:       scenario || "custom",
-    cycle_seconds:  _rateValues.cycle_seconds,
     dirt_rate_pct:  _rateValues.dirt_rate_pct,
     p1_trend_pct:   _rateValues.p1_trend_pct,
     flow_drop_pct:  _rateValues.flow_drop_pct,
     temp_trend:     _rateValues.temp_trend,
   });
-  // Sperre für Zyklusdauer-Slider aufheben, damit Status wieder synchronisieren kann
-  const el = document.getElementById("sl-cycle-dur");
-  if (el) delete el.dataset.userSet;
 }
 
 function selectScenario(name) {
   const sc = SIM_SCENARIOS[name];
   if (!sc) return;
-  // Zyklusdauer bleibt erhalten; nur die anderen Parameter werden gesetzt
-  _rateValues = { cycle_seconds: _rateValues.cycle_seconds, ...sc };
+  _rateValues = { ...sc };
 
   const setSlider = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
   setSlider("sl-dirt-rate",  sc.dirt_rate_pct);
@@ -2158,10 +2140,6 @@ async function onManualToggle(checkbox) {
 }
 
 function resetSliders() {
-  _rateValues.cycle_seconds = 300;
-  const durEl = document.getElementById("sl-cycle-dur");
-  if (durEl) { durEl.value = 300; delete durEl.dataset.userSet; }
-  setText("sv-cycle-dur", _fmtCycleDur(300));
   selectScenario("normal");
 }
 

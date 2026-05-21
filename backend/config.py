@@ -47,7 +47,6 @@ _DEFAULTS = {
     "tolerance_temp_c":   10.0,
     "required_cycles_for_profile": 3,
     # Simulation – feste Basiswerte
-    "sim_cycle_seconds": 300,
     "sim_p1_base_bar":   4.0,
     "sim_q_base_l_min":  145.0,
     "sim_t_base_c":      25.0,
