@@ -798,21 +798,15 @@
 
           <div class="sim-sliders" id="sim-sliders">
 
-            <div class="sim-slider-row">
-              <label class="sim-slider-label">
-                Zyklusdauer
-                <span class="sim-slider-note">Zeit bis dp-Grenzwert erreicht</span>
-              </label>
-              <input type="range" id="sl-cycle-dur" class="sim-slider"
-                     min="10" max="7200" step="10" value="300"
-                     oninput="onSliderInput('cycle_dur', this.value)">
-              <span class="sim-slider-val" id="sv-cycle-dur">5 min</span>
+            <div class="sim-info-row">
+              <span class="sim-info-label">Geschätzte Zyklusdauer</span>
+              <span class="sim-info-val" id="sv-est-cycle-dur">– min</span>
             </div>
 
             <div class="sim-slider-row">
               <label class="sim-slider-label">
                 Beladungsintensität
-                <span class="sim-slider-note">% relativ zur eingest. Zyklusdauer</span>
+                <span class="sim-slider-note">Höher = schnellere Verschmutzung = kürzerer Zyklus</span>
               </label>
               <input type="range" id="sl-dirt-rate" class="sim-slider"
                      min="10" max="400" step="5" value="100"

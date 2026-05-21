@@ -549,6 +549,17 @@ main {
 .sim-slider-val   { font-size: .85rem; font-weight: 700; color: var(--heta-accent); text-align: right; white-space: nowrap; }
 .sim-slider-actions { display: flex; justify-content: flex-end; margin-top: .25rem; }
 
+.sim-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .35rem .1rem;
+  border-top: 1px solid var(--border);
+  margin-top: .25rem;
+}
+.sim-info-label { font-size: .85rem; color: var(--text-muted); }
+.sim-info-val   { font-size: .85rem; font-weight: 700; color: var(--text-main); }
+
 .sim-comparison { margin-top: 1.25rem; border-top: 1px solid var(--border); padding-top: 1rem; }
 .sim-cmp-title  { font-weight: 700; font-size: .88rem; color: var(--heta-blue-mid); margin-bottom: .6rem; }
 .sim-cmp-grid   {

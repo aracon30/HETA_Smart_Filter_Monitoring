@@ -30,7 +30,7 @@ from sensors import (read_sensors, reset_simulation, full_reset_simulation,
                      update_simulation_params, probe_hardware, check_hardware_sensors,
                      set_simulation_scenario_params, get_simulation_scenario_params,
                      clear_simulation_rates, get_simulation_rates_active,
-                     get_simulation_cycle_steps)
+                     get_simulation_estimated_cycle_secs)
 from calculations import (calculate_filter_state, FilterState,
                           calculate_filter_health_from_r_eff,
                           STATUS_OK, STATUS_WARNUNG, STATUS_FEHLER,
@@ -202,7 +202,7 @@ _state = {
     "sensor_fault_message": "",
 
     # Simulations-Szenario-Parameter
-    "sim_cycle_seconds":       settings.get("sim_cycle_seconds", 300),
+    "sim_estimated_cycle_secs": 300.0,
     "sim_rates_active":        False,
     "sim_scenario":            "normal",
     "sim_dirt_rate_pct":       100.0,
@@ -289,7 +289,6 @@ update_simulation_params(
     dp_clean=settings.get("dp_clean_bar", 0.2),
     dp_limit=settings.get("dp_limit_bar", 2.5),
     flow_max=settings.get("flow_max_l_min", 150.0),
-    cycle_seconds=settings.get("sim_cycle_seconds", 300),
     p1_base=settings.get("sim_p1_base_bar", 4.0),
     q_base=settings.get("sim_q_base_l_min", 145.0),
     t_base=settings.get("sim_t_base_c", 25.0),
@@ -1068,6 +1067,7 @@ def _measurement_loop():
                 "service_priority": rec["priority"],
                 "last_update": time.strftime("%Y-%m-%dT%H:%M:%S"),
                 "sim_rates_active": get_simulation_rates_active(),
+                "sim_estimated_cycle_secs": round(get_simulation_estimated_cycle_secs(), 1),
                 "operation_mode": settings.get("operation_mode", "continuous"),
             })
 
@@ -1927,7 +1927,6 @@ def api_settings_post():
         dp_clean=settings["dp_clean_bar"],
         dp_limit=settings["dp_limit_bar"],
         flow_max=settings["flow_max_l_min"],
-        cycle_seconds=settings.get("sim_cycle_seconds", 300),
         p1_base=settings.get("sim_p1_base_bar", 4.0),
         q_base=settings.get("sim_q_base_l_min", 145.0),
         t_base=settings.get("sim_t_base_c", 25.0),
@@ -2124,7 +2123,6 @@ def api_onboarding_complete():
         dp_clean=settings["dp_clean_bar"],
         dp_limit=settings["dp_limit_bar"],
         flow_max=settings["flow_max_l_min"],
-        cycle_seconds=settings.get("sim_cycle_seconds", 300),
         p1_base=settings.get("sim_p1_base_bar", 4.0),
         q_base=settings.get("sim_q_base_l_min", 145.0),
         t_base=settings.get("sim_t_base_c", 25.0),
@@ -2231,12 +2229,14 @@ def api_simulation_quick_learn():
     dp_limit          = settings.get("dp_limit_bar", 2.5)
     flow_max          = settings.get("flow_max_l_min", 150.0)
     sampling_interval = settings.get("sampling_interval_seconds", 1)
-    cycle_steps       = get_simulation_cycle_steps()        # Schritte pro Zyklus
-    cycle_secs        = float(cycle_steps) * sampling_interval
-    required_cycles   = settings.get("required_cycles_for_profile", 3)
+    # Zyklusdauer aus Simulator ableiten (dirt_rate_factor bestimmt die Dauer)
+    sc_params     = get_simulation_scenario_params()
+    cycle_secs    = get_simulation_estimated_cycle_secs()
+    cycle_steps   = max(10, int(cycle_secs / max(sampling_interval, 1)))
+    required_cycles = settings.get("required_cycles_for_profile", 3)
 
     # Aktuelle Szenario-Parameter für konsistente Simulation
-    sc = get_simulation_scenario_params()
+    sc               = sc_params  # bereits oben abgerufen
     sim_p1_base      = sc.get("p1_base",              4.0)
     sim_q_base       = sc.get("q_base",               145.0)
     sim_t_base       = sc.get("t_base",               25.0)
@@ -2373,21 +2373,6 @@ def api_simulation_set_rates():
     flow_drop_pct  = max(10.0,  min(float(data.get("flow_drop_pct",  75.0)),  99.0))
     temp_trend     = max(-5.0,  min(float(data.get("temp_trend",     0.0)),   5.0))
     scenario       = str(data.get("scenario", "custom"))
-    cycle_secs     = max(10.0, min(float(data.get("cycle_seconds", settings.get("sim_cycle_seconds", 300))), 86400.0))
-
-    settings["sim_cycle_seconds"] = round(cycle_secs)
-    save_settings(settings)
-
-    update_simulation_params(
-        dp_clean=settings["dp_clean_bar"],
-        dp_limit=settings["dp_limit_bar"],
-        flow_max=settings["flow_max_l_min"],
-        cycle_seconds=cycle_secs,
-        p1_base=settings.get("sim_p1_base_bar", 4.0),
-        q_base=settings.get("sim_q_base_l_min", 145.0),
-        t_base=settings.get("sim_t_base_c", 25.0),
-        reset_clogging=False,
-    )
 
     set_simulation_scenario_params(
         dirt_rate_factor    = dirt_rate_pct / 100.0,
@@ -2396,21 +2381,22 @@ def api_simulation_set_rates():
         temp_trend_per_cycle = temp_trend,
     )
 
+    estimated_secs = get_simulation_estimated_cycle_secs()
     dp_dev_pct   = round(dirt_rate_pct - 100.0, 1)
     flow_dev_pct = round((flow_drop_pct / 75.0 - 1.0) * 100.0, 1)
     temp_dev     = round(temp_trend, 1)
 
     with _state_lock:
-        _state["sim_cycle_seconds"]      = round(cycle_secs)
-        _state["sim_rates_active"]       = True
-        _state["sim_scenario"]           = scenario
-        _state["sim_dirt_rate_pct"]      = round(dirt_rate_pct, 1)
-        _state["sim_p1_trend_pct"]       = round(p1_trend_pct,  1)
-        _state["sim_flow_drop_pct"]      = round(flow_drop_pct, 1)
-        _state["sim_temp_trend"]         = round(temp_trend,     1)
-        _state["sim_dp_deviation_pct"]   = dp_dev_pct
-        _state["sim_flow_deviation_pct"] = flow_dev_pct
-        _state["sim_temp_deviation"]     = temp_dev
+        _state["sim_estimated_cycle_secs"] = round(estimated_secs, 1)
+        _state["sim_rates_active"]         = True
+        _state["sim_scenario"]             = scenario
+        _state["sim_dirt_rate_pct"]        = round(dirt_rate_pct, 1)
+        _state["sim_p1_trend_pct"]         = round(p1_trend_pct,  1)
+        _state["sim_flow_drop_pct"]        = round(flow_drop_pct, 1)
+        _state["sim_temp_trend"]           = round(temp_trend,     1)
+        _state["sim_dp_deviation_pct"]     = dp_dev_pct
+        _state["sim_flow_deviation_pct"]   = flow_dev_pct
+        _state["sim_temp_deviation"]       = temp_dev
 
     return jsonify({
         "success": True, "active": True,
@@ -2419,6 +2405,7 @@ def api_simulation_set_rates():
         "p1_trend_pct": p1_trend_pct,
         "flow_drop_pct": flow_drop_pct,
         "temp_trend": temp_trend,
+        "estimated_cycle_secs": round(estimated_secs, 1),
     })
 
 

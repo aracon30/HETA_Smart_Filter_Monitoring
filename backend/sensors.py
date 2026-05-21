@@ -156,14 +156,18 @@ class FilterSimulator:
                             flow_drop_factor, temp_trend_per_cycle.
 
     clogging ∈ [0, 1] wächst zeitbasiert:
-        clogging += dirt_rate_factor / cycle_seconds * delta_t
+        clogging += dirt_rate_factor * _BASE_CLOGGING_RATE * delta_t
+
+    _BASE_CLOGGING_RATE = 1/300 → Bei dirt_rate_factor=1.0 dauert ein Zyklus ~300 s.
+    Die Zyklusdauer ergibt sich ausschließlich aus Beladungsintensität und Filterphysik.
     """
 
+    _BASE_CLOGGING_RATE = 1.0 / 300.0  # 1.0 = normaler Schmutzeintrag → ~300 s / Zyklus
+
     def __init__(self, dp_clean: float = 0.2, dp_limit: float = 2.5,
-                 cycle_seconds: float = 300.0, flow_max: float = 150.0):
+                 flow_max: float = 150.0):
         self.dp_clean      = dp_clean
         self.dp_limit      = dp_limit
-        self.cycle_seconds = max(1.0, float(cycle_seconds))
         self.flow_max      = flow_max   # Sensor-Maximalbereich (nicht Q_base)
         self._lock         = threading.Lock()
         # Feste Basiswerte (aus Konfiguration gesetzt)
@@ -180,10 +184,10 @@ class FilterSimulator:
         self._last_time   = None
         self._rates_active = False
 
-    @property
-    def cycle_steps(self) -> int:
-        """Abwärtskompatibel: Schritte pro Zyklus (= Sekunden)."""
-        return max(1, int(self.cycle_seconds))
+    def estimated_cycle_secs(self) -> float:
+        """Geschätzte Zyklusdauer in Sekunden (abhängig vom aktuellen dirt_rate_factor)."""
+        with self._lock:
+            return 1.0 / (max(self._dirt_rate_factor, 0.01) * self._BASE_CLOGGING_RATE)
 
     def reset(self):
         """Setzt nur Beladungszustand zurück – Szenarien bleiben."""
@@ -251,7 +255,7 @@ class FilterSimulator:
                 delta_t = max(0.0, now - self._last_time)
             self._last_time = now
 
-            dirt_rate      = self._dirt_rate_factor / self.cycle_seconds
+            dirt_rate      = self._dirt_rate_factor * FilterSimulator._BASE_CLOGGING_RATE
             self._clogging = min(1.0, self._clogging + dirt_rate * delta_t)
             clogging       = self._clogging
 
@@ -303,7 +307,6 @@ def full_reset_simulation():
 
 
 def update_simulation_params(dp_clean: float, dp_limit: float, flow_max: float,
-                              cycle_seconds: float = 300.0,
                               p1_base: float = 4.0,
                               q_base: float = 145.0,
                               t_base: float = 25.0,
@@ -317,13 +320,12 @@ def update_simulation_params(dp_clean: float, dp_limit: float, flow_max: float,
                            wenn sich nur Anzeigeeinstellungen ändern).
     """
     with _simulator._lock:
-        _simulator.dp_clean      = dp_clean
-        _simulator.dp_limit      = dp_limit
-        _simulator.flow_max      = flow_max
-        _simulator.cycle_seconds = max(1.0, float(cycle_seconds))
-        _simulator._p1_base      = p1_base
-        _simulator._q_base       = q_base
-        _simulator._t_base       = t_base
+        _simulator.dp_clean  = dp_clean
+        _simulator.dp_limit  = dp_limit
+        _simulator.flow_max  = flow_max
+        _simulator._p1_base  = p1_base
+        _simulator._q_base   = q_base
+        _simulator._t_base   = t_base
         if reset_clogging:
             _simulator._clogging  = 0.0
             _simulator._last_time = None
@@ -349,8 +351,9 @@ def get_simulation_rates_active() -> bool:
     return _simulator.rates_active
 
 
-def get_simulation_cycle_steps() -> int:
-    return _simulator.cycle_steps
+def get_simulation_estimated_cycle_secs() -> float:
+    """Geschätzte Zyklusdauer in Sekunden basierend auf aktuellem dirt_rate_factor."""
+    return _simulator.estimated_cycle_secs()
 
 
 def get_simulation_scenario_params() -> dict:
