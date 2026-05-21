@@ -1884,8 +1884,10 @@ function buildDiagnosis(dpDevPct, flowDevPct, tempDev) {
 
   if (flowLow && !dpFast) {
     hints.push("Durchfluss unter Referenz → Pumpenproblem, Leckage im Bypass oder Vorverstopfung möglich.");
-  } else if (flowHigh) {
-    hints.push("Erhöhter Durchfluss → Filterwechselintervall verkürzt sich entsprechend.");
+  } else if (flowHigh && !dpSlow) {
+    // flowHigh + dpSlow ist konsistent: weniger Beladung → niedrigerer Δp UND höherer
+    // Durchfluss (weniger Filterwiderstand). Kein Widerspruch – dpSlow-Hinweis reicht.
+    hints.push("Erhöhter Durchfluss ohne Δp-Reduktion → mehr Partikelladung pro Zeiteinheit, Filterwechselintervall kann sich verkürzen.");
   }
 
   if (tempHigh) {

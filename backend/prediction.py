@@ -155,9 +155,14 @@ class PredictionEngine:
         if self._last_remaining is None or remaining <= self._last_remaining:
             self._last_remaining = remaining
         else:
-            # Dämpfe Anstiege durch Messrauschen: max +2 %/Tick
-            capped = min(remaining, self._last_remaining * 1.02)
-            self._last_remaining += 0.3 * (capped - self._last_remaining)
+            # Anstieg: echte Lastreduktion (>20 % mehr) sofort übernehmen;
+            # kleinere Schwankungen (Messrauschen) sanft dämpfen.
+            ratio = remaining / max(self._last_remaining, 0.1)
+            if ratio > 1.20:
+                self._last_remaining = remaining          # sofortiger Sprung
+            else:
+                capped = min(remaining, self._last_remaining * 1.05)
+                self._last_remaining += 0.4 * (capped - self._last_remaining)
 
         return self._last_remaining
 
