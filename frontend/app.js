@@ -1827,29 +1827,29 @@ function updateAnalysisSection(d) {
   setText("an-dp-cur", fmt(dpSlopeCur * 1000, 3) + " mbar/s");
   setAnalysisDev("an-dp-dev", dpDev, "%", _tolDp * 100, _tolDp * 200);
 
-  // R_eff-Steigung vs. Referenzkurve
-  const reffSlopeRef = d.analysis_reff_rate_ref     ?? 0;
-  const reffSlopeCur = d.analysis_reff_rate_current ?? 0;
-  const reffDev      = d.analysis_reff_deviation_pct ?? 0;
-  setText("an-reff-ref", fmt(reffSlopeRef * 1e6, 2) + " µ(bar·min/l)/s");
-  setText("an-reff-cur", fmt(reffSlopeCur * 1e6, 2) + " µ(bar·min/l)/s");
+  // R_eff: Absolutwert am gleichen dp-Punkt (sekündlich aktuell)
+  const reffRef = d.analysis_reff_ref ?? 0;
+  const reffCur = d.analysis_reff_cur ?? d.r_eff ?? 0;
+  const reffDev = d.analysis_reff_deviation_pct ?? 0;
+  setText("an-reff-ref", fmt(reffRef * 1000, 1) + " mbar·min/l");
+  setText("an-reff-cur", fmt(reffCur * 1000, 1) + " mbar·min/l");
   setAnalysisDev("an-reff-dev", reffDev, "%", _tolReff * 100, _tolReff * 200);
 
-  // Durchfluss-Steigung Q vs. Referenzkurve
-  const flSlopeRef = d.analysis_flow_rate_ref     ?? 0;
-  const flSlopeCur = d.analysis_flow_rate_current ?? 0;
-  const flDev      = d.analysis_flow_deviation_pct ?? 0;
-  setText("an-fl-ref", fmt(flSlopeRef * 60, 3) + " l/min/min");
-  setText("an-fl-cur", fmt(flSlopeCur * 60, 3) + " l/min/min");
+  // Durchfluss Q: Absolutwert am gleichen dp-Punkt
+  const flRef = d.analysis_flow_ref ?? 0;
+  const flCur = d.flow_l_min        ?? 0;
+  const flDev = d.analysis_flow_deviation_pct ?? 0;
+  setText("an-fl-ref", fmt(flRef, 1) + " l/min");
+  setText("an-fl-cur", fmt(flCur, 1) + " l/min");
   setAnalysisDev("an-fl-dev", flDev, "%", _tolFlow * 100, _tolFlow * 200);
 
-  // Temperatur-Steigung T vs. Referenzkurve
-  const tSlopeRef = d.analysis_temp_rate_ref     ?? 0;
-  const tSlopeCur = d.analysis_temp_rate_current ?? 0;
-  const tDev      = d.analysis_temp_deviation_pct ?? 0;
-  setText("an-tmp-ref", fmt(tSlopeRef * 60, 3) + " °C/min");
-  setText("an-tmp-cur", fmt(tSlopeCur * 60, 3) + " °C/min");
-  setAnalysisDev("an-tmp-dev", tDev, "%", _tolTempC * 5, _tolTempC * 10);
+  // Temperatur T: Absolutwert am gleichen dp-Punkt
+  const tRef = d.analysis_temp_ref      ?? 0;
+  const tCur = d.temperature_c          ?? 0;
+  const tDev = d.analysis_temp_deviation ?? 0;
+  setText("an-tmp-ref", fmt(tRef, 1) + " °C");
+  setText("an-tmp-cur", fmt(tCur, 1) + " °C");
+  setAnalysisDev("an-tmp-dev", tDev, "°C", _tolTempC, _tolTempC * 2, true);
 
   setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev, true));
 }

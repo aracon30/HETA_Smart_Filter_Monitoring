@@ -390,16 +390,12 @@ class LearningManager:
                            current_temp_slope: Optional[float] = None,
                            current_reff_slope: Optional[float] = None) -> Optional[dict]:
         """
-        Vergleicht aktuelle Messwerte mit der gelernten Referenzkurve am
-        dp-äquivalenten Punkt der Kurve.
+        Vergleicht aktuelle Messwerte mit der gelernten Referenzkurve.
 
-        Zyklusfortschritt = dp-basiert (0 % = sauber, 100 % = dp_limit):
-        Die Referenzkurve wird nach dp invertiert (dp → t_pct), sodass der
-        Vergleich immer am physikalisch passenden Kurvenabschnitt stattfindet –
-        unabhängig davon ob der aktuelle Zyklus schneller oder langsamer läuft
-        als die Lernzyklen.
-
-        Rückgabe: dict mit Referenzwerten und Abweichungen, oder None.
+        Fortschritt & Ankerpunkt: dp-basiert (Referenzkurve invertieren).
+        - Δp-Steigung: Vergleich mbar/s — zeigt Beladungsgeschwindigkeit
+        - Q, T, R_eff: Absolutwertvergleich am gleichen dp-Punkt — aktualisiert
+          sich sekündlich mit dp und zeigt echte Prozessabweichungen.
         """
         profile = self.get_profile(heta_code)
         if not profile or not profile.get("profile_valid"):
@@ -422,9 +418,7 @@ class LearningManager:
             logger.debug("get_curve_analysis: leere Kurve nach JSON-Parse für %s", heta_code)
             return None
 
-        # dp-basierter Zyklusfortschritt: Referenzkurve nach dp invertieren.
-        # Damit bleibt der Vergleich immer im gültigen Bereich, auch wenn der
-        # aktuelle Zyklus länger oder kürzer als die Referenz dauert.
+        # dp-basierter Zyklusfortschritt
         t_pct = self._invert_dp_to_tpct(curve, current_dp)
         cycle_progress_pct = round(t_pct, 1)
         ref = self._interpolate_curve(curve, t_pct)
@@ -440,37 +434,24 @@ class LearningManager:
                 return round((cur / ref_val - 1.0) * 100.0, 1)
             return 0.0
 
-        # Referenzsteigungen an der aktuellen Kurvenposition
-        def slope_dev(cur_slope, key):
-            ref_s = self._slope_at_tpct(curve, t_pct, ref_dur, key)
-            if cur_slope is None or ref_s is None or abs(ref_s) < 1e-12:
-                return 0.0, ref_s or 0.0
-            return pct_dev(cur_slope, ref_s), ref_s
-
-        dp_slope_dev,   ref_dp_slope   = slope_dev(current_dp_slope,   "dp")
-        flow_slope_dev, ref_flow_slope = slope_dev(current_flow_slope, "flow")
-        temp_slope_dev, ref_temp_slope = slope_dev(current_temp_slope, "temp")
-        reff_slope_dev, ref_reff_slope = slope_dev(current_reff_slope, "r_eff")
+        # dp-Steigung: Referenz aus Kurvenableitung, Aktuell aus Regression
+        ref_dp_slope  = self._slope_at_tpct(curve, t_pct, ref_dur, "dp")
+        dp_slope_dev  = pct_dev(current_dp_slope, ref_dp_slope) if current_dp_slope is not None and abs(ref_dp_slope) > 1e-9 else 0.0
 
         return {
-            "cycle_progress_pct":    cycle_progress_pct,
-            "elapsed_seconds":       round(elapsed_seconds, 1),
-            # dp-Steigung
-            "ref_dp_slope":          round(ref_dp_slope,   6),
-            "cur_dp_slope":          round(current_dp_slope,   6) if current_dp_slope   is not None else None,
-            "dp_deviation_pct":      dp_slope_dev,
-            # Flow-Steigung (l/min/s — negativ: Durchfluss fällt mit dp)
-            "ref_flow_slope":        round(ref_flow_slope, 6),
-            "cur_flow_slope":        round(current_flow_slope, 6) if current_flow_slope is not None else None,
-            "flow_deviation_pct":    flow_slope_dev,
-            # Temperatur-Steigung (°C/s)
-            "ref_temp_slope":        round(ref_temp_slope, 6),
-            "cur_temp_slope":        round(current_temp_slope, 6) if current_temp_slope is not None else None,
-            "temp_deviation_pct":    temp_slope_dev,
-            # R_eff-Steigung (bar·min/l pro s)
-            "ref_reff_slope":        round(ref_reff_slope, 9),
-            "cur_reff_slope":        round(current_reff_slope, 9) if current_reff_slope is not None else None,
-            "r_eff_deviation_pct":   reff_slope_dev,
+            "cycle_progress_pct":   cycle_progress_pct,
+            "elapsed_seconds":      round(elapsed_seconds, 1),
+            # dp-Steigung (Beladungsgeschwindigkeit)
+            "ref_dp_slope":         round(ref_dp_slope, 6),
+            "cur_dp_slope":         round(current_dp_slope, 6) if current_dp_slope is not None else None,
+            "dp_deviation_pct":     dp_slope_dev,
+            # Q, T, R_eff: Absolutwert am gleichen dp-Punkt — sekündlich aktuell
+            "ref_r_eff":            round(ref_reff, 6),
+            "ref_flow":             round(ref_flow, 1),
+            "ref_temp":             round(ref_temp, 1),
+            "r_eff_deviation_pct":  pct_dev(current_r_eff,  ref_reff),
+            "flow_deviation_pct":   pct_dev(current_flow,   ref_flow),
+            "temp_deviation":       round(current_temp - ref_temp, 1),
         }
 
     @staticmethod
