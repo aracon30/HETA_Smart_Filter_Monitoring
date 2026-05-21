@@ -384,7 +384,8 @@ class LearningManager:
 
     def get_curve_analysis(self, heta_code: str, elapsed_seconds: float,
                            current_dp: float, current_r_eff: float,
-                           current_flow: float, current_temp: float) -> Optional[dict]:
+                           current_flow: float, current_temp: float,
+                           current_dp_slope: Optional[float] = None) -> Optional[dict]:
         """
         Vergleicht aktuelle Messwerte mit der gelernten Referenzkurve am
         dp-äquivalenten Punkt der Kurve.
@@ -427,7 +428,6 @@ class LearningManager:
         if not ref:
             return None
 
-        ref_dp   = ref.get("dp")    or 0.0
         ref_reff = ref.get("r_eff") or 0.0
         ref_flow = ref.get("flow")  or 0.0
         ref_temp = ref.get("temp")  or 0.0
@@ -437,16 +437,22 @@ class LearningManager:
                 return round((cur / ref_val - 1.0) * 100.0, 1)
             return 0.0
 
+        # Referenz-dp-Steigung an der aktuellen Kurvenposition (bar/s)
+        ref_slope = self._slope_at_tpct(curve, t_pct, ref_dur)
+        slope_dev = pct_dev(current_dp_slope, ref_slope) if current_dp_slope is not None else 0.0
+
         return {
-            "cycle_progress_pct":  cycle_progress_pct,
-            "ref_dp":              round(ref_dp,   4),
-            "ref_r_eff":           round(ref_reff, 6),
-            "ref_flow":            round(ref_flow, 1),
-            "ref_temp":            round(ref_temp, 1),
-            "dp_deviation_pct":    pct_dev(current_dp,    ref_dp),
-            "r_eff_deviation_pct": pct_dev(current_r_eff, ref_reff),
-            "flow_deviation_pct":  pct_dev(current_flow,  ref_flow),
-            "temp_deviation":      round(current_temp - ref_temp, 1),
+            "cycle_progress_pct":   cycle_progress_pct,
+            "elapsed_seconds":      round(elapsed_seconds, 1),
+            "ref_dp_slope":         round(ref_slope,  6),
+            "cur_dp_slope":         round(current_dp_slope, 6) if current_dp_slope is not None else None,
+            "dp_deviation_pct":     slope_dev,
+            "ref_r_eff":            round(ref_reff, 6),
+            "ref_flow":             round(ref_flow, 1),
+            "ref_temp":             round(ref_temp, 1),
+            "r_eff_deviation_pct":  pct_dev(current_r_eff, ref_reff),
+            "flow_deviation_pct":   pct_dev(current_flow,  ref_flow),
+            "temp_deviation":       round(current_temp - ref_temp, 1),
         }
 
     @staticmethod
@@ -499,6 +505,26 @@ class LearningManager:
 
         closest = min(pts, key=lambda p: abs(p[1] - dp_bar))
         return closest[0]
+
+    @staticmethod
+    def _slope_at_tpct(curve: list, t_pct: float, ref_duration: float) -> float:
+        """
+        Berechnet die Referenz-dp-Steigung (bar/s) an der Position t_pct.
+        Ableitung der Kurve: d(dp)/d(t_pct) × (100 / ref_duration).
+        """
+        if not curve or ref_duration <= 0:
+            return 0.0
+        for i in range(len(curve) - 1):
+            t0 = curve[i].get("t_pct", 0)
+            t1 = curve[i + 1].get("t_pct", 0)
+            if t0 <= t_pct <= t1 and (t1 - t0) > 0.001:
+                dp0 = curve[i].get("dp") or 0.0
+                dp1 = curve[i + 1].get("dp") or 0.0
+                t_delta_s = (t1 - t0) / 100.0 * ref_duration
+                return (dp1 - dp0) / t_delta_s if t_delta_s > 0 else 0.0
+        # Fallback: mittlere Gesamtsteigung
+        dp_total = (curve[-1].get("dp") or 0.0) - (curve[0].get("dp") or 0.0)
+        return dp_total / ref_duration
 
     def get_profile(self, heta_code: str) -> Optional[dict]:
         """Gibt das Referenzprofil zurück oder None."""

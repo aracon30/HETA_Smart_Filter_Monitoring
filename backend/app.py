@@ -884,16 +884,18 @@ def _measurement_loop():
         an_ready  = False
         analysis  = None
         cycle_progress_pct = 0.0
-        dp_ref = dp_dev = 0.0
+        dp_slope_ref = dp_slope_cur = dp_dev = 0.0
         reff_ref = reff_dev = 0.0
         flow_ref = flow_dev = 0.0
         temp_ref = temp_dev = 0.0
+        analysis_elapsed = 0.0
 
         if an_active and cycle_active:
             try:
                 analysis = learning.get_curve_analysis(
-                    heta_code, 0.0,
+                    heta_code, elapsed,
                     fs.dp_bar, fs.r_eff, fs.flow_l_min, fs.temperature_c,
+                    current_dp_slope=predictor.get_current_slope(),
                 )
             except Exception as _e:
                 logger.warning("Kurvenanalyse-Fehler: %s", _e, exc_info=True)
@@ -901,7 +903,9 @@ def _measurement_loop():
             if analysis:
                 an_ready           = True
                 cycle_progress_pct = analysis["cycle_progress_pct"]
-                dp_ref             = analysis["ref_dp"]
+                analysis_elapsed   = analysis["elapsed_seconds"]
+                dp_slope_ref       = analysis["ref_dp_slope"]
+                dp_slope_cur       = analysis["cur_dp_slope"] or 0.0
                 dp_dev             = analysis["dp_deviation_pct"]
                 reff_ref           = analysis["ref_r_eff"]
                 reff_dev           = analysis["r_eff_deviation_pct"]
@@ -998,7 +1002,9 @@ def _measurement_loop():
                 "analysis_active":             an_active,
                 "analysis_ready":              an_ready,
                 "analysis_cycle_progress_pct": cycle_progress_pct,
-                "analysis_dp_ref":             dp_ref,
+                "analysis_elapsed_seconds":    analysis_elapsed,
+                "analysis_dp_rate_ref":        dp_slope_ref,
+                "analysis_dp_rate_current":    dp_slope_cur,
                 "analysis_dp_deviation_pct":   dp_dev,
                 "analysis_reff_ref":           reff_ref,
                 "analysis_reff_cur":           fs.r_eff,

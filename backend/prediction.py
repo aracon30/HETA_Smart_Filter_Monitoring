@@ -226,6 +226,10 @@ class PredictionEngine:
             return None
         return max(numerator / denominator, 0.0)
 
+    def get_current_slope(self) -> Optional[float]:
+        """Gibt die aktuelle dp-Steigung (bar/s) zurück, oder None wenn zu wenig Daten."""
+        return self._calculate_slope()
+
     def reset(self):
         """Setzt die Prognose zurück (z.B. nach Filterwechsel oder Neukonfiguration)."""
         self._last_remaining = None

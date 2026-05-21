@@ -1807,18 +1807,24 @@ function updateAnalysisSection(d) {
   if (contentEl) contentEl.classList.toggle("hidden", !ready);
   if (!ready) return;
 
-  // Zyklusfortschritt
+  // Zyklusfortschritt (dp-basiert) + Laufzeit
   const progressPct = d.analysis_cycle_progress_pct ?? 0;
   const progressBar = document.getElementById("analysis-progress-bar");
   if (progressBar) progressBar.style.width = Math.min(100, progressPct) + "%";
   setText("analysis-progress-pct", Math.round(progressPct) + " %");
+  const elapsedSec = d.analysis_elapsed_seconds ?? 0;
+  const elapsedMin = Math.floor(elapsedSec / 60);
+  const elapsedS   = Math.floor(elapsedSec % 60);
+  setText("analysis-elapsed", elapsedMin > 0
+    ? `${elapsedMin} min ${String(elapsedS).padStart(2,"0")} s`
+    : `${elapsedS} s`);
 
-  // Δp vs. Referenzkurve
-  const dpRef = d.analysis_dp_ref ?? 0;
-  const dpCur = d.dp_bar          ?? 0;
-  const dpDev = d.analysis_dp_deviation_pct ?? 0;
-  setText("an-dp-ref", fmt(dpRef, 3) + " bar");
-  setText("an-dp-cur", fmt(dpCur, 3) + " bar");
+  // Δp-Steigung vs. Referenzkurve
+  const dpSlopeRef = d.analysis_dp_rate_ref     ?? 0;
+  const dpSlopeCur = d.analysis_dp_rate_current ?? 0;
+  const dpDev      = d.analysis_dp_deviation_pct ?? 0;
+  setText("an-dp-ref", fmt(dpSlopeRef * 1000, 3) + " mbar/s");
+  setText("an-dp-cur", fmt(dpSlopeCur * 1000, 3) + " mbar/s");
   setAnalysisDev("an-dp-dev", dpDev, "%", _tolDp * 100, _tolDp * 200);
 
   // R_eff vs. Referenzkurve – als Widerstandsfaktor anzeigen
@@ -1847,7 +1853,7 @@ function updateAnalysisSection(d) {
   setText("an-tmp-cur", fmt(tCur, 1) + " °C");
   setAnalysisDev("an-tmp-dev", tDev, "°C", _tolTempC, _tolTempC * 2, true);
 
-  setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev));
+  setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev, true));
 }
 
 function setAnalysisDev(id, val, unit, warnAt, critAt, isAbsolute = false) {
@@ -1864,7 +1870,7 @@ function setAnalysisDev(id, val, unit, warnAt, critAt, isAbsolute = false) {
   );
 }
 
-function buildDiagnosis(dpDevPct, flowDevPct, tempDev) {
+function buildDiagnosis(dpDevPct, flowDevPct, tempDev, isSlopeBase = false) {
   const dpFast   = dpDevPct   >  40;
   const dpSlow   = dpDevPct   < -30;
   const flowLow  = flowDevPct < -20;
@@ -1877,9 +1883,11 @@ function buildDiagnosis(dpDevPct, flowDevPct, tempDev) {
   if (dpFast && flowLow) {
     hints.push("Schnelle Beladung + reduzierter Durchfluss → Verdacht auf Filterverstopfung oder erhöhten Verschmutzungseintrag.");
   } else if (dpFast) {
-    hints.push("Δp steigt schneller als gelernt → erhöhte Partikelkonzentration oder beschädigtes Filterelement möglich.");
+    const label = isSlopeBase ? "Δp-Steigung höher als Referenz" : "Δp steigt schneller als gelernt";
+    hints.push(label + " → erhöhte Partikelkonzentration oder beschädigtes Filterelement möglich.");
   } else if (dpSlow) {
-    hints.push("Langsame Beladung → Prozess läuft mit reduzierter Last. Filterwechselintervall verlängert sich.");
+    const label = isSlopeBase ? "Δp-Steigung niedriger als Referenz" : "Langsame Beladung";
+    hints.push(label + " → Prozess läuft mit reduzierter Last. Filterwechselintervall verlängert sich.");
   }
 
   if (flowLow && !dpFast) {
