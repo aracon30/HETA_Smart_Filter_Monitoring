@@ -156,13 +156,17 @@ class FilterSimulator:
                             flow_drop_factor, temp_trend_per_cycle.
 
     clogging ∈ [0, 1] wächst zeitbasiert:
-        clogging += dirt_rate_factor * _BASE_CLOGGING_RATE * delta_t
+        dp_range = dp_limit - dp_clean
+        clogging += dirt_rate_factor * (REF_DP_RANGE / (dp_range * REF_CYCLE_SECS)) * delta_t
 
-    _BASE_CLOGGING_RATE = 1/300 → Bei dirt_rate_factor=1.0 dauert ein Zyklus ~300 s.
-    Die Zyklusdauer ergibt sich ausschließlich aus Beladungsintensität und Filterphysik.
+    Kalibrierung: Bei dp_limit=2.5 bar, dp_clean=0.2 bar und dirt_rate_factor=1.0
+    dauert ein Zyklus exakt 300 s. Mit dp_limit=1.0 bar (dp_range=0.8 bar) dauert
+    er nur ~104 s, weil das Filter früher getauscht wird.
     """
 
-    _BASE_CLOGGING_RATE = 1.0 / 300.0  # 1.0 = normaler Schmutzeintrag → ~300 s / Zyklus
+    # Referenzkalibrierung: dp_range=2.3 bar (2.5−0.2) → 300 s bei dirt_rate=1.0
+    _REF_DP_RANGE_BAR  = 2.3    # bar
+    _REF_CYCLE_SECS    = 300.0  # Sekunden
 
     def __init__(self, dp_clean: float = 0.2, dp_limit: float = 2.5,
                  flow_max: float = 150.0):
@@ -185,9 +189,10 @@ class FilterSimulator:
         self._rates_active = False
 
     def estimated_cycle_secs(self) -> float:
-        """Geschätzte Zyklusdauer in Sekunden (abhängig vom aktuellen dirt_rate_factor)."""
+        """Geschätzte Zyklusdauer in Sekunden (abhängig von dp_limit, dp_clean und dirt_rate_factor)."""
         with self._lock:
-            return 1.0 / (max(self._dirt_rate_factor, 0.01) * self._BASE_CLOGGING_RATE)
+            dp_range = max(self.dp_limit - self.dp_clean, 0.01)
+            return (dp_range / self._REF_DP_RANGE_BAR) * self._REF_CYCLE_SECS / max(self._dirt_rate_factor, 0.01)
 
     def reset(self):
         """Setzt nur Beladungszustand zurück – Szenarien bleiben."""
@@ -255,7 +260,8 @@ class FilterSimulator:
                 delta_t = max(0.0, now - self._last_time)
             self._last_time = now
 
-            dirt_rate      = self._dirt_rate_factor * FilterSimulator._BASE_CLOGGING_RATE
+            dp_range       = max(self.dp_limit - self.dp_clean, 0.01)
+            dirt_rate      = self._dirt_rate_factor * (self._REF_DP_RANGE_BAR / (dp_range * self._REF_CYCLE_SECS))
             self._clogging = min(1.0, self._clogging + dirt_rate * delta_t)
             clogging       = self._clogging
 
