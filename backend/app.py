@@ -887,8 +887,8 @@ def _measurement_loop():
         analysis_elapsed   = 0.0
         dp_slope_ref   = dp_slope_cur   = dp_dev   = 0.0
         flow_slope_ref = flow_slope_cur = flow_dev = 0.0
+        temp_slope_ref = temp_slope_cur = temp_dev = 0.0
         reff_slope_ref = reff_slope_cur = reff_dev = 0.0
-        temp_ref = temp_dev = 0.0
 
         if an_active and cycle_active:
             try:
@@ -914,11 +914,12 @@ def _measurement_loop():
                 flow_slope_ref     = analysis["ref_flow_slope"]
                 flow_slope_cur     = analysis["cur_flow_slope"]  or 0.0
                 flow_dev           = analysis["flow_deviation_pct"]
+                temp_slope_ref     = analysis["ref_temp_slope"]
+                temp_slope_cur     = analysis["cur_temp_slope"]  or 0.0
+                temp_dev           = analysis["temp_deviation_pct"]
                 reff_slope_ref     = analysis["ref_reff_slope"]
                 reff_slope_cur     = analysis["cur_reff_slope"]  or 0.0
                 reff_dev           = analysis["r_eff_deviation_pct"]
-                temp_ref           = analysis["ref_temp"]
-                temp_dev           = analysis["temp_deviation"]
 
         # ── Kanalsteigungen aktualisieren (Q, T, R_eff) ──────────────────
         predictor.update_channels(fs.flow_l_min, fs.temperature_c, fs.r_eff)
@@ -1018,8 +1019,9 @@ def _measurement_loop():
                 "analysis_flow_rate_ref":       flow_slope_ref,
                 "analysis_flow_rate_current":   flow_slope_cur,
                 "analysis_flow_deviation_pct":  flow_dev,
-                "analysis_temp_ref":            temp_ref,
-                "analysis_temp_deviation":      temp_dev,
+                "analysis_temp_rate_ref":       temp_slope_ref,
+                "analysis_temp_rate_current":   temp_slope_cur,
+                "analysis_temp_deviation_pct":  temp_dev,
                 "analysis_reff_rate_ref":       reff_slope_ref,
                 "analysis_reff_rate_current":   reff_slope_cur,
                 "analysis_reff_deviation_pct":  reff_dev,

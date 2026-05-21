@@ -1843,13 +1843,13 @@ function updateAnalysisSection(d) {
   setText("an-fl-cur", fmt(flSlopeCur * 60, 3) + " l/min/min");
   setAnalysisDev("an-fl-dev", flDev, "%", _tolFlow * 100, _tolFlow * 200);
 
-  // Temperatur: Absolutwert am gleichen dp-Punkt (Steigung wäre ≈ 0, sinnlos)
-  const tRef = d.analysis_temp_ref      ?? 0;
-  const tCur = d.temperature_c          ?? 0;
-  const tDev = d.analysis_temp_deviation ?? 0;
-  setText("an-tmp-ref", fmt(tRef, 1) + " °C");
-  setText("an-tmp-cur", fmt(tCur, 1) + " °C");
-  setAnalysisDev("an-tmp-dev", tDev, "°C", _tolTempC, _tolTempC * 2, true);
+  // T-Steigung — rückwärts 30-s-Fenster
+  const tSlopeRef = d.analysis_temp_rate_ref     ?? 0;
+  const tSlopeCur = d.analysis_temp_rate_current ?? 0;
+  const tDev      = d.analysis_temp_deviation_pct ?? 0;
+  setText("an-tmp-ref", fmt(tSlopeRef * 60, 4) + " °C/min");
+  setText("an-tmp-cur", fmt(tSlopeCur * 60, 4) + " °C/min");
+  setAnalysisDev("an-tmp-dev", tDev, "%", _tolTempC * 10, _tolTempC * 20);
 
   setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev, true));
 }
