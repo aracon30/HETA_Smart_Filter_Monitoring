@@ -110,15 +110,36 @@ class PredictionEngine:
 
     def update(self, dp_bar: float) -> Optional[float]:
         """
-        Fallback für die Lernphase (kein valides Profil): berechnet Reststandzeit
-        aus der gemessenen Beladungsrate (lineare Regression über dp-Verlauf).
-        Wird nur verwendet solange kein Referenzprofil vorliegt.
+        Berechnet Reststandzeit aus der gemessenen dp-Steigung.
+
+        Wenn ein Seed-Wert gesetzt wurde (aus Referenzdauer):
+          - Zählt sekündlich herunter bis die echte Steigung einen
+            niedrigeren Wert liefert → dann übernimmt slope-Berechnung.
+          - Verhindert dadurch den Sprung nach oben in den ersten ~30 s.
         """
         self._dp_history.append(dp_bar)
         if len(self._dp_history) > self._history_window:
             self._dp_history.pop(0)
 
         slope = self._calculate_slope()
+
+        # Seeded phase: tick-weise herunterzählen, kein Sprung nach oben
+        if self._seeded_ceiling is not None:
+            if self._last_remaining is None:
+                self._last_remaining = self._seeded_ceiling
+            if slope is not None and slope > 0:
+                # Echte Steigung verwenden (ohne min_slope-Clamp) für den Vergleich
+                raw_true = (self.dp_limit - dp_bar) / slope
+                if raw_true < self._last_remaining:
+                    # Slope-basierter Wert liegt unter dem Countdown → übergeben
+                    self._last_remaining = max(0.0, raw_true)
+                    self._seeded_ceiling = None
+                    return self._last_remaining
+            # Noch nicht übergeben: einfach 1 Sekunde herunterzählen
+            self._last_remaining = max(0.0, self._last_remaining - 1.0)
+            return self._last_remaining
+
+        # Normale Phase (kein Seed mehr aktiv)
         if slope is None or slope <= 0:
             return self._last_remaining
 
@@ -127,14 +148,9 @@ class PredictionEngine:
         if self._last_remaining is None:
             self._last_remaining = raw_remaining
         elif raw_remaining < self._last_remaining:
-            # Abfall sofort übernehmen
             self._last_remaining = raw_remaining
-            self._seeded_ceiling = None  # Ceiling aufheben sobald Wert erstmals sinkt
         else:
-            # Upward-Sprünge verhindern solange der Seed-Ceiling aktiv ist
-            if self._seeded_ceiling is not None and raw_remaining > self._seeded_ceiling:
-                pass  # ignorieren – Steigung noch nicht stabil
-            elif raw_remaining > self._last_remaining * 1.05:
+            if raw_remaining > self._last_remaining * 1.05:
                 self._last_remaining = raw_remaining
             else:
                 self._last_remaining += 0.4 * (raw_remaining - self._last_remaining)
