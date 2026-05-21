@@ -518,6 +518,16 @@ if _display and _navigation:
 # Messzyklus-Thread
 # ---------------------------------------------------------------------------
 
+def _seed_predictor_from_profile(heta_code: str):
+    """Setzt Reststandzeit-Startwert aus der Referenzdauer der Lernzyklen."""
+    if not heta_code:
+        return
+    profile = learning.get_profile(heta_code)
+    if profile and profile.get("profile_valid"):
+        ref_dur = profile.get("reference_duration_seconds", 0.0)
+        if ref_dur > 0:
+            predictor.seed(ref_dur)
+
 def _get_flow_thresholds() -> tuple:
     """
     Gibt (flow_threshold, stability_secs, pause_tolerance) zurück.
@@ -730,6 +740,7 @@ def _measurement_loop():
                 _flow_stable_since = None
                 if heta_code:
                     learning.start_cycle(heta_code, fs.r_eff, fs.dp_bar)
+                    _seed_predictor_from_profile(heta_code)
                 with _state_lock:
                     _state["waiting_for_flow"]     = False
                     _state["cycle_active"]         = bool(heta_code)
@@ -759,6 +770,7 @@ def _measurement_loop():
                     _flow_below_since  = None
                     if heta_code:
                         learning.start_cycle(heta_code, fs.r_eff, fs.dp_bar)
+                        _seed_predictor_from_profile(heta_code)
                     with _state_lock:
                         _state["waiting_for_flow"]    = False
                         _state["cycle_active"]        = True if heta_code else False

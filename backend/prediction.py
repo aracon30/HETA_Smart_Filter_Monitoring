@@ -269,8 +269,9 @@ class PredictionEngine:
         self._reff_history.clear()
 
     def seed(self, initial_seconds: float):
-        """Kompatibilitäts-Stub – wird nicht mehr verwendet."""
-        pass
+        """Setzt den Startwert der Reststandzeit aus der Referenzdauer."""
+        if initial_seconds > 0:
+            self._last_remaining = float(initial_seconds)
 
     def update_limits(self, dp_limit: float, dp_clean: float):
         """Aktualisiert die Grenzwerte ohne Neustart."""
