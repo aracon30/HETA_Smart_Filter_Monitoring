@@ -448,7 +448,6 @@ class LearningManager:
             return pct_dev(cur_slope, ref_s), ref_s
 
         flow_dev_pct, ref_flow_slope = slope_dev(current_flow_slope, "flow")
-        temp_dev_pct, ref_temp_slope = slope_dev(current_temp_slope, "temp")
         reff_dev_pct, ref_reff_slope = slope_dev(current_reff_slope, "r_eff")
 
         return {
@@ -462,14 +461,13 @@ class LearningManager:
             "ref_flow_slope":       round(ref_flow_slope, 6),
             "cur_flow_slope":       round(current_flow_slope, 6) if current_flow_slope is not None else None,
             "flow_deviation_pct":   flow_dev_pct,
-            # T-Steigung (°C/s)
-            "ref_temp_slope":       round(ref_temp_slope, 6),
-            "cur_temp_slope":       round(current_temp_slope, 6) if current_temp_slope is not None else None,
-            "temp_deviation_pct":   temp_dev_pct,
             # R_eff-Steigung
             "ref_reff_slope":       round(ref_reff_slope, 9),
             "cur_reff_slope":       round(current_reff_slope, 9) if current_reff_slope is not None else None,
             "r_eff_deviation_pct":  reff_dev_pct,
+            # Temperatur: Absolutwert am gleichen dp-Punkt (Steigung ≈ 0 → sinnlos)
+            "ref_temp":             round(ref_temp, 1),
+            "temp_deviation":       round(current_temp - ref_temp, 1),
         }
 
     @staticmethod
