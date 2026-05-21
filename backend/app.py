@@ -1088,6 +1088,8 @@ _measure_thread: threading.Thread = None
 def _start_measurement_thread():
     global _measure_thread
     if _measure_thread and _measure_thread.is_alive():
+        # Alter Thread lebt noch; running wurde vom Aufrufer bereits auf True gesetzt,
+        # sodass der Thread nach seinem sleep() einfach weiterläuft — kein neuer Thread.
         return
     _state["running"] = True
     _measure_thread = threading.Thread(target=_measurement_loop, daemon=True)
@@ -2157,6 +2159,10 @@ def api_simulation_start():
     predictor.reset()
     _smoothed_health_pct = None
     with _state_lock:
+        # running=True muss VOR _start_measurement_thread gesetzt werden: läuft der alte
+        # Thread nach einem Stop noch im sleep(), sieht er running=True und macht weiter
+        # statt zu beenden — Race Condition beim schnellen Stop→Start vermieden.
+        _state["running"]               = True
         _state["simulation_mode"]       = True
         _state["sensor_fault"]          = False
         _state["sensor_fault_channels"] = []
@@ -2165,11 +2171,12 @@ def api_simulation_start():
         _state["cycle_active"]           = False
         _state["cycle_start_time"]       = None
         _state["cycle_dp_reached_time"]  = None
+        _state["cycle_active_seconds"]   = 0.0
         _state["awaiting_confirmation"]  = False
+        _state["waiting_for_flow"]       = True
         _state["anomaly_active"]         = False
         _state["anomaly_percent"]        = 0.0
-    if not _state["running"]:
-        _start_measurement_thread()
+    _start_measurement_thread()
     return jsonify({"success": True, "message": "Simulation gestartet."})
 
 
