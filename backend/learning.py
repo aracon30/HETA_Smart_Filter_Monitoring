@@ -511,15 +511,16 @@ class LearningManager:
     def _slope_windowed(curve: list, t_pct: float, ref_duration: float,
                         field: str = "dp", window_s: float = 30.0) -> float:
         """
-        Referenzsteigung über ein window_s-Fenster um t_pct (in Sekunden).
-        Gleiche Mittelungsbreite wie die aktuelle Regression → direkt vergleichbar.
-        Die Referenz aktualisiert sich mit t_pct (= mit dp).
+        Referenzsteigung über ein window_s-Fenster VOR t_pct (rückwärts).
+        Gleiche Richtung wie die lineare Regression der aktuellen Messwerte
+        (beide schauen 30s zurück) → kein systematischer Versatz bei
+        beschleunigender dp-Kurve.
         """
         if not curve or ref_duration <= 0:
             return 0.0
-        half_pct = (window_s / ref_duration) * 50.0   # halbes Fenster in t_pct-Einheiten
-        t_lo = max(0.0,   t_pct - half_pct)
-        t_hi = min(100.0, t_pct + half_pct)
+        window_pct = (window_s / ref_duration) * 100.0   # Fenstergröße in t_pct
+        t_lo = max(0.0,   t_pct - window_pct)
+        t_hi = min(100.0, t_pct)
 
         def interp_val(t):
             if t <= curve[0].get("t_pct", 0):
