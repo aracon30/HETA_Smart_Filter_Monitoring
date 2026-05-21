@@ -69,6 +69,7 @@
         <h2>Willkommen</h2>
         <p>Dieser Assistent richtet das HETA Smart Filter Monitoring für Ihren Einsatz ein. Bitte folgen Sie den Schritten.</p>
         <ul class="wizard-checklist">
+          <li>HETA-Code &amp; PIN eingeben</li>
           <li>Filterparameter konfigurieren</li>
           <li>Betriebsart wählen</li>
           <li>Zugriffspasswort festlegen</li>
@@ -77,6 +78,34 @@
       </div>
 
       <div class="wizard-step hidden" data-step="2">
+        <h2>HETA-Code aktivieren</h2>
+        <p>Geben Sie Ihren HETA-Code und den zugehörigen PIN ein, um das Gerät zu registrieren.</p>
+        <div class="form-grid">
+          <label>
+            HETA-Code
+            <div class="input-unit-row">
+              <span class="heta-code-prefix" style="padding:.45rem .6rem;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-right:none;border-radius:var(--radius) 0 0 var(--radius);font-weight:700;white-space:nowrap">HETA-</span>
+              <input type="text" id="ob-heta-code" placeholder="12345" maxlength="15"
+                     inputmode="numeric" pattern="[0-9]*"
+                     style="border-radius:0 var(--radius) var(--radius) 0" />
+            </div>
+            <small>Der HETA-Code befindet sich auf dem Typenschild Ihres Filtergehäuses.</small>
+          </label>
+          <label>
+            PIN (6-stellig)
+            <input type="text" id="ob-heta-pin" placeholder="000000" maxlength="6"
+                   inputmode="numeric" pattern="[0-9]*" autocomplete="off" />
+            <small>Den PIN erhalten Sie von Ihrem HETA-Servicepartner.</small>
+          </label>
+        </div>
+        <div id="ob-heta-msg" class="msg" style="margin-top:.75rem"></div>
+        <p class="wizard-note" style="margin-top:.75rem">
+          Sie können diesen Schritt überspringen und den HETA-Code später im System-Tab aktivieren.
+          <button class="btn btn-ghost btn-sm" style="margin-left:.5rem" onclick="wizardSkipHeta()">Überspringen</button>
+        </p>
+      </div>
+
+      <div class="wizard-step hidden" data-step="3">
         <h2>Betriebsart</h2>
         <p>Wie soll das System betrieben werden?</p>
         <div class="mode-cards">
@@ -93,7 +122,7 @@
         </div>
       </div>
 
-      <div class="wizard-step hidden" data-step="3">
+      <div class="wizard-step hidden" data-step="4">
         <h2>Betriebsweise des Filterkreislaufs</h2>
         <p>Wie wird Ihre Anlage betrieben? Die Auswahl bestimmt, wann das System einen Messzyklus startet und wie es mit Pausen ohne Durchfluss umgeht.</p>
         <div class="mode-cards">
@@ -111,7 +140,7 @@
         <p class="wizard-note">In beiden Betriebsweisen startet der Messzyklus automatisch, sobald stabiler Durchfluss erkannt wird. Die Durchflussschwellwerte werden automatisch aus den ersten Betriebsdaten berechnet.</p>
       </div>
 
-      <div class="wizard-step hidden" data-step="4">
+      <div class="wizard-step hidden" data-step="5">
         <h2>Filterparameter</h2>
         <div class="form-grid">
           <label>
@@ -184,7 +213,7 @@
         </div>
       </div>
 
-      <div class="wizard-step hidden" data-step="5">
+      <div class="wizard-step hidden" data-step="6">
         <h2>Temperatursensor</h2>
         <p>Messbereich des Temperatursensors (ifm TA2405). Standardwerte können übernommen werden.</p>
         <div class="form-grid">
@@ -205,7 +234,7 @@
         </div>
       </div>
 
-      <div class="wizard-step hidden" data-step="6">
+      <div class="wizard-step hidden" data-step="7">
         <h2>Zugriffspasswort</h2>
         <p>Legen Sie ein Passwort für den Einstellungsbereich fest. Es schützt die Konfiguration vor unbeabsichtigten Änderungen.</p>
         <div class="form-grid">
@@ -221,7 +250,7 @@
         <div id="ob-pw-msg" class="msg"></div>
       </div>
 
-      <div class="wizard-step hidden" data-step="7">
+      <div class="wizard-step hidden" data-step="8">
         <h2>Zusammenfassung</h2>
         <p>Bitte prüfen Sie die Einstellungen und klicken Sie auf <strong>Einrichtung abschließen</strong>.</p>
         <div id="ob-summary" class="summary-box"></div>
@@ -230,7 +259,7 @@
 
       <div class="wizard-footer">
         <button class="btn btn-ghost" id="wizard-back" onclick="wizardBack()" style="display:none">Zurück</button>
-        <div class="wizard-step-indicator" id="wizard-step-label">Schritt 1 von 7</div>
+        <div class="wizard-step-indicator" id="wizard-step-label">Schritt 1 von 8</div>
         <button class="btn btn-primary" id="wizard-next" onclick="wizardNext()">Weiter</button>
       </div>
     </div>

@@ -83,7 +83,8 @@ function switchTab(tabName) {
 // ============================================================
 
 let _wizardStep = 1;
-const WIZARD_TOTAL = 7;
+const WIZARD_TOTAL = 8;
+let _hetaActivatedInWizard = false;
 
 async function checkOnboarding() {
   try {
@@ -146,7 +147,13 @@ function wizardBack() {
 }
 
 function validateWizardStep(step) {
-  if (step === 6) {
+  if (step === 2) {
+    // HETA-Code-Schritt: asynchrone Validierung, daher hier sync-false zurückgeben
+    // und wizardNext() nach erfolgreicher Aktivierung selbst weiterschalten
+    _wizardActivateHeta();
+    return false;
+  }
+  if (step === 7) {
     const pw  = document.getElementById("ob-password").value;
     const pw2 = document.getElementById("ob-password-confirm").value;
     if (pw.length < 4) { showMsg("ob-pw-msg", "Passwort muss mindestens 4 Zeichen haben.", true); return false; }
@@ -156,12 +163,43 @@ function validateWizardStep(step) {
   return true;
 }
 
+async function _wizardActivateHeta() {
+  const code = (document.getElementById("ob-heta-code")?.value ?? "").trim();
+  const pin  = (document.getElementById("ob-heta-pin")?.value  ?? "").trim();
+  if (!code || !pin) {
+    showMsg("ob-heta-msg", "Bitte HETA-Code und PIN eingeben oder den Schritt überspringen.", true);
+    return;
+  }
+  showMsg("ob-heta-msg", "Wird geprüft …", false);
+  const result = await apiFetch("/api/heta/activate", "POST", { heta_code: code, pin });
+  if (result?.valid) {
+    _hetaActivatedInWizard = true;
+    showMsg("ob-heta-msg", `✓ HETA-${result.heta_code} erfolgreich aktiviert.`, false);
+    _wizardStep++;
+    renderWizardStep();
+  } else {
+    showMsg("ob-heta-msg", result?.message ?? "Ungültiger Code oder PIN.", true);
+  }
+}
+
+function wizardSkipHeta() {
+  _hetaActivatedInWizard = false;
+  showMsg("ob-heta-msg", "", false);
+  _wizardStep++;
+  renderWizardStep();
+}
+
 function buildSummary() {
   const mode = document.querySelector("input[name='op-mode']:checked")?.value === "hardware"
     ? "Hardwaremodus" : "Simulationsmodus";
   const cycleMode = document.querySelector("input[name='cycle-mode']:checked")?.value === "batch"
     ? "Intervallbetrieb (Batch)" : "Dauerbetrieb (kontinuierlich)";
+  const hetaCode = (document.getElementById("ob-heta-code")?.value ?? "").trim();
+  const hetaLine = _hetaActivatedInWizard && hetaCode
+    ? `HETA-${hetaCode} ✓`
+    : "Nicht aktiviert (kann später im System-Tab erfolgen)";
   const lines = [
+    ["HETA-Code", hetaLine],
     ["Betriebsart", mode],
     ["Betriebsweise", cycleMode],
     ["Grenzwert Filterwechsel (Δp)", `${document.getElementById("ob-dp-limit").value} bar`],
