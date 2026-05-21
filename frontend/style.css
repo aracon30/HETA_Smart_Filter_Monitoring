@@ -684,6 +684,63 @@ main {
 }
 
 /* ================================================================
+   PROFILE TILES (redesigned)
+   ================================================================ */
+.profile-tiles-row {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: .25rem;
+}
+
+.profile-tile {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem 1.1rem;
+  min-width: 160px;
+  flex: 1 1 160px;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: .2rem;
+}
+
+.profile-tile-label {
+  font-size: .7rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.profile-tile-value-row {
+  display: flex;
+  align-items: baseline;
+  gap: .4rem;
+  margin-top: .15rem;
+}
+
+.profile-tile-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--heta-blue-mid);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-tile-sub {
+  font-size: .84rem;
+  color: var(--text-muted);
+}
+
+.profile-tile-hint {
+  font-size: .74rem;
+  color: var(--text-muted);
+  margin-top: .35rem;
+}
+
+/* ================================================================
    CYCLES SECTION
    ================================================================ */
 .cycles-section {
@@ -747,6 +804,86 @@ main {
   display: block;
   font-size: .76rem;
   color: var(--text-muted);
+}
+
+.cycle-ts {
+  font-size: .8rem;
+  white-space: nowrap;
+}
+
+.cycle-status {
+  display: inline-flex;
+  align-items: center;
+  gap: .3rem;
+  font-size: .8rem;
+  font-weight: 600;
+  padding: .2rem .55rem;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.cycle-status-running { background: rgba(56,189,248,0.12); color: #38bdf8; }
+.cycle-status-ok      { background: rgba(34,197,94,0.12);  color: var(--ok-green); }
+.cycle-status-done    { background: rgba(148,163,184,0.1); color: var(--text-muted); }
+
+.cycle-problem-count {
+  color: var(--warn-yellow);
+  font-weight: 700;
+}
+
+.badge-sm {
+  font-size: .62rem;
+  padding: .1rem .35rem;
+  min-width: 0;
+}
+
+/* Cycle modal events */
+.cycle-modal-events-list {
+  margin: .85rem 1.25rem .5rem;
+  padding: 0;
+}
+
+.cycle-events-ok {
+  color: var(--ok-green);
+  font-size: .88rem;
+  padding: .6rem 0;
+}
+
+.cycle-events-header {
+  font-size: .78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: var(--warn-yellow);
+  margin-bottom: .5rem;
+  padding-bottom: .35rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.cycle-event-row {
+  display: flex;
+  gap: .75rem;
+  padding: .45rem 0;
+  border-bottom: 1px solid var(--border);
+  font-size: .85rem;
+  align-items: baseline;
+}
+.cycle-event-row:last-child { border-bottom: none; }
+
+.cycle-event-sev {
+  font-weight: 700;
+  min-width: 5.5rem;
+  flex-shrink: 0;
+}
+
+.cycle-event-ts {
+  color: var(--text-muted);
+  min-width: 4.5rem;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.cycle-event-msg {
+  color: var(--text-main);
 }
 
 /* ================================================================
@@ -1440,6 +1577,19 @@ footer {
   overflow-y: auto;
   padding-bottom: 1.5rem;
 }
+.modal.modal-cycle {
+  max-width: 980px;
+  padding: 0;
+}
+.modal.modal-cycle .modal-header {
+  padding: .85rem 1.25rem;
+}
+.modal.modal-cycle .chart-container {
+  margin: 0 1.25rem;
+}
+.modal.modal-cycle .chart-toggle-bar {
+  padding: .4rem 1.25rem 0;
+}
 .modal.modal-wide .modal-header { flex-shrink: 0; }
 
 .modal-header {
@@ -1627,8 +1777,8 @@ footer {
   .sim-cmp-head:nth-child(n+3),
   .sim-cmp-val:nth-child(3n),
   .sim-cmp-dev { display: none; }
-  .profile-stats-grid { grid-template-columns: 1fr 1fr; }
-  .stat-card-cycles { grid-column: span 2; }
+  .profile-tiles-row { flex-direction: column; }
+  .profile-tile { max-width: 100%; }
   .cycles-table { font-size: .78rem; }
   .cycles-table th, .cycles-table td { padding: .45rem .5rem; }
   .tab-btn { padding: .65rem .7rem; font-size: .82rem; gap: .3rem; }
@@ -1636,6 +1786,5 @@ footer {
 }
 
 @media (max-width: 400px) {
-  .profile-stats-grid { grid-template-columns: 1fr; }
-  .stat-card-cycles { grid-column: span 1; }
+  .cycle-ts { font-size: .74rem; }
 }

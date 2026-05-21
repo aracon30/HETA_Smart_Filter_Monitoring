@@ -286,15 +286,19 @@
        ZYKLUS-DIAGRAMM MODAL
        ================================================================ -->
   <div id="cycle-modal-overlay" class="overlay hidden" onclick="if(event.target===this)closeCycleModal()">
-    <div class="modal modal-wide">
+    <div class="modal modal-wide modal-cycle">
       <div class="modal-header">
         <h2 id="cycle-modal-title">Filterzyklus</h2>
         <button class="btn-close" onclick="closeCycleModal()">&#10005;</button>
       </div>
-      <div class="chart-container" style="height:280px;margin-top:0.75rem">
+      <!-- Channel toggles -->
+      <div id="cycle-modal-toggles" class="chart-toggle-bar" style="margin-top:.5rem"></div>
+      <!-- Chart -->
+      <div class="chart-container" style="height:320px;margin-top:0.5rem">
         <canvas id="chart-cycle-modal"></canvas>
       </div>
-      <div id="cycle-modal-events" style="margin-top:1rem;padding:0 0.25rem"></div>
+      <!-- Events / Problems list -->
+      <div id="cycle-modal-events" class="cycle-modal-events-list"></div>
     </div>
   </div>
 
@@ -938,41 +942,26 @@
         </div>
 
         <div id="profile-content" class="hidden">
-          <div class="profile-stats-grid">
-            <div class="stat-card">
-              <div class="stat-label">Gemessener dp_clean</div>
-              <div class="stat-value" id="prof-dp-clean">–</div>
-              <div class="stat-unit">bar</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Referenz R<sub>eff</sub></div>
-              <div class="stat-value" id="prof-r-eff">–</div>
-              <div class="stat-unit">bar·min/l</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Referenz &Delta;p-Rate</div>
-              <div class="stat-value" id="prof-loading-rate">–</div>
-              <div class="stat-unit">mbar/s</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Ø Durchfluss</div>
-              <div class="stat-value" id="prof-avg-flow">–</div>
-              <div class="stat-unit">l/min</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-label">Ø Temperatur</div>
-              <div class="stat-value" id="prof-avg-temp">–</div>
-              <div class="stat-unit">°C</div>
-            </div>
-            <div class="stat-card stat-card-cycles">
-              <div class="stat-label">Bestätigte Lernzyklen</div>
-              <div class="stat-value-row">
-                <span class="stat-value" id="prof-cycles-count">0</span>
-                <span class="stat-cycles-needed" id="prof-cycles-needed">von 3 erforderlich</span>
+          <div class="profile-tiles-row">
+            <!-- Lernzyklen-Kachel -->
+            <div class="profile-tile">
+              <div class="profile-tile-label">Lernzyklen</div>
+              <div class="profile-tile-value-row">
+                <span class="profile-tile-value" id="prof-cycles-count">0</span>
+                <span class="profile-tile-sub" id="prof-cycles-needed">von 3</span>
               </div>
               <div class="profile-progress-outer">
                 <div class="profile-progress-fill" id="prof-progress-bar"></div>
               </div>
+              <div class="profile-tile-hint">Lernzyklen bilden die Referenz</div>
+            </div>
+            <!-- Messzyklen-Kachel -->
+            <div class="profile-tile">
+              <div class="profile-tile-label">Messzyklen</div>
+              <div class="profile-tile-value-row">
+                <span class="profile-tile-value" id="prof-meas-count">0</span>
+              </div>
+              <div class="profile-tile-hint" id="prof-meas-hint">Zyklen nach der Lernphase</div>
             </div>
           </div>
         </div>
@@ -1000,16 +989,11 @@
             <thead>
               <tr>
                 <th>#</th>
-                <th>Datum &amp; Uhrzeit</th>
+                <th>Start</th>
+                <th>Ende</th>
                 <th>Dauer</th>
-                <th>&Delta;p Start</th>
-                <th>&Delta;p Ende</th>
-                <th>Ø Durchfluss</th>
-                <th>Ø Temp.</th>
-                <th>Beladungsrate</th>
-                <th>&#10003;</th>
-                <th>Probleme</th>
-                <th>Diagramm</th>
+                <th>Status</th>
+                <th>Diagramm &amp; Probleme</th>
               </tr>
             </thead>
             <tbody id="cycles-tbody"></tbody>
