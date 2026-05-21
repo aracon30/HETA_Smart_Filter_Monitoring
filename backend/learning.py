@@ -104,6 +104,7 @@ class LearningManager:
 
         cycle = self._active_cycle
         now = end_time if end_time is not None else time.time()
+        self.close_all_events(ts_end=now)
         duration = now - cycle.start_time
         active_secs = active_seconds if active_seconds is not None else duration
 
@@ -619,11 +620,40 @@ class LearningManager:
     def active_cycle(self) -> Optional[ActiveCycle]:
         return self._active_cycle
 
-    def add_event(self, severity: str, message: str):
+    def add_event(self, severity: str, message: str, category: str = ""):
         """Fügt ein Ereignis zum aktiven Zyklus hinzu (z.B. Anomalie, Sensorfehler)."""
         if self._active_cycle is not None:
+            now = round(time.time())
             self._active_cycle.events.append({
-                "ts": round(time.time()),
+                "ts":       now,
+                "ts_start": now,
+                "ts_end":   None,
                 "severity": severity,
-                "message": message,
+                "category": category,
+                "message":  message,
             })
+
+    def close_event(self, category: str = "", severity: str = "", ts_end: float = None):
+        """Schließt das letzte offene Ereignis (optional nach Kategorie/Schwere filtern)."""
+        if self._active_cycle is None:
+            return
+        now = round(ts_end or time.time())
+        for ev in reversed(self._active_cycle.events):
+            if ev.get("ts_end") is not None:
+                continue
+            if category and ev.get("category") != category:
+                continue
+            if severity and ev.get("severity") != severity:
+                continue
+            ev["ts_end"] = now
+            return
+
+    def close_all_events(self, ts_end: float = None):
+        """Schließt alle noch offenen Ereignisse (z.B. am Zyklusende)."""
+        if self._active_cycle is None:
+            return
+        now = round(ts_end or time.time())
+        for ev in self._active_cycle.events:
+            if ev.get("ts_end") is None:
+                ev["ts_end"] = now
+

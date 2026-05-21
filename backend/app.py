@@ -257,6 +257,8 @@ _state = {
     "reference_dp_clean": 0.0,
     "anomaly_active": False,
     "anomaly_percent": 0.0,
+    # Aktive Abweichungs-Perioden je Kanal (für ts_end-Tracking)
+    "_dev_active": {"dp": False, "flow": False, "reff": False},
     # Beladungsgrad nur anzeigen wenn HETA-Code aktiv
     "show_filter_health": False,
 
@@ -954,12 +956,37 @@ def _measurement_loop():
         prev_status = _state.get("filter_status", STATUS_OK)
         if fs.status != prev_status and cycle_active:
             if fs.status == STATUS_FEHLER:
-                learning.add_event("FEHLER", "Sensorfehler erkannt")
+                learning.add_event("FEHLER", "Sensorfehler erkannt", category="status")
             elif fs.status == STATUS_WARNUNG:
-                learning.add_event("WARNUNG", "Anomales Beladungsverhalten erkannt")
+                learning.add_event("WARNUNG", "Anomales Beladungsverhalten erkannt", category="status")
             elif fs.status in (STATUS_WECHSEL, STATUS_WECHSEL_BESTAETIGEN):
                 learning.add_event("WECHSEL",
-                    f"Filterwechsel erforderlich – Δp={fs.dp_bar:.3f} bar")
+                    f"Filterwechsel erforderlich – Δp={fs.dp_bar:.3f} bar", category="status")
+            elif prev_status in (STATUS_FEHLER, STATUS_WARNUNG) and fs.status == STATUS_OK:
+                learning.close_event(category="status")
+
+        # ── Abweichungs-Perioden tracken (Δp, Q, R_eff) ─────────────────
+        if cycle_active and an_ready and profile_valid:
+            tol_dp   = settings.get("tolerance_dp_pct",   0.25) * 100
+            tol_flow = settings.get("tolerance_flow_pct", 0.25) * 100
+            tol_reff = settings.get("tolerance_reff_pct", 0.25) * 100
+            dev_active = _state.get("_dev_active", {"dp": False, "flow": False, "reff": False})
+
+            checks = [
+                ("dp",   dp_dev,   tol_dp,   f"Δp-Abweichung: +{dp_dev:.0f}% zur Referenz"),
+                ("flow", flow_dev, tol_flow, f"Durchfluss-Abweichung: {flow_dev:.0f}% zur Referenz"),
+                ("reff", reff_dev, tol_reff, f"Filterwiderstand-Abweichung: +{reff_dev:.0f}% zur Referenz"),
+            ]
+            for ch, dev, tol, msg in checks:
+                exceeds = abs(dev) > tol
+                was_active = dev_active.get(ch, False)
+                if exceeds and not was_active:
+                    learning.add_event("ABWEICHUNG", msg, category=f"dev_{ch}")
+                    dev_active[ch] = True
+                elif not exceeds and was_active:
+                    learning.close_event(category=f"dev_{ch}")
+                    dev_active[ch] = False
+            _state["_dev_active"] = dev_active
 
         # ── Prognosestatus ────────────────────────────────────────────────
         req_cycles  = settings.get("required_cycles_for_profile", 3)
@@ -1369,6 +1396,7 @@ def api_heta_reset_cycles():
         _state["cycle_dp_reached_time"] = None
         _state["awaiting_confirmation"] = False
         _state["anomaly_active"]        = False
+        _state["_dev_active"]          = {"dp": False, "flow": False, "reff": False}
         _state["anomaly_percent"]       = 0.0
         _state["analysis_active"]       = False
         _state["analysis_ready"]        = False
@@ -1432,7 +1460,8 @@ def _do_confirm_filter_change():
         _state["cycle_dp_reached_time"]  = None
         _state["cycle_active_seconds"]   = 0.0
         _state["cycle_pause_start_time"] = None
-        _state["anomaly_active"]         = False
+        _state["anomaly_active"]        = False
+        _state["_dev_active"]          = {"dp": False, "flow": False, "reff": False}
         _state["anomaly_percent"]        = 0.0
 
     db.insert_service_event("FILTERWECHSEL_BESTAETIGT", heta_code,
@@ -1959,7 +1988,8 @@ def api_settings_post():
         with _state_lock:
             _state["cycle_active"] = False
             _state["cycle_start_time"] = None
-            _state["anomaly_active"] = False
+            _state["anomaly_active"]  = False
+            _state["_dev_active"]     = {"dp": False, "flow": False, "reff": False}
             _state["anomaly_percent"] = 0.0
         db.insert_service_event(
             "LERNDATEN_RESET",
@@ -2068,7 +2098,8 @@ def api_factory_reset():
         _state["activation_status"] = False
         _state["cycle_active"]     = False
         _state["cycle_start_time"] = None
-        _state["anomaly_active"]   = False
+        _state["anomaly_active"]        = False
+        _state["_dev_active"]          = {"dp": False, "flow": False, "reff": False}
         _state["anomaly_percent"]  = 0.0
         _state["filter_status"]    = "OK"
         _state["simulation_mode"]  = settings.get("simulation_mode", True)
@@ -2178,7 +2209,8 @@ def api_simulation_start():
         _state["cycle_active_seconds"]   = 0.0
         _state["awaiting_confirmation"]  = False
         _state["waiting_for_flow"]       = True
-        _state["anomaly_active"]         = False
+        _state["anomaly_active"]        = False
+        _state["_dev_active"]          = {"dp": False, "flow": False, "reff": False}
         _state["anomaly_percent"]        = 0.0
     _start_measurement_thread()
     return jsonify({"success": True, "message": "Simulation gestartet."})
@@ -2197,7 +2229,8 @@ def api_simulation_stop():
         _state["cycle_start_time"]       = None
         _state["cycle_dp_reached_time"]  = None
         _state["awaiting_confirmation"]  = False
-        _state["anomaly_active"]         = False
+        _state["anomaly_active"]        = False
+        _state["_dev_active"]          = {"dp": False, "flow": False, "reff": False}
         _state["anomaly_percent"]        = 0.0
     _smoothed_health_pct = None
     return jsonify({"success": True, "message": "Simulation gestoppt."})

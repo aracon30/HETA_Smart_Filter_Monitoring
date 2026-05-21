@@ -1060,17 +1060,56 @@ function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
   // Annotations for events
   const annotations = {};
   const cycleStartTs = samples.length > 0 ? (samples[0].timestamp - samples[0].cycle_second) : 0;
+
+  const _tsPct = ts => {
+    if (!ts || !cycleStartTs || !durationSeconds) return null;
+    return Math.max(0, Math.min(100, ((ts - cycleStartTs) / durationSeconds) * 100));
+  };
+
+  const _sevColors = sev => {
+    if (sev === "FEHLER")      return { line: "rgba(239,68,68,0.9)",    box: "rgba(239,68,68,0.10)",  border: "rgba(239,68,68,0.4)"  };
+    if (sev === "ABWEICHUNG")  return { line: "rgba(251,146,60,0.9)",   box: "rgba(251,146,60,0.09)", border: "rgba(251,146,60,0.4)"  };
+    return                            { line: "rgba(251,191,36,0.9)",   box: "rgba(251,191,36,0.08)", border: "rgba(251,191,36,0.35)" };
+  };
+
   (events || []).forEach((e, i) => {
-    if (!e.ts || !durationSeconds) return;
-    const elapsed = cycleStartTs > 0 ? e.ts - cycleStartTs : 0;
-    const xPct = durationSeconds > 0 ? (elapsed / durationSeconds) * 100 : elapsed;
-    const sevColor = e.severity === "FEHLER" ? "rgba(239,68,68,0.85)" : "rgba(251,191,36,0.85)";
-    annotations[`ev${i}`] = {
-      type: "line", scaleID: "x", value: xPct,
-      borderColor: sevColor, borderWidth: 1.5, borderDash: [4, 3],
-      label: { content: e.severity, display: true, position: "start",
-        backgroundColor: sevColor, color: "#fff", font: { size: 9 }, padding: { x: 4, y: 2 } },
-    };
+    const tsStart = e.ts_start ?? e.ts;
+    const tsEnd   = e.ts_end ?? null;
+    const xStart  = _tsPct(tsStart);
+    if (xStart === null) return;
+
+    const col   = _sevColors(e.severity);
+    const label = e.severity + (e.message ? `: ${e.message}` : "");
+
+    if (tsEnd && durationSeconds) {
+      // Shaded region — problem period with known end
+      const xEnd = _tsPct(tsEnd);
+      annotations[`ev${i}`] = {
+        type: "box",
+        xMin: xStart, xMax: xEnd,
+        yMin: "0%",   yMax: "100%",
+        backgroundColor: col.box,
+        borderColor: col.border,
+        borderWidth: 1,
+        label: {
+          content: label, display: true, position: { x: "start", y: "start" },
+          backgroundColor: col.line, color: "#fff",
+          font: { size: 9, weight: "600" }, padding: { x: 5, y: 3 },
+          textAlign: "left",
+        },
+      };
+    } else {
+      // Single vertical line — point event
+      annotations[`ev${i}`] = {
+        type: "line", scaleID: "x", value: xStart,
+        borderColor: col.line, borderWidth: 1.5, borderDash: [4, 3],
+        label: {
+          content: e.severity, display: true, position: "start",
+          backgroundColor: col.line, color: "#fff",
+          font: { size: 9 }, padding: { x: 4, y: 2 },
+        },
+      };
+    }
   });
 
   // Dataset visibility helpers
@@ -1233,16 +1272,33 @@ async function openCycleModal(cycleId, cycleNum, dateStr, hetaCode, durationSeco
     if (!events.length) {
       eventsEl.innerHTML = '<p class="cycle-events-ok">&#10003; Keine Probleme in diesem Zyklus.</p>';
     } else {
-      const sevColor = s => s === "FEHLER" ? "var(--alert-red)" : "var(--warn-yellow)";
+      const sevColor = s => {
+        if (s === "FEHLER")     return "var(--alert-red)";
+        if (s === "ABWEICHUNG") return "#fb923c";
+        return "var(--warn-yellow)";
+      };
+      const fmtTs = ts => ts ? new Date(ts * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "–";
       const rows = events.map(e => {
-        const ts = e.ts ? new Date(e.ts * 1000).toLocaleTimeString("de-DE") : "–";
+        const tsStart = e.ts_start ?? e.ts;
+        const tsEnd   = e.ts_end ?? null;
+        let timeStr;
+        if (tsEnd) {
+          const durSec = tsEnd - tsStart;
+          const durFmt = durSec >= 60
+            ? `${Math.floor(durSec / 60)} min ${durSec % 60} s`
+            : `${durSec} s`;
+          timeStr = `${fmtTs(tsStart)} – ${fmtTs(tsEnd)} (${durFmt})`;
+        } else {
+          timeStr = fmtTs(tsStart);
+        }
+        const icon = e.severity === "ABWEICHUNG" ? "⬆" : "⚠";
         return `<div class="cycle-event-row">
-          <span class="cycle-event-sev" style="color:${sevColor(e.severity)}">${e.severity}</span>
-          <span class="cycle-event-ts">${ts}</span>
+          <span class="cycle-event-sev" style="color:${sevColor(e.severity)}">${icon} ${e.severity}</span>
+          <span class="cycle-event-ts">${timeStr}</span>
           <span class="cycle-event-msg">${e.message}</span>
         </div>`;
       }).join("");
-      eventsEl.innerHTML = `<div class="cycle-events-header">&#9888; Ereignisse / Abweichungen</div>${rows}`;
+      eventsEl.innerHTML = `<div class="cycle-events-header">&#9888; Ereignisse &amp; Abweichungen</div>${rows}`;
     }
   }
 

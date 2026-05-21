@@ -877,9 +877,10 @@ main {
 
 .cycle-event-ts {
   color: var(--text-muted);
-  min-width: 4.5rem;
+  min-width: 16rem;
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
+  font-size: .82rem;
 }
 
 .cycle-event-msg {
