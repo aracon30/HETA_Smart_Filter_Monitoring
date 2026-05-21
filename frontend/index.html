@@ -237,11 +237,11 @@
   </div>
 
   <!-- ================================================================
-       WARTE AUF DURCHFLUSS – OVERLAY
+       DURCHFLUSSERKENNUNG – OVERLAY
        ================================================================ -->
   <div id="flow-wait-overlay" class="status-overlay status-overlay--amber hidden">
     <div class="status-overlay__icon">&#9685;</div>
-    <div class="status-overlay__title">Warte auf stabilen Durchfluss</div>
+    <div class="status-overlay__title">Durchflusserkennung aktiv</div>
     <div class="status-overlay__body">
       <div class="status-overlay__row">
         <span>Durchfluss Q</span>
@@ -258,6 +258,7 @@
         <div class="status-overlay__progress-fill" id="flow-wait-bar" style="width:0%"></div>
       </div>
       <p class="status-overlay__hint">Der Messzyklus startet automatisch, sobald der Durchfluss stabil über dem Schwellwert liegt.</p>
+      <button class="status-overlay__minimize-btn" onclick="minimizeFlowOverlay()">&#9660; Minimieren</button>
     </div>
   </div>
 
@@ -277,6 +278,7 @@
         <span id="pause-elapsed">–</span>
       </div>
       <p class="status-overlay__hint">Kein Durchfluss erkannt. Der Zyklus wird fortgesetzt, sobald der Durchfluss zurückkehrt.</p>
+      <button class="status-overlay__minimize-btn" onclick="minimizeFlowOverlay()">&#9660; Minimieren</button>
     </div>
   </div>
 
@@ -653,10 +655,25 @@
           <div class="card-sub" id="dp-limit-hint"></div>
         </div>
 
-        <div class="card" id="card-flow">
+        <div class="card" id="card-flow" onclick="expandFlowOverlay()" style="cursor:default">
           <div class="card-label">Durchfluss Q</div>
           <div class="card-value" id="val-flow">–</div>
           <div class="card-unit">l/min</div>
+          <!-- Kompakte Anzeige wenn Overlay minimiert ist -->
+          <div id="flow-card-indicator" class="flow-card-indicator hidden">
+            <div id="flow-card-wait" class="hidden">
+              <div class="flow-card-indicator__label flow-card-indicator__label--amber">&#9685; Durchflusserkennung aktiv</div>
+              <div class="flow-card-indicator__bar-wrap">
+                <div class="flow-card-indicator__bar-fill" id="flow-card-bar" style="width:0%"></div>
+              </div>
+              <div class="flow-card-indicator__sub" id="flow-card-sub">–</div>
+            </div>
+            <div id="flow-card-pause" class="hidden">
+              <div class="flow-card-indicator__label flow-card-indicator__label--blue">&#9646;&#9646; Zyklus pausiert</div>
+              <div class="flow-card-indicator__sub" id="flow-card-pause-time">–</div>
+            </div>
+            <div class="flow-card-indicator__expand-hint">&#9650; Anzeigen</div>
+          </div>
         </div>
 
         <div class="card" id="card-temp">

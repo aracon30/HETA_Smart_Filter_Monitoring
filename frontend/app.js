@@ -530,8 +530,44 @@ function updateDashboard(d) {
 }
 
 // ============================================================
-// Fluss-Overlays (Warte auf Durchfluss / Zyklus pausiert)
+// Fluss-Overlays (Durchflusserkennung aktiv / Zyklus pausiert)
 // ============================================================
+
+let _flowOverlayMinimized = false;
+let _flowOverlayActiveType = null; // "wait" | "pause" | null
+
+function minimizeFlowOverlay() {
+  _flowOverlayMinimized = true;
+  document.getElementById("flow-wait-overlay").classList.add("hidden");
+  document.getElementById("flow-pause-overlay").classList.add("hidden");
+  _applyFlowCardIndicator();
+}
+
+function expandFlowOverlay() {
+  if (!_flowOverlayMinimized || !_flowOverlayActiveType) return;
+  _flowOverlayMinimized = false;
+  _applyFlowCardIndicator();
+  if (_flowOverlayActiveType === "wait")
+    document.getElementById("flow-wait-overlay").classList.remove("hidden");
+  else if (_flowOverlayActiveType === "pause")
+    document.getElementById("flow-pause-overlay").classList.remove("hidden");
+}
+
+function _applyFlowCardIndicator() {
+  const cardEl     = document.getElementById("card-flow");
+  const indicEl    = document.getElementById("flow-card-indicator");
+  const waitIndEl  = document.getElementById("flow-card-wait");
+  const pauseIndEl = document.getElementById("flow-card-pause");
+  if (!cardEl || !indicEl) return;
+
+  const show = _flowOverlayMinimized && !!_flowOverlayActiveType;
+  indicEl.classList.toggle("hidden", !show);
+  cardEl.classList.toggle("flow-card--interactive", show);
+  cardEl.classList.toggle("pause-mode", show && _flowOverlayActiveType === "pause");
+
+  if (waitIndEl)  waitIndEl.classList.toggle("hidden",  _flowOverlayActiveType !== "wait");
+  if (pauseIndEl) pauseIndEl.classList.toggle("hidden", _flowOverlayActiveType !== "pause");
+}
 
 function updateFlowOverlays(d) {
   const waitEl  = document.getElementById("flow-wait-overlay");
@@ -540,10 +576,27 @@ function updateFlowOverlays(d) {
 
   const waiting = !!d.waiting_for_flow;
   const paused  = !!d.cycle_paused;
+  const newType = waiting ? "wait" : paused ? "pause" : null;
 
-  waitEl.classList.toggle("hidden", !waiting);
-  pauseEl.classList.toggle("hidden", paused || waiting ? !paused : true);
+  // Wenn der Zustand wegfällt → Minimierung aufheben
+  if (!newType && _flowOverlayActiveType) {
+    _flowOverlayMinimized  = false;
+    _flowOverlayActiveType = null;
+    _applyFlowCardIndicator();
+  }
+  // Wenn Zustand wechselt (wait→pause oder pause→wait) → Minimierung aufheben
+  if (newType && _flowOverlayActiveType && newType !== _flowOverlayActiveType) {
+    _flowOverlayMinimized = false;
+  }
+  _flowOverlayActiveType = newType;
 
+  // Overlays ein-/ausblenden (nur wenn nicht minimiert)
+  if (!_flowOverlayMinimized) {
+    waitEl.classList.toggle("hidden",  !waiting);
+    pauseEl.classList.toggle("hidden", !paused);
+  }
+
+  // Daten aktualisieren
   if (waiting) {
     const q   = d.flow_check_q   ?? 0;
     const thr = d.flow_threshold  ?? 0;
@@ -552,6 +605,11 @@ function updateFlowOverlays(d) {
     document.getElementById("flow-wait-thr").textContent = `${thr.toFixed(1)} l/min`;
     document.getElementById("flow-wait-pct").textContent = pct;
     document.getElementById("flow-wait-bar").style.width = `${Math.min(pct, 100)}%`;
+    // Kachel-Kompaktanzeige
+    const barEl = document.getElementById("flow-card-bar");
+    const subEl = document.getElementById("flow-card-sub");
+    if (barEl) barEl.style.width = `${Math.min(pct, 100)}%`;
+    if (subEl) subEl.textContent = `Q: ${q.toFixed(1)} l/min | Schwelle: ${thr.toFixed(1)} l/min`;
   }
 
   if (paused) {
@@ -560,7 +618,12 @@ function updateFlowOverlays(d) {
     const pauseSecs  = pauseStart ? (Date.now() / 1000 - pauseStart) : 0;
     document.getElementById("pause-active-time").textContent = fmtSeconds(activeSecs);
     document.getElementById("pause-elapsed").textContent     = fmtSeconds(Math.max(0, pauseSecs));
+    // Kachel-Kompaktanzeige
+    const ptEl = document.getElementById("flow-card-pause-time");
+    if (ptEl) ptEl.textContent = `Pausiert seit ${fmtSeconds(Math.max(0, pauseSecs))}`;
   }
+
+  _applyFlowCardIndicator();
 }
 
 function fmtSeconds(s) {

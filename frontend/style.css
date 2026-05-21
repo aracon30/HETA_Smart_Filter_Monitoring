@@ -1215,6 +1215,82 @@ footer {
   line-height: 1.5;
 }
 
+.status-overlay__minimize-btn {
+  display: block;
+  width: 100%;
+  margin-top: .9rem;
+  padding: .45rem .8rem;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: .82rem;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.status-overlay__minimize-btn:hover {
+  background: rgba(255,255,255,0.13);
+  color: var(--text-main);
+}
+
+/* ================================================================
+   DURCHFLUSS-KACHEL KOMPAKTANZEIGE (minimiertes Overlay)
+   ================================================================ */
+.flow-card-indicator {
+  margin-top: .6rem;
+  padding-top: .55rem;
+  border-top: 1px solid var(--border);
+}
+
+.flow-card-indicator__label {
+  font-size: .72rem;
+  font-weight: 600;
+  margin-bottom: .35rem;
+  letter-spacing: .02em;
+}
+.flow-card-indicator__label--amber { color: #f5a623; }
+.flow-card-indicator__label--blue  { color: #4ab3f4; }
+
+.flow-card-indicator__bar-wrap {
+  height: 5px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: .3rem;
+}
+.flow-card-indicator__bar-fill {
+  height: 100%;
+  background: #f5a623;
+  border-radius: 3px;
+  transition: width .4s ease;
+}
+
+.flow-card-indicator__sub {
+  font-size: .7rem;
+  color: var(--text-muted);
+}
+
+.flow-card-indicator__expand-hint {
+  font-size: .68rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: .4rem;
+  opacity: .6;
+}
+
+/* Kachel wird klickbar wenn Indicator sichtbar */
+#card-flow.flow-card--interactive {
+  cursor: pointer !important;
+}
+#card-flow.flow-card--interactive:hover {
+  border-color: rgba(245,166,35,.4);
+  background: rgba(245,166,35,.04);
+}
+#card-flow.flow-card--interactive.pause-mode:hover {
+  border-color: rgba(74,179,244,.4);
+  background: rgba(74,179,244,.04);
+}
+
 /* ================================================================
    ONBOARDING WIZARD
    ================================================================ */
