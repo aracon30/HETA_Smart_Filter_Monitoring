@@ -42,19 +42,24 @@ HETA_Smart_Filter_Monitoring/
 ## Ersteinrichtung (Onboarding)
 
 Beim ersten Start erkennt die Software `onboarding_complete: false` in `settings.json`
-und zeigt automatisch einen 7-stufigen Einrichtungsassistenten an.
+und zeigt automatisch einen 8-stufigen Einrichtungsassistenten an.
 
 | Schritt | Inhalt |
 |---------|--------|
 | 1 | Willkommen – Erklärung des Ablaufs |
-| 2 | Betriebsart – Simulation oder Hardware |
-| 3 | Betriebsweise – Dauerbetrieb (kontinuierlich) oder Intervallbetrieb (Batch) |
-| 4 | Filterparameter – dp_limit, dp_clean, flow_max, Druckbereich |
-| 5 | Temperatursensor – Messbereich min/max |
-| 6 | Zugriffspasswort festlegen (mind. 4 Zeichen) |
-| 7 | Zusammenfassung und Abschluss |
+| 2 | HETA-Code & PIN (optional) – Zahl ohne „HETA-"-Präfix, überspringbar |
+| 3 | Betriebsart – Simulation oder Hardware |
+| 4 | Betriebsweise – Dauerbetrieb (kontinuierlich) oder Intervallbetrieb (Batch) |
+| 5 | Filterparameter – dp_limit, dp_clean, flow_max, Druckbereich |
+| 6 | Temperatursensor – Messbereich min/max |
+| 7 | Zugriffspasswort festlegen (mind. 4 Zeichen) |
+| 8 | Zusammenfassung und Abschluss |
 
 Der Messzyklus startet erst nach erfolgreich abgeschlossenem Onboarding.
+`POST /api/simulation/start` gibt HTTP 403 zurück, solange `onboarding_complete: false`.
+
+Frontend: `startPolling()` wird erst aufgerufen, wenn `checkOnboarding()` `true` zurückgibt
+(Onboarding abgeschlossen). WIZARD_TOTAL = 8, Schritt 2 ruft `/api/heta/activate` auf.
 
 ---
 
@@ -274,7 +279,7 @@ _flow_below_since: Optional[float]  = None  # Zeitpunkt Fluss < Schwellwert
 | average_temperature | REAL | Mittlere Temperatur |
 | loading_rate | REAL | Beladungsrate (bar/s) |
 | confirmed_filter_change | INT | 1 = bestätigt |
-| events_json | TEXT | JSON-Array mit Pausen-/Unterbrechungsereignissen |
+| events_json | TEXT | JSON-Array mit Ereignissen (ts, ts_start, ts_end, severity, category, message) |
 
 Relevante Abfragen:
 - `get_cycles_for_heta(heta_code)` – alle Zyklen eines HETA-Codes
@@ -367,16 +372,49 @@ Die Anzeige passt sich dem verfügbaren Wissensstand an.
 
 ### Glättungsalgorithmus
 
+Im **BASIS-Modus** (kein Referenzprofil):
 ```python
-# Anstieg stark begrenzen (max. +2 % pro Update)
-if new_raw > current:
-    new_raw = min(new_raw, current * 1.02)
-# Abfall schneller erlaubt (max. −8 % pro Update)
+# Abfall sofort übernehmen; Anstieg max. +5 % pro Tick
+if raw_remaining < last_remaining:
+    last_remaining = raw_remaining
+elif raw_remaining > last_remaining * 1.05:
+    last_remaining = raw_remaining          # großer Anstieg sofort
 else:
-    new_raw = max(new_raw, current * 0.92)
+    last_remaining += 0.4 * (raw_remaining - last_remaining)
+```
 
-# Exponentielle Glättung
-smoothed = current + 0.15 × (new_raw - current)
+Im **HETA_VALIDIERT-Modus** (Referenzkurven-Inversion):
+```python
+# Abstieg sofort; echter Anstieg (ratio > 1.05) sofort; Rauschen sanft glätten
+ratio = remaining / max(last_remaining, 0.1)
+if ratio > 1.05:
+    last_remaining = remaining
+else:
+    last_remaining += 0.4 * (remaining - last_remaining)
+```
+
+### Seed-Mechanismus (Zyklusstart)
+
+Beim Start eines neuen Zyklus wird `predictor.seed(ref_duration)` mit der
+`reference_duration_seconds` des validen Profils aufgerufen (`_seed_predictor_from_profile`):
+
+```python
+def seed(self, initial_seconds: float):
+    if initial_seconds > 0:
+        self._last_remaining  = float(initial_seconds)
+        self._seeded_ceiling  = float(initial_seconds)
+```
+
+Während `_seeded_ceiling is not None` läuft die **Seeded-Phase**:
+- Zählt 1 s/Tick herunter (kein Sprung nach oben)
+- Sobald die echte Slope-Berechnung (ohne `min_slope`-Clamp) einen **niedrigeren**
+  Wert liefert, übernimmt die normale Slope-Logik: `_seeded_ceiling = None`
+
+```python
+raw_true = (dp_limit - dp_bar) / slope  # kein min_slope-Clamp hier!
+if raw_true < self._last_remaining:
+    self._last_remaining = max(0.0, raw_true)
+    self._seeded_ceiling = None
 ```
 
 ---
@@ -394,10 +432,68 @@ basieren auf `active_seconds` (kumulierte Betriebszeit ohne Pausen), nicht auf d
 Wall-Clock-Wert `duration_seconds`. Dies sorgt dafür, dass die Prognose im Batch-Betrieb
 korrekt auf Betriebsstunden basiert.
 
+### Ereignisstruktur (events_json)
+
+Jeder Zyklus speichert ein JSON-Array mit Ereignissen. Jedes Ereignis hat folgende Felder:
+
+```json
+{
+  "ts":       1716300000,
+  "ts_start": 1716300000,
+  "ts_end":   1716300180,
+  "severity": "WARNUNG",
+  "category": "dp",
+  "message":  "Erhöhte dp-Abweichung: +32 %"
+}
+```
+
+| Feld | Beschreibung |
+|------|-------------|
+| `ts` | Zeitstempel des Ereignisses (Unix, Sekunden) |
+| `ts_start` | Beginn des Problemzeitraums |
+| `ts_end` | Ende des Problemzeitraums (null = noch offen) |
+| `severity` | `INFO`, `WARNUNG`, `FEHLER` |
+| `category` | `dp`, `flow`, `reff`, `status`, `pause` oder leer |
+| `message` | Lesbare Beschreibung |
+
+### Event-Methoden (learning.py)
+
+```python
+add_event(severity, message, category="")
+# Fügt ein neues offenes Ereignis (ts_end=None) zum aktiven Zyklus hinzu.
+
+close_event(category="", severity="", ts_end=None)
+# Schließt das letzte offene Ereignis, das category/severity passt (ts_end setzen).
+
+close_all_events(ts_end=None)
+# Schließt alle noch offenen Ereignisse (ts_end=None) des aktiven Zyklus.
+# Wird in end_cycle() automatisch aufgerufen.
+```
+
+### Abweichungs-Tracking (app.py)
+
+Im Messzyklus-Thread wird nach jeder Kurvenanalyse geprüft, ob dp, flow oder r_eff
+signifikant vom Referenzprofil abweichen. Abweichungen werden als persistente,
+zeitgespannte Ereignisse gespeichert:
+
+```python
+_state["_dev_active"] = {"dp": False, "flow": False, "reff": False}
+```
+
+- **Abweichung neu**: `_dev_active[ch]` wird `True`, `add_event("WARNUNG", ..., category=ch)`
+- **Abweichung endet**: `_dev_active[ch]` wird `False`, `close_event(category=ch)`
+
+Im Frontend werden diese Zeitbereiche als **farbige Boxannotationen** im Zyklus-Diagramm
+dargestellt (Chart.js annotation plugin). Ereignisse mit `ts_end` → Box (xMin/xMax),
+Punkt-Ereignisse → vertikale Linie.
+
 ### Startverhalten-Prüfung
 
 Nach jedem Filterwechsel wird r_eff der ersten 10 Sekunden mit dem Referenzprofil
 verglichen. Abweichung > 25 % → Status `WARNUNG`.
+
+`add_event("WARNUNG", ..., category="status")` öffnet ein Status-Ereignis.
+`close_event(category="status")` schließt es, wenn r_eff wieder im Toleranzbereich liegt.
 
 ---
 
@@ -490,6 +586,24 @@ dp ≥ dp_limit
   Schwellwert und Stabilitäts-Fortschrittsbalken. Verschwindet automatisch bei Zyklusstart.
 - **Blau Overlay** (`flow-pause-overlay`): Erscheint wenn `d.cycle_paused === true`. Zeigt aktive
   Messzeit und Pausendauer.
+
+### Tab: Zyklen & Profil
+
+Zeigt Lernfortschritt und alle Zyklen eines aktiven HETA-Codes.
+
+**Profil-Kacheln** (`profile-tiles-row`):
+- **Lernzyklen**: `min(learned_cycles, required_cycles)` / `required_cycles` – max. 3 von 3; grüner „Validiert"-Badge nach Validierung
+- **Messzyklen**: `max(0, cycles.length - required_cycles)` – Zyklen nach Abschluss der Lernphase
+
+**Zyklustabelle** (6 Spalten): #, Start, Ende, Dauer, Status, „Diagramm & Probleme (N)"
+
+**Zyklus-Detaildiagramm** (`modal-cycle`):
+- 4 Kanäle (dp, Q, T, r_eff) mit je 4 Datasets: tol_up, tol_lo, ref (gestrichelt), measured
+- Multi-Achsen: yDp, yFlow, yTemp, yReff (je separate y-Achse)
+- Kanal-Toggle-Chips: dp/Q standardmäßig aktiv, T/r_eff deaktiviert
+- Annotationen: Box für Ereignisse mit `ts_end` (xMin/xMax in % der Zyklusdauer),
+  Linie für Punktereignisse; Farbe nach Severity (`_sevColors(sev)`)
+- Ereignisliste: Zeitraum mit Δt, z. B. „08:12:05 – 08:15:30 (3 min 25 s)"
 
 ### _do_confirm_filter_change()
 
@@ -597,8 +711,9 @@ Bei `"restarting": true` startet der systemd-Service `heta-monitor` automatisch 
 | `learned_cycles` | int | Anzahl bestätigter Zyklen |
 | `profile_status` | string | `LERNEND` / `VALIDIERT` |
 | `awaiting_confirmation` | bool | Filterwechsel wartet auf Bestätigung |
-| `anomaly_active` | bool | Startverhalten-Anomalie erkannt |
-| `anomaly_percent` | float | Abweichung vom Referenzprofil in % |
+| `anomaly_active` | bool | Startverhalten-Anomalie erkannt (r_eff > Toleranz) |
+| `anomaly_percent` | float | Abweichung r_eff vom Referenzprofil in % |
+| `dev_active` | dict | Aktive Abweichungen: `{"dp": bool, "flow": bool, "reff": bool}` |
 | `sensor_fault` | bool | Mindestens ein Sensor nicht erreichbar (Messung gestoppt) |
 | `sensor_fault_channels` | list | Kanal-Nummern ausgefallener Sensoren |
 | `sensor_fault_message` | string | Lesbare Fehlerbeschreibung |

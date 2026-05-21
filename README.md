@@ -124,18 +124,20 @@ sudo apt-get install -y python3-lgpio
 ## Ersteinrichtung (Onboarding)
 
 Beim ersten Start erkennt die Software `onboarding_complete: false` in `config/settings.json`
-und zeigt automatisch einen 7-stufigen Einrichtungsassistenten an.
-Der Messzyklus startet erst nach Abschluss.
+und zeigt automatisch einen 8-stufigen Einrichtungsassistenten an.
+Der Messzyklus startet erst nach Abschluss – eine laufende Simulation während des Onboardings
+ist technisch blockiert.
 
 | Schritt | Inhalt |
 |---------|--------|
 | 1 | Willkommen – Systemübersicht |
-| 2 | Betriebsart: **Hardware** (Realbetrieb) oder **Simulation** (nur Tests) |
-| 3 | Betriebsweise: **Dauerbetrieb** (kontinuierlich) oder **Intervallbetrieb** (Batch) |
-| 4 | Filterparameter: dp-Grenzwert, Druckabfall sauberer Filter, max. Durchfluss, Druckbereich |
-| 5 | Temperatursensorbereich (Minimum und Maximum in °C) |
-| 6 | Zugriffspasswort festlegen (mind. 4 Zeichen) |
-| 7 | Zusammenfassung – Bestätigen startet das System |
+| 2 | HETA-Code & PIN (optional) – Code als reine Zahl eingeben (ohne „HETA-"-Präfix) oder überspringen |
+| 3 | Betriebsart: **Hardware** (Realbetrieb) oder **Simulation** (nur Tests) |
+| 4 | Betriebsweise: **Dauerbetrieb** (kontinuierlich) oder **Intervallbetrieb** (Batch) |
+| 5 | Filterparameter: dp-Grenzwert, Druckabfall sauberer Filter, max. Durchfluss, Druckbereich |
+| 6 | Temperatursensorbereich (Minimum und Maximum in °C) |
+| 7 | Zugriffspasswort festlegen (mind. 4 Zeichen) |
+| 8 | Zusammenfassung – Bestätigen startet das System |
 
 > **Hinweis:** Nach Abschluss der Einrichtung wartet das System, bis ein **stabiler Durchfluss**
 > erkannt wird, bevor der erste Messzyklus startet. Ein bernsteinfarbenes Overlay im Dashboard

@@ -11,14 +11,15 @@ Sie benötigen keine Programmierkenntnisse.
 2. [Ersteinrichtung (Onboarding)](#2-ersteinrichtung-onboarding)
 3. [Betriebsweise und Durchflusserkennung](#3-betriebsweise-und-durchflusserkennung)
 4. [Das Dashboard](#4-das-dashboard)
-5. [HETA-Code aktivieren](#5-heta-code-aktivieren)
-6. [Filterwechsel bestätigen](#6-filterwechsel-bestätigen)
-7. [Einstellungen ändern](#7-einstellungen-ändern)
-8. [Simulationsmodus](#8-simulationsmodus)
-9. [OLED-Display und Encoder](#9-oled-display-und-encoder)
-10. [Systemmeldungen im Detail](#10-systemmeldungen-im-detail)
-11. [Fehlermeldungen](#11-fehlermeldungen)
-12. [Häufige Fragen](#12-häufige-fragen)
+5. [Zyklen & Profil](#5-zyklen--profil)
+6. [HETA-Code aktivieren](#6-heta-code-aktivieren)
+7. [Filterwechsel bestätigen](#7-filterwechsel-bestätigen)
+8. [Einstellungen ändern](#8-einstellungen-ändern)
+9. [Simulationsmodus](#9-simulationsmodus)
+10. [OLED-Display und Encoder](#10-oled-display-und-encoder)
+11. [Systemmeldungen im Detail](#11-systemmeldungen-im-detail)
+12. [Fehlermeldungen](#12-fehlermeldungen)
+13. [Häufige Fragen](#13-häufige-fragen)
 
 ---
 
@@ -56,13 +57,30 @@ direkt im Browser – ohne separaten Download oder Dateiöffnung.
 ## 2. Ersteinrichtung (Onboarding)
 
 Beim allerersten Start des Systems erscheint automatisch der **Einrichtungsassistent**.
-Er führt Sie in 7 Schritten durch die Grundkonfiguration.
+Er führt Sie in 8 Schritten durch die Grundkonfiguration.
+
+> **Wichtig:** Während der Ersteinrichtung ist die Messung gesperrt. Die Simulation startet
+> erst, nachdem Sie den Assistenten vollständig abgeschlossen haben.
 
 ### Schritt 1 – Willkommen
 
 Lesen Sie die Übersicht und klicken Sie auf **„Weiter"**.
 
-### Schritt 2 – Betriebsart
+### Schritt 2 – HETA-Code und PIN (optional)
+
+Wenn Sie bereits einen HETA-Code besitzen, können Sie ihn hier eingeben:
+
+1. Tragen Sie **nur die Zahlenkombination** Ihres Codes ein – **ohne** das Präfix „HETA-".
+   Beispiel: Ihr Code lautet `HETA-12345` → Sie tippen `12345`.
+2. Geben Sie den zugehörigen **6-stelligen PIN** ein.
+3. Klicken Sie auf **„Aktivieren"**.
+
+Das System prüft die Kombination sofort. Bei Erfolg erscheint eine Bestätigung und der
+Lernprozess beginnt mit dem ersten vollständigen Filterzyklus.
+
+> Sie können diesen Schritt auch **überspringen** und den HETA-Code später im Dashboard aktivieren.
+
+### Schritt 3 – Betriebsart
 
 Wählen Sie, wie das System Messwerte erfasst:
 
@@ -74,7 +92,7 @@ Wählen Sie, wie das System Messwerte erfasst:
 > Wenn Sie unsicher sind, wählen Sie **Hardware**. Der Simulationsmodus kann
 > jederzeit nachträglich in den Einstellungen aktiviert werden.
 
-### Schritt 3 – Betriebsweise (NEU)
+### Schritt 4 – Betriebsweise
 
 Wählen Sie, wie Ihre Anlage betrieben wird:
 
@@ -100,7 +118,7 @@ Prognose nicht verfälschen.
 > **Hinweis:** Die Betriebsweise beeinflusst, wie Pausen behandelt werden.
 > Bei Unsicherheit wählen Sie **Dauerbetrieb**.
 
-### Schritt 4 – Filterparameter
+### Schritt 5 – Filterparameter
 
 Tragen Sie die Kenndaten Ihres Filterkreislaufs ein:
 
@@ -113,12 +131,12 @@ Tragen Sie die Kenndaten Ihres Filterkreislaufs ein:
 
 > Diese Werte stehen im Datenblatt Ihres Filters und Ihrer Sensoren.
 
-### Schritt 5 – Temperatursensorbereich
+### Schritt 6 – Temperatursensorbereich
 
 Tragen Sie den Messbereich Ihres Temperatursensors ein (Minimum und Maximum in °C).
 Standardwert: −50 °C bis +150 °C.
 
-### Schritt 6 – Passwort festlegen
+### Schritt 7 – Passwort festlegen
 
 Legen Sie ein Passwort für den geschützten Einstellungsbereich fest.
 Das Passwort muss **mindestens 4 Zeichen** lang sein.
@@ -126,7 +144,7 @@ Das Passwort muss **mindestens 4 Zeichen** lang sein.
 > Notieren Sie das Passwort. Falls Sie es vergessen, muss ein Administrator
 > es über die Konsole zurücksetzen.
 
-### Schritt 7 – Zusammenfassung
+### Schritt 8 – Zusammenfassung
 
 Prüfen Sie alle Angaben – einschließlich der gewählten Betriebsweise.
 Klicken Sie auf **„Einrichtung abschließen"** – das System startet die Messung.
@@ -233,7 +251,54 @@ Oben rechts im Dashboard:
 
 ---
 
-## 5. HETA-Code aktivieren
+## 5. Zyklen & Profil
+
+Der Tab **„Zyklen & Profil"** im Dashboard zeigt den vollständigen Lernfortschritt
+und alle aufgezeichneten Filterzyklen. Er ist nur sichtbar, wenn ein HETA-Code aktiv ist.
+
+### Profil-Kacheln
+
+Oben im Tab befinden sich zwei Kacheln:
+
+| Kachel | Bedeutung |
+|--------|-----------|
+| **Lernzyklen** | Anzahl der für das Profil benötigten Zyklen (max. 3 von 3). Nach 3 Zyklen erscheint der grüne „Validiert"-Badge. |
+| **Messzyklen** | Anzahl aller weiteren Zyklen, die nach Abschluss der Lernphase aufgezeichnet wurden. |
+
+### Zyklustabelle
+
+Die Tabelle zeigt alle abgeschlossenen und den aktuell laufenden Zyklus:
+
+| Spalte | Inhalt |
+|--------|--------|
+| **#** | Zyklus-Nummer |
+| **Start** | Startzeit des Zyklus |
+| **Ende** | Endezeit (oder „läuft" bei aktivem Zyklus) |
+| **Dauer** | Kumulierte Betriebszeit (ohne Pausen) |
+| **Status** | `Läuft`, `OK` oder `Abgeschlossen` |
+| **Diagramm & Probleme** | Schaltfläche zum Öffnen des Zyklus-Detaildiagramms |
+
+> Die Schaltfläche zeigt die Anzahl der erkannten Probleme an, z. B. „Diagramm & Probleme (2)".
+
+### Zyklus-Detaildiagramm
+
+Ein Klick auf **„Diagramm & Probleme"** öffnet ein modales Fenster mit:
+
+- **Mehrkanaldiagramm**: Vier Kanäle wählbar (dp, Durchfluss Q, Temperatur T, r_eff)
+- **Referenzkurven** (gestrichelt) und **Toleranzbänder** aus dem validen Profil
+- **Problembereiche** als farbige Schattierungen: Der genaue Zeitraum eines Fehlers
+  wird als vertikaler Bereich eingeblendet (z. B. rot für FEHLER, orange für WARNUNG)
+- **Ereignisliste**: Jedes Ereignis wird mit seinem genauen Zeitraum angezeigt,
+  z. B. „08:12:05 – 08:15:30 (3 min 25 s)"
+
+#### Kanal-Toggles
+
+Mit den Chip-Schaltflächen oberhalb des Diagramms können Sie einzelne Kanäle
+ein- und ausblenden. Standardmäßig sind **dp** und **Q** aktiv.
+
+---
+
+## 6. HETA-Code aktivieren (im laufenden Betrieb)
 
 Mit einem HETA-Code schaltet das System erweiterte Funktionen frei:
 
@@ -243,6 +308,14 @@ Mit einem HETA-Code schaltet das System erweiterte Funktionen frei:
 
 ### So aktivieren Sie einen HETA-Code
 
+Sie können einen HETA-Code auf zwei Wegen eingeben:
+
+**Während des Onboardings (Schritt 2):**
+1. Tragen Sie **nur die Zahlenkombination** ein (z. B. `12345` für Code `HETA-12345`)
+2. Geben Sie den zugehörigen 6-stelligen PIN ein
+3. Klicken Sie auf **„Aktivieren"** oder **„Überspringen"** zum späteren Nachholen
+
+**Im laufenden Betrieb (Dashboard):**
 1. Klicken Sie im Dashboard auf das Eingabefeld **„HETA-Code"**
 2. Geben Sie Ihren Code ein, z. B. `HETA-12345`
 3. Geben Sie den zugehörigen **PIN** ein (6-stellig)
@@ -267,7 +340,7 @@ Referenzprofils – präzise und selbst-adaptierend bei Prozessänderungen.
 
 ---
 
-## 6. Filterwechsel bestätigen
+## 7. Filterwechsel bestätigen
 
 Wenn der Filter sein Limit erreicht hat, zeigt das System den Status **„Wechsel"** an.
 
@@ -288,7 +361,7 @@ Nach der Bestätigung:
 
 ---
 
-## 7. Einstellungen ändern
+## 8. Einstellungen ändern
 
 Klicken Sie auf das **Zahnrad-Symbol (⚙)** oben rechts im Dashboard.
 
@@ -338,7 +411,7 @@ Altes Passwort eingeben, neues Passwort zweimal bestätigen.
 
 ---
 
-## 8. Simulationsmodus
+## 9. Simulationsmodus
 
 Der Simulationsmodus ermöglicht eine vollständige Vorführung des Systems **ohne
 angeschlossene Sensoren** – ideal für Messen, Schulungen und Entwicklungstests.
@@ -391,7 +464,7 @@ Klicken Sie auf **„Zurücksetzen"**, um die Simulation von vorne zu beginnen.
 
 ---
 
-## 9. OLED-Display und Encoder
+## 10. OLED-Display und Encoder
 
 Das OLED-Display am Gerät zeigt dieselben Messwerte wie das Browser-Dashboard –
 ohne Computer oder Smartphone.
@@ -427,7 +500,7 @@ Kleine Punkte am unteren Rand zeigen, auf welchem Bildschirm Sie sich befinden.
 
 ---
 
-## 10. Systemmeldungen im Detail
+## 11. Systemmeldungen im Detail
 
 Das System gibt kontinuierlich Rückmeldung über den Zustand des Filters und der Anlage.
 Dieser Abschnitt erklärt jede mögliche Meldung, welche Messwerte dazu geführt haben und
@@ -435,7 +508,7 @@ was Sie als Bediener konkret tun sollten.
 
 ---
 
-### 10.1 Filterstatus-Meldungen
+### 11.1 Filterstatus-Meldungen
 
 Der Filterstatus ist die zentrale Statusanzeige im Dashboard. Er fasst alle Messwerte
 zu einer klaren Handlungsempfehlung zusammen.
@@ -584,11 +657,11 @@ Mögliche Ursachen je nach betroffenem Kanal:
 | **Bedeutung** | Kabelbruch | Unterbereich | Überbereich / Kurzschluss |
 
 **Was Sie tun sollten:**
-→ Siehe [Abschnitt 11 – Fehlermeldungen: Sensor ausgefallen](#rotes-overlay-sensor-ausgefallen)
+→ Siehe [Abschnitt 12 – Fehlermeldungen: Sensor ausgefallen](#rotes-overlay-sensor-ausgefallen)
 
 ---
 
-### 10.2 Prognosemeldungen
+### 11.2 Prognosemeldungen
 
 Die Reststandzeit-Anzeige zeigt je nach verfügbarem Wissensstand unterschiedliche
 Meldungen. Alle Angaben beziehen sich auf den aktuellen Messwert und das gelernte
@@ -655,7 +728,7 @@ veränderter Prozess): Lerndaten zurücksetzen, damit das System neu lernt.
 
 ---
 
-### 10.3 Lernphasen-Meldungen
+### 11.3 Lernphasen-Meldungen
 
 ---
 
@@ -694,7 +767,7 @@ Die Grobprognose (Bereichsanzeige) ist weiterhin aktiv.
 
 ---
 
-### 10.4 Analyse-Meldungen (Simulationsmodus)
+### 11.4 Analyse-Meldungen (Simulationsmodus)
 
 Diese Meldungen erscheinen im Simulationsbereich, wenn ein abweichendes Szenario
 aktiv ist und das System das laufende Verhalten mit dem Referenzprofil vergleicht.
@@ -744,7 +817,7 @@ Differenzdruck beeinflussen.
 
 ---
 
-### 10.5 Overlay: Warte auf stabilen Durchfluss
+### 11.5 Overlay: Warte auf stabilen Durchfluss
 
 **Wann:** Nach Systemstart, nach einem Filterwechsel oder nach Abbruch eines Zyklus.
 
@@ -759,7 +832,7 @@ wurde. Falls das Overlay dauerhaft bleibt:
 
 ---
 
-### 10.6 Overlay: Messzyklus pausiert
+### 11.6 Overlay: Messzyklus pausiert
 
 **Wann:** Durchfluss ist während eines aktiven Zyklus auf 0 gefallen (Pumpe aus).
 
@@ -773,7 +846,7 @@ in den Wartezustand zurück.
 
 ---
 
-## 11. Fehlermeldungen
+## 12. Fehlermeldungen
 
 ### Rotes Overlay: Sensor ausgefallen {#rotes-overlay-sensor-ausgefallen}
 
@@ -815,7 +888,7 @@ wenigen Sekunden.
 
 ---
 
-## 12. Häufige Fragen
+## 13. Häufige Fragen
 
 **Wie lange dauert die Lernphase?**
 
