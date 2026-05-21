@@ -102,6 +102,11 @@ class PredictionEngine:
         self._dp_history: list[float] = []
         self._history_window: int = 30
 
+        # Multi-Kanal-Verlauf für Q, T, R_eff
+        self._flow_history:  list[float] = []
+        self._temp_history:  list[float] = []
+        self._reff_history:  list[float] = []
+
     def update(self, dp_bar: float) -> Optional[float]:
         """
         Fallback für die Lernphase (kein valides Profil): berechnet Reststandzeit
@@ -214,26 +219,54 @@ class PredictionEngine:
         return closest[0]
 
     def _calculate_slope(self) -> Optional[float]:
-        """Lineare Regression über das dp-Messfenster (1 Index = 1 Sekunde)."""
-        n = len(self._dp_history)
+        """Lineare Regression über das dp-Messfenster."""
+        return self._linear_slope(self._dp_history, clamp_positive=True)
+
+    @staticmethod
+    def _linear_slope(history: list, clamp_positive: bool = False) -> Optional[float]:
+        """Lineare Regression über einen beliebigen Messverlauf (1 Index = 1 Sekunde)."""
+        n = len(history)
         if n < 5:
             return None
         x_mean = (n - 1) / 2.0
-        y_mean = sum(self._dp_history) / n
-        numerator   = sum((i - x_mean) * (self._dp_history[i] - y_mean) for i in range(n))
+        y_mean = sum(history) / n
+        numerator   = sum((i - x_mean) * (history[i] - y_mean) for i in range(n))
         denominator = sum((i - x_mean) ** 2 for i in range(n))
         if denominator == 0:
             return None
-        return max(numerator / denominator, 0.0)
+        slope = numerator / denominator
+        return max(slope, 0.0) if clamp_positive else slope
+
+    def update_channels(self, flow: float, temp: float, r_eff: float) -> None:
+        """Aktualisiert den Verlaufspuffer für Q, T und R_eff (je 1 Eintrag/s)."""
+        for hist, val in (
+            (self._flow_history, flow),
+            (self._temp_history, temp),
+            (self._reff_history, r_eff),
+        ):
+            hist.append(val)
+            if len(hist) > self._history_window:
+                hist.pop(0)
 
     def get_current_slope(self) -> Optional[float]:
         """Gibt die aktuelle dp-Steigung (bar/s) zurück, oder None wenn zu wenig Daten."""
         return self._calculate_slope()
 
+    def get_channel_slopes(self) -> dict:
+        """Gibt Steigungen für Q (l/min/s), T (°C/s) und R_eff (bar·min/l/s) zurück."""
+        return {
+            "flow": self._linear_slope(self._flow_history),
+            "temp": self._linear_slope(self._temp_history),
+            "r_eff": self._linear_slope(self._reff_history),
+        }
+
     def reset(self):
         """Setzt die Prognose zurück (z.B. nach Filterwechsel oder Neukonfiguration)."""
         self._last_remaining = None
         self._dp_history.clear()
+        self._flow_history.clear()
+        self._temp_history.clear()
+        self._reff_history.clear()
 
     def seed(self, initial_seconds: float):
         """Kompatibilitäts-Stub – wird nicht mehr verwendet."""
