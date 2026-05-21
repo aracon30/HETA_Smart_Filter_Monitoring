@@ -922,7 +922,8 @@ def _measurement_loop():
                 except Exception:
                     ref_curve = []
                 remaining_s = predictor.update_with_reference_curve(
-                    fs.dp_bar, ref_duration, ref_curve
+                    fs.dp_bar, ref_duration, ref_curve,
+                    elapsed_seconds=cycle_active_secs,
                 )
             else:
                 remaining_s = predictor.update(fs.dp_bar)

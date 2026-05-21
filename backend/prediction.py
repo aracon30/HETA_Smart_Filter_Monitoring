@@ -133,36 +133,41 @@ class PredictionEngine:
         dp_bar: float,
         ref_duration: float,
         ref_curve: list,
+        elapsed_seconds: float = 0.0,
     ) -> float:
         """
         Berechnet Reststandzeit durch Invertierung der gelernten Referenzkurve.
 
         Funktionsprinzip:
-          1. Finde die zeitliche Position t_pct in der Referenzkurve,
-             an der dp_ref ≈ dp_bar (dp → t_pct Inversion)
-          2. remaining = ref_duration × (1 − t_pct / 100)
-
-        Ergebnis:
-          - Gerade Linie im Diagramm wenn Beladung wie Referenz
-            (die Nichtlinearität des dp-Anstiegs ist in der Referenzkurve hinterlegt
-             und wird durch die Inversion herausgerechnet)
-          - Automatische Anpassung: dp steigt schneller → höhere t_pct →
-            weniger Restzeit; kein harter Sprung am dp-Limit
+          1. Finde t_pct in der Referenzkurve wo dp_ref ≈ dp_bar
+          2. Schätze die tatsächliche Zyklusdauer aus der bisherigen Laufzeit:
+               actual_duration ≈ elapsed / (t_pct / 100)
+             Damit passt sich die Restzeit automatisch an langsamere/schnellere
+             Beladung an: reduzierte Last → dp niedrig → t_pct klein →
+             actual_duration groß → Restzeit springt sofort nach oben.
+          3. Fallback auf ref_duration wenn elapsed zu klein für eine
+             zuverlässige Schätzung (erste 5 Sekunden).
         """
         t_pct = self._invert_curve_dp_to_tpct(dp_bar, ref_curve)
-        remaining = max(0.0, ref_duration * (1.0 - t_pct / 100.0))
+
+        # Tatsächliche Zyklusdauer aus Laufzeit ableiten (ab 5 s zuverlässig)
+        if elapsed_seconds >= 5.0 and t_pct > 0.5:
+            actual_duration = elapsed_seconds / (t_pct / 100.0)
+        else:
+            actual_duration = ref_duration
+
+        remaining = max(0.0, actual_duration * (1.0 - t_pct / 100.0))
 
         if self._last_remaining is None or remaining <= self._last_remaining:
             self._last_remaining = remaining
         else:
-            # Anstieg: echte Lastreduktion (>20 % mehr) sofort übernehmen;
-            # kleinere Schwankungen (Messrauschen) sanft dämpfen.
+            # Anstiege durch echte Lastreduktion sofort übernehmen;
+            # kleines Rauschen (<5 %) sanft glätten.
             ratio = remaining / max(self._last_remaining, 0.1)
-            if ratio > 1.20:
-                self._last_remaining = remaining          # sofortiger Sprung
+            if ratio > 1.05:
+                self._last_remaining = remaining
             else:
-                capped = min(remaining, self._last_remaining * 1.05)
-                self._last_remaining += 0.4 * (capped - self._last_remaining)
+                self._last_remaining += 0.4 * (remaining - self._last_remaining)
 
         return self._last_remaining
 
