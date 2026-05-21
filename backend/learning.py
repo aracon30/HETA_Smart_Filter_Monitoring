@@ -440,20 +440,36 @@ class LearningManager:
         ref_dp_slope = self._slope_windowed(curve, t_pct, ref_dur, field="dp", window_s=30)
         dp_slope_dev = pct_dev(current_dp_slope, ref_dp_slope) if current_dp_slope is not None and abs(ref_dp_slope) > 1e-9 else 0.0
 
+        # Rückwärts-Steigungen für Q, T, R_eff — identische Methodik wie dp
+        def slope_dev(cur_slope, field):
+            ref_s = self._slope_windowed(curve, t_pct, ref_dur, field=field, window_s=30)
+            if cur_slope is None or abs(ref_s) < 1e-12:
+                return 0.0, ref_s
+            return pct_dev(cur_slope, ref_s), ref_s
+
+        flow_dev_pct, ref_flow_slope = slope_dev(current_flow_slope, "flow")
+        temp_dev_pct, ref_temp_slope = slope_dev(current_temp_slope, "temp")
+        reff_dev_pct, ref_reff_slope = slope_dev(current_reff_slope, "r_eff")
+
         return {
             "cycle_progress_pct":   cycle_progress_pct,
             "elapsed_seconds":      round(elapsed_seconds, 1),
-            # dp-Steigung (Beladungsgeschwindigkeit)
-            "ref_dp_slope":         round(ref_dp_slope, 6),
+            # dp-Steigung
+            "ref_dp_slope":         round(ref_dp_slope,   6),
             "cur_dp_slope":         round(current_dp_slope, 6) if current_dp_slope is not None else None,
             "dp_deviation_pct":     dp_slope_dev,
-            # Q, T, R_eff: Absolutwert am gleichen dp-Punkt — sekündlich aktuell
-            "ref_r_eff":            round(ref_reff, 6),
-            "ref_flow":             round(ref_flow, 1),
-            "ref_temp":             round(ref_temp, 1),
-            "r_eff_deviation_pct":  pct_dev(current_r_eff,  ref_reff),
-            "flow_deviation_pct":   pct_dev(current_flow,   ref_flow),
-            "temp_deviation":       round(current_temp - ref_temp, 1),
+            # Q-Steigung (l/min/s)
+            "ref_flow_slope":       round(ref_flow_slope, 6),
+            "cur_flow_slope":       round(current_flow_slope, 6) if current_flow_slope is not None else None,
+            "flow_deviation_pct":   flow_dev_pct,
+            # T-Steigung (°C/s)
+            "ref_temp_slope":       round(ref_temp_slope, 6),
+            "cur_temp_slope":       round(current_temp_slope, 6) if current_temp_slope is not None else None,
+            "temp_deviation_pct":   temp_dev_pct,
+            # R_eff-Steigung
+            "ref_reff_slope":       round(ref_reff_slope, 9),
+            "cur_reff_slope":       round(current_reff_slope, 9) if current_reff_slope is not None else None,
+            "r_eff_deviation_pct":  reff_dev_pct,
         }
 
     @staticmethod
