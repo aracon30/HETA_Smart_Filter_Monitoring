@@ -939,10 +939,25 @@ def _measurement_loop():
         predictor.update_channels(fs.flow_l_min, fs.temperature_c, fs.r_eff)
 
         # ── Reststandzeit berechnen ───────────────────────────────────────
-        # Immer aus dem aktuell laufenden Zyklus (dp-Steigung), niemals aus
-        # den Referenzzyklen – damit passt sich die Anzeige sofort an
-        # veränderte Prozessbedingungen an.
-        remaining_s = predictor.update(fs.dp_bar)
+        # Bei validiertem Profil: Referenzkurve invertieren → passt sich sofort
+        # an reduzierte/erhöhte Schmutzfracht an (kein sek.-weiser Countdown).
+        # Ohne valides Profil: dp-Steigung (Seeded-Ceiling-Fallback).
+        if profile_valid and profile:
+            _rc_json = profile.get("reference_curve_json")
+            _rc_dur  = profile.get("reference_duration_seconds", 0.0)
+            if _rc_json and _rc_dur > 0:
+                try:
+                    _rc = json.loads(_rc_json) if isinstance(_rc_json, str) else _rc_json
+                    remaining_s = predictor.update_with_reference_curve(
+                        fs.dp_bar, _rc_dur, _rc, elapsed
+                    )
+                except Exception as _e:
+                    logger.warning("update_with_reference_curve Fehler: %s", _e)
+                    remaining_s = predictor.update(fs.dp_bar)
+            else:
+                remaining_s = predictor.update(fs.dp_bar)
+        else:
+            remaining_s = predictor.update(fs.dp_bar)
 
         # ── Lernwert erfassen (mit Beladungsgrad und Reststandzeit) ───────
         if cycle_active and not sensor_error:
