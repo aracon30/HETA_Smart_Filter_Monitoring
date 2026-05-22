@@ -87,17 +87,29 @@ const WIZARD_TOTAL = 8;
 let _hetaActivatedInWizard = false;
 
 async function checkOnboarding() {
-  try {
-    const data = await apiFetch("/api/onboarding/status");
-    if (data && !data.onboarding_complete) {
-      showOnboarding();
-      return false;  // Polling noch nicht starten
+  const banner   = document.getElementById("connection-error-banner");
+  const bannerTx = document.getElementById("connection-error-text");
+  let attempt = 0;
+  while (true) {
+    try {
+      const data = await apiFetch("/api/onboarding/status");
+      if (banner) banner.classList.add("hidden");   // Verbindung wieder OK
+      if (data && !data.onboarding_complete) {
+        showOnboarding();
+        return false;
+      }
+      return true;
+    } catch (e) {
+      attempt++;
+      console.warn(`Onboarding-Status nicht abrufbar (Versuch ${attempt}):`, e);
+      if (banner) {
+        if (bannerTx) bannerTx.textContent =
+          `Server nicht erreichbar – neuer Versuch in 3 s… (Versuch ${attempt})`;
+        banner.classList.remove("hidden");
+      }
+      await new Promise(r => setTimeout(r, 3000));
     }
-  } catch (e) {
-    console.warn("Onboarding-Status konnte nicht abgerufen werden.", e);
-    return false;  // Im Fehlerfall kein Polling starten – Status unklar
   }
-  return true;
 }
 
 function showOnboarding() {

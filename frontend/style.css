@@ -1286,6 +1286,34 @@ footer {
 }
 
 /* ================================================================
+   VERBINDUNGSFEHLER-BANNER
+   ================================================================ */
+.connection-error-banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  padding: .6rem 1.2rem;
+  background: #7f1d1d;
+  color: #fecaca;
+  font-size: .85rem;
+  font-weight: 500;
+}
+.connection-error-icon { font-size: 1rem; flex-shrink: 0; }
+.connection-error-spinner {
+  margin-left: auto;
+  width: 14px; height: 14px;
+  border: 2px solid rgba(252,165,165,.3);
+  border-top-color: #fca5a5;
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ================================================================
    OVERLAY (Onboarding + Settings)
    ================================================================ */
 .overlay {
