@@ -95,6 +95,7 @@ async function checkOnboarding() {
     }
   } catch (e) {
     console.warn("Onboarding-Status konnte nicht abgerufen werden.", e);
+    return false;  // Im Fehlerfall kein Polling starten – Status unklar
   }
   return true;
 }
