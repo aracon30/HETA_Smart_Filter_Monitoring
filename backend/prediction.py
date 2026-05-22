@@ -176,7 +176,13 @@ class PredictionEngine:
              actual_duration groß → Restzeit springt sofort nach oben.
           3. Fallback auf ref_duration wenn elapsed zu klein für eine
              zuverlässige Schätzung (erste 5 Sekunden).
+        _dp_history wird mitgeführt, damit get_current_slope() aktuelle
+        Daten liefert (identisch zu update()).
         """
+        # dp-History pflegen (für get_current_slope / Prozessanalyse)
+        self._dp_history.append(dp_bar)
+        if len(self._dp_history) > self._history_window:
+            self._dp_history.pop(0)
         t_pct = self._invert_curve_dp_to_tpct(dp_bar, ref_curve)
 
         # Tatsächliche Zyklusdauer aus Laufzeit ableiten (ab 5 s zuverlässig)
