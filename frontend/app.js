@@ -479,7 +479,10 @@ async function saveSettings() {
 // Polling
 // ============================================================
 
+let _pollingStarted = false;
 function startPolling() {
+  if (_pollingStarted) return;
+  _pollingStarted = true;
   fetchStatus();
   setInterval(fetchStatus, POLL_INTERVAL_MS);
 }
