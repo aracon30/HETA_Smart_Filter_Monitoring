@@ -186,14 +186,18 @@ async function _wizardActivateHeta() {
     return;
   }
   showMsg("ob-heta-msg", "Wird geprüft …", false);
-  const result = await apiFetch("/api/heta/activate", "POST", { heta_code: code, pin });
-  if (result?.valid) {
-    _hetaActivatedInWizard = true;
-    showMsg("ob-heta-msg", `✓ HETA-${result.heta_code} erfolgreich aktiviert.`, false);
-    _wizardStep++;
-    renderWizardStep();
-  } else {
-    showMsg("ob-heta-msg", result?.message ?? "Ungültiger Code oder PIN.", true);
+  try {
+    const result = await apiFetch("/api/heta/activate", "POST", { heta_code: code, pin });
+    if (result?.valid) {
+      _hetaActivatedInWizard = true;
+      showMsg("ob-heta-msg", `✓ HETA-${result.heta_code} erfolgreich aktiviert.`, false);
+      _wizardStep++;
+      renderWizardStep();
+    } else {
+      showMsg("ob-heta-msg", result?.message ?? "Ungültiger Code oder PIN.", true);
+    }
+  } catch (e) {
+    showMsg("ob-heta-msg", "Server nicht erreichbar – bitte erneut versuchen oder überspringen.", true);
   }
 }
 

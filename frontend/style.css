@@ -1039,12 +1039,12 @@ main {
   background: var(--chip-color, var(--border));
   flex-shrink: 0;
 }
-.chart-chip.active {
+.chart-chip.chip-active {
   background: var(--chip-color, var(--heta-accent));
   color: #0a1628;
   border-color: var(--chip-color);
 }
-.chart-chip.active::before { background: rgba(0,0,0,0.3); }
+.chart-chip.chip-active::before { background: rgba(0,0,0,0.3); }
 .chart-chip:disabled, .chart-chip.disabled {
   opacity: .35;
   cursor: not-allowed;
@@ -1291,7 +1291,7 @@ footer {
 .connection-error-banner {
   position: fixed;
   top: 0; left: 0; right: 0;
-  z-index: 2000;
+  z-index: 1001;
   display: flex;
   align-items: center;
   gap: .6rem;
