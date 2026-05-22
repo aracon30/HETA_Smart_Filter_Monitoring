@@ -982,23 +982,25 @@ def _measurement_loop():
             tol_dp   = settings.get("tolerance_dp_pct",   0.25) * 100
             tol_flow = settings.get("tolerance_flow_pct", 0.25) * 100
             tol_reff = settings.get("tolerance_reff_pct", 0.25) * 100
-            dev_active = _state.get("_dev_active", {"dp": False, "flow": False, "reff": False})
-
             checks = [
                 ("dp",   dp_dev,   tol_dp,   f"Δp-Abweichung: +{dp_dev:.0f}% zur Referenz"),
                 ("flow", flow_dev, tol_flow, f"Durchfluss-Abweichung: {flow_dev:.0f}% zur Referenz"),
                 ("reff", reff_dev, tol_reff, f"Filterwiderstand-Abweichung: +{reff_dev:.0f}% zur Referenz"),
             ]
-            for ch, dev, tol, msg in checks:
-                exceeds = abs(dev) > tol
-                was_active = dev_active.get(ch, False)
-                if exceeds and not was_active:
-                    learning.add_event("ABWEICHUNG", msg, category=f"dev_{ch}")
-                    dev_active[ch] = True
-                elif not exceeds and was_active:
-                    learning.close_event(category=f"dev_{ch}")
-                    dev_active[ch] = False
-            _state["_dev_active"] = dev_active
+            # Read-Modify-Write atomar unter _state_lock – verhindert Race mit
+            # API-Handlern (Filterwechsel, Reset), die _dev_active zurücksetzen.
+            with _state_lock:
+                dev_active = _state.get("_dev_active", {"dp": False, "flow": False, "reff": False})
+                for ch, dev, tol, msg in checks:
+                    exceeds = abs(dev) > tol
+                    was_active = dev_active.get(ch, False)
+                    if exceeds and not was_active:
+                        learning.add_event("ABWEICHUNG", msg, category=f"dev_{ch}")
+                        dev_active[ch] = True
+                    elif not exceeds and was_active:
+                        learning.close_event(category=f"dev_{ch}")
+                        dev_active[ch] = False
+                _state["_dev_active"] = dev_active
 
         # ── Prognosestatus ────────────────────────────────────────────────
         req_cycles  = settings.get("required_cycles_for_profile", 3)
