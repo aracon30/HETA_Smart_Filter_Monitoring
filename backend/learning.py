@@ -635,6 +635,9 @@ class LearningManager:
 
     def close_event(self, category: str = "", severity: str = "", ts_end: float = None):
         """Schließt das letzte offene Ereignis (optional nach Kategorie/Schwere filtern)."""
+        if not category and not severity:
+            logger.warning("close_event() ohne category/severity – schließt erstes offenes Event, "
+                           "egal welcher Typ. Bitte category angeben.")
         if self._active_cycle is None:
             return
         now = round(ts_end or time.time())
