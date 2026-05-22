@@ -734,36 +734,36 @@ function initCharts() {
         // ── Messwerte (Indizes 0–6) ──────────────────────────────────────
         mkDs("p1 [bar]",            DS_COLORS.p1,     "yPressure", { borderWidth: 1.5 }),
         mkDs("p2 [bar]",            DS_COLORS.p2,     "yPressure", { borderWidth: 1.5 }),
-        mkDs("Δp [bar]",            DS_COLORS.dp,     "yPressure", {
+        mkDs("Δp [mbar/s]",           DS_COLORS.dp,     "yDpRate", {
           borderWidth: 2.5,
           backgroundColor: "rgba(56,189,248,0.07)",
           fill: "origin",
         }),
-        mkDs("Q [l/min]",           DS_COLORS.flow,   "yFlow"),
-        mkDs("Temp [°C]",           DS_COLORS.temp,   "yTemp"),
-        mkDs("Widerstandsfaktor [×]", DS_COLORS.reff,  "yReff",   { borderDash: [5, 3] }),
+        mkDs("Q [l/min/min]",         DS_COLORS.flow,   "yFlow"),
+        mkDs("T [°C/min]",            DS_COLORS.temp,   "yTemp"),
+        mkDs("R_eff [µ(b·min/l)/s]",  DS_COLORS.reff,   "yReff",  { borderDash: [5, 3] }),
         mkDs("Reststandzeit [min]", DS_COLORS.remain, "yTime",   { borderDash: [5, 3] }),
         // ── Referenz & Toleranz Δp (Indizes 7–9) ────────────────────────────
-        // 7 = Toleranz Δp obere Grenze → füllt bis Dataset 8
+        // 7 = Toleranz Δp-Rate obere Grenze → füllt bis Dataset 8
         {
           label: "±Tol Δp",
-          yAxisID: "yPressure", data: [], parsing: false,
+          yAxisID: "yDpRate", data: [], parsing: false,
           borderColor: DS_COLORS.tolEdge,
           backgroundColor: DS_COLORS.tolBand,
           borderWidth: 1, borderDash: [3, 4],
           pointRadius: 0, tension: 0.3, fill: "+1",
         },
-        // 8 = Toleranz Δp untere Grenze
+        // 8 = Toleranz Δp-Rate untere Grenze
         {
           label: "_tol_dp_lower",
-          yAxisID: "yPressure", data: [], parsing: false,
+          yAxisID: "yDpRate", data: [], parsing: false,
           borderColor: DS_COLORS.tolEdge,
           backgroundColor: "transparent",
           borderWidth: 1, borderDash: [3, 4],
           pointRadius: 0, tension: 0.3, fill: false,
         },
-        // 9 = Referenz Δp-Linie
-        mkDs("Ref Δp", DS_COLORS.refLine, "yPressure", {
+        // 9 = Referenz Δp-Rate-Linie
+        mkDs("Ref Δp", DS_COLORS.refLine, "yDpRate", {
           borderWidth: 1.5, borderDash: [10, 5],
         }),
         // ── Referenz & Toleranz Q (Indizes 10–12) ───────────────────────────
@@ -865,10 +865,11 @@ function initCharts() {
               const v = ctx.parsed.y;
               if (v == null || isNaN(v)) return null;
               const dec = {
-                "p1 [bar]": 3, "p2 [bar]": 3, "Δp [bar]": 3,
-                "Q [l/min]": 1, "Temp [°C]": 1,
-                "R_eff [bar·min/l]": 5, "Reststandzeit [min]": 1,
-                "Referenz Δp": 3, "Toleranzband": 3,
+                "p1 [bar]": 3, "p2 [bar]": 3,
+                "Δp [mbar/s]": 3, "Q [l/min/min]": 3,
+                "T [°C/min]": 3, "R_eff [µ(b·min/l)/s]": 3,
+                "Reststandzeit [min]": 1,
+                "Ref Δp": 3, "Ref Q": 3, "Ref T": 3, "Ref R_eff": 3,
               };
               return ` ${ctx.dataset.label}: ${v.toFixed(dec[ctx.dataset.label] ?? 2)}`;
             },
@@ -927,31 +928,42 @@ function initCharts() {
         yPressure: {
           type: "linear",
           position: "left",
+          display: false,
           min: 0,
-          title: { display: true, text: "Druck [bar]", font: { size: 10 }, color: DS_COLORS.dp },
+          title: { display: true, text: "Druck [bar]", font: { size: 10 }, color: DS_COLORS.p1 },
+          ticks: { font: { size: 10 }, color: DS_COLORS.p1 },
+          grid: { color: "rgba(100,130,160,0.15)" },
+        },
+        yDpRate: {
+          type: "linear",
+          position: "left",
+          min: 0,
+          title: { display: true, text: "Δp [mbar/s]", font: { size: 10 }, color: DS_COLORS.dp },
           ticks: { font: { size: 10 }, color: DS_COLORS.dp },
           grid: { color: "rgba(100,130,160,0.15)" },
         },
         yFlow: {
           type: "linear",
           position: "right",
-          min: 0,
-          title: { display: true, text: "Durchfluss [l/min]", font: { size: 10 }, color: DS_COLORS.flow },
+          title: { display: true, text: "ΔQ [l/min/min]", font: { size: 10 }, color: DS_COLORS.flow },
           ticks: { font: { size: 10 }, color: DS_COLORS.flow },
           grid: { drawOnChartArea: false },
+          display: false,
         },
         yTemp: {
           type: "linear",
           position: "right",
           display: false,
-          min: 0,
+          title: { display: true, text: "ΔT [°C/min]", font: { size: 10 }, color: DS_COLORS.temp },
+          ticks: { font: { size: 10 }, color: DS_COLORS.temp },
           grid: { drawOnChartArea: false },
         },
         yReff: {
           type: "linear",
           position: "right",
           display: false,
-          min: 0,
+          title: { display: true, text: "ΔR_eff [µ(b·min/l)/s]", font: { size: 10 }, color: DS_COLORS.reff },
+          ticks: { font: { size: 10 }, color: DS_COLORS.reff },
           grid: { drawOnChartArea: false },
         },
         yTime: {
@@ -982,12 +994,16 @@ function pushChartData(status) {
 
   const xPct   = status.analysis_cycle_progress_pct ?? 0;
   const remMin = status.remaining_seconds != null ? status.remaining_seconds / 60 : null;
+  const dpRate   = status.analysis_dp_rate_current   != null ? status.analysis_dp_rate_current   * 1000 : null;
+  const flRate   = status.analysis_flow_rate_current != null ? status.analysis_flow_rate_current * 60   : null;
+  const tRate    = status.analysis_temp_rate_current != null ? status.analysis_temp_rate_current * 60   : null;
+  const rfRate   = status.analysis_reff_rate_current != null ? status.analysis_reff_rate_current * 1e6  : null;
   ds[0].data.push({ x: xPct, y: status.p1_bar ?? null });
   ds[1].data.push({ x: xPct, y: status.p2_bar ?? null });
-  ds[2].data.push({ x: xPct, y: status.dp_bar ?? null });
-  ds[3].data.push({ x: xPct, y: status.flow_l_min ?? null });
-  ds[4].data.push({ x: xPct, y: status.temperature_c ?? null });
-  ds[5].data.push({ x: xPct, y: status.r_rel_factor ?? status.r_eff ?? null });
+  ds[2].data.push({ x: xPct, y: dpRate });
+  ds[3].data.push({ x: xPct, y: flRate });
+  ds[4].data.push({ x: xPct, y: tRate });
+  ds[5].data.push({ x: xPct, y: rfRate });
   ds[6].data.push({ x: xPct, y: remMin });
   for (let i = 0; i < 7; i++) {
     if (ds[i].data.length > MAX_CHART_POINTS) ds[i].data.shift();
@@ -1043,46 +1059,52 @@ async function updateReferenceOverlay(status) {
   const refCurve = await _getRefCurve(hetaCode);
   if (!refCurve?.curve?.length) return;
 
-  const tolDp          = refCurve.tolerance_dp_pct   ?? refCurve.tolerance_pct ?? 0.25;
-  const tolFlow        = refCurve.tolerance_flow_pct ?? 0.25;
-  const tolReff        = refCurve.tolerance_reff_pct ?? 0.25;
-  const tolTempC       = refCurve.tolerance_temp_c   ?? 10.0;
-  const reffStartRef   = refCurve.reference_r_eff_start || 0;
+  const refDuration = refCurve.reference_duration_seconds || 300;
+  const tolDp       = refCurve.tolerance_dp_pct   ?? refCurve.tolerance_pct ?? 0.25;
+  const tolFlow     = refCurve.tolerance_flow_pct ?? 0.25;
+  const tolReff     = refCurve.tolerance_reff_pct ?? 0.25;
+  const tolTempAbs  = refCurve.tolerance_temp_c   ?? 10.0; // °C absolut → in Rate umrechnen
 
-  // Dp datasets (7=upper, 8=lower, 9=center)
+  // Dp datasets (7=upper, 8=lower, 9=center)   [mbar/s]
   const dpUpper = [], dpLower = [], dpCenter = [];
-  // Flow datasets (10=upper, 11=lower, 12=center)
+  // Flow datasets (10=upper, 11=lower, 12=center) [l/min/min]
   const flUpper = [], flLower = [], flCenter = [];
-  // Temp datasets (13=upper, 14=lower, 15=center)
+  // Temp datasets (13=upper, 14=lower, 15=center) [°C/min]
   const tpUpper = [], tpLower = [], tpCenter = [];
-  // Reff datasets (16=upper, 17=lower, 18=center)
+  // Reff datasets (16=upper, 17=lower, 18=center) [µ(b·min/l)/s]
   const rfUpper = [], rfLower = [], rfCenter = [];
 
-  for (const pt of refCurve.curve) {
-    // x direkt als Zyklusfortschritt in % – passt zur x-Achse der live-Messung
-    const xPct = pt.t_pct;
+  const curve = refCurve.curve;
+  for (let i = 0; i < curve.length - 1; i++) {
+    const p0 = curve[i], p1 = curve[i + 1];
+    const dtS = (p1.t_pct - p0.t_pct) / 100 * refDuration; // Zeitdelta in s
+    if (dtS <= 0) continue;
+    const xMid = (p0.t_pct + p1.t_pct) / 2;
 
-    if (pt.dp != null) {
-      dpCenter.push({ x: xPct, y: pt.dp });
-      dpUpper.push({  x: xPct, y: pt.dp * (1 + tolDp) });
-      dpLower.push({  x: xPct, y: Math.max(0, pt.dp * (1 - tolDp)) });
+    if (p0.dp != null && p1.dp != null) {
+      const r = (p1.dp - p0.dp) / dtS * 1000;          // mbar/s
+      dpCenter.push({ x: xMid, y: r });
+      dpUpper.push({  x: xMid, y: r * (1 + tolDp) });
+      dpLower.push({  x: xMid, y: Math.max(0, r * (1 - tolDp)) });
     }
-    if (pt.flow != null) {
-      flCenter.push({ x: xPct, y: pt.flow });
-      flUpper.push({  x: xPct, y: pt.flow * (1 + tolFlow) });
-      flLower.push({  x: xPct, y: Math.max(0, pt.flow * (1 - tolFlow)) });
+    if (p0.flow != null && p1.flow != null) {
+      const r = (p1.flow - p0.flow) / dtS * 60;         // l/min/min
+      flCenter.push({ x: xMid, y: r });
+      flUpper.push({  x: xMid, y: r * (1 + tolFlow) });
+      flLower.push({  x: xMid, y: r - r * tolFlow });
     }
-    if (pt.temp != null) {
-      tpCenter.push({ x: xPct, y: pt.temp });
-      tpUpper.push({  x: xPct, y: pt.temp + tolTempC });
-      tpLower.push({  x: xPct, y: pt.temp - tolTempC });
+    if (p0.temp != null && p1.temp != null) {
+      const r = (p1.temp - p0.temp) / dtS * 60;         // °C/min
+      const tol = tolTempAbs / (refDuration / 60);       // °C/min Toleranzbreite
+      tpCenter.push({ x: xMid, y: r });
+      tpUpper.push({  x: xMid, y: r + tol });
+      tpLower.push({  x: xMid, y: r - tol });
     }
-    if (pt.r_eff != null) {
-      // Normieren auf Widerstandsfaktor: pt.r_eff / reference_r_eff_start
-      const rfNorm = reffStartRef > 0 ? pt.r_eff / reffStartRef : pt.r_eff;
-      rfCenter.push({ x: xPct, y: rfNorm });
-      rfUpper.push({  x: xPct, y: rfNorm * (1 + tolReff) });
-      rfLower.push({  x: xPct, y: Math.max(0, rfNorm * (1 - tolReff)) });
+    if (p0.r_eff != null && p1.r_eff != null) {
+      const r = (p1.r_eff - p0.r_eff) / dtS * 1e6;     // µ(b·min/l)/s
+      rfCenter.push({ x: xMid, y: r });
+      rfUpper.push({  x: xMid, y: r * (1 + tolReff) });
+      rfLower.push({  x: xMid, y: r * (1 - tolReff) });
     }
   }
 
@@ -1444,13 +1466,13 @@ function updateChartDpLimit(dpLimitBar) {
 
 // Dataset metadata for toggle buttons and axis config
 const DS_META = [
-  { label: "p1",           color: DS_COLORS.p1,     live: true,  axisFixed: true,  unit: "bar",          axis: "yPressure" },
-  { label: "p2",           color: DS_COLORS.p2,     live: true,  axisFixed: true,  unit: "bar",          axis: "yPressure" },
-  { label: "Δp",           color: DS_COLORS.dp,     live: true,  axisFixed: true,  unit: "bar",          axis: "yPressure" },
-  { label: "Q",            color: DS_COLORS.flow,   live: true,  axisFixed: false, unit: "l/min",        axis: "yFlow"     },
-  { label: "T",            color: DS_COLORS.temp,   live: true,  axisFixed: false, unit: "°C",           axis: "yTemp"     },
-  { label: "Widerstandsfaktor", color: DS_COLORS.reff, live: true, axisFixed: false, unit: "×",          axis: "yReff"     },
-  { label: "Reststandzeit",color: DS_COLORS.remain, live: true,  axisFixed: false, unit: "min",          axis: "yTime"     },
+  { label: "p1",           color: DS_COLORS.p1,     live: true,  axisFixed: true,  unit: "bar",             axis: "yPressure" },
+  { label: "p2",           color: DS_COLORS.p2,     live: true,  axisFixed: true,  unit: "bar",             axis: "yPressure" },
+  { label: "Δp",           color: DS_COLORS.dp,     live: true,  axisFixed: true,  unit: "mbar/s",          axis: "yDpRate"   },
+  { label: "Q",            color: DS_COLORS.flow,   live: true,  axisFixed: false, unit: "l/min/min",       axis: "yFlow"     },
+  { label: "T",            color: DS_COLORS.temp,   live: true,  axisFixed: false, unit: "°C/min",          axis: "yTemp"     },
+  { label: "Widerstandsfaktor", color: DS_COLORS.reff, live: true, axisFixed: false, unit: "µ(b·min/l)/s", axis: "yReff"     },
+  { label: "Reststandzeit",color: DS_COLORS.remain, live: true,  axisFixed: false, unit: "min",             axis: "yTime"     },
   // Reference dp (indices 7,8,9)
   { label: "±Tol Δp",     color: "rgba(0,212,255,0.35)",  ref: true, refGroup: "dp",   groupLabel: "Δp",   isTolerancePair: [7,8], isTolUpper: true },
   { label: "_tol_dp_lo",  color: "rgba(0,212,255,0.35)",  ref: true, refGroup: "dp",   isToleranceLower: true },
@@ -1470,11 +1492,12 @@ const DS_META = [
 ];
 
 const AXIS_OPTIONS = [
-  { id: "yPressure", label: "Links – Druck [bar]"              },
-  { id: "yFlow",     label: "Rechts 1 – Durchfluss [l/min]"   },
-  { id: "yTemp",     label: "Rechts 2 – Temperatur [°C]"      },
-  { id: "yReff",     label: "Rechts 3 – Widerstandsfaktor [×]" },
-  { id: "yTime",     label: "Rechts 4 – Reststandzeit [min]"  },
+  { id: "yDpRate",   label: "Links – Δp [mbar/s]"                },
+  { id: "yFlow",     label: "Rechts 1 – ΔQ [l/min/min]"          },
+  { id: "yTemp",     label: "Rechts 2 – ΔT [°C/min]"             },
+  { id: "yReff",     label: "Rechts 3 – ΔR_eff [µ(b·min/l)/s]"  },
+  { id: "yTime",     label: "Rechts 4 – Reststandzeit [min]"     },
+  { id: "yPressure", label: "Links 2 – Druck [bar]"              },
 ];
 
 function _buildChartToggleButtons() {
@@ -1578,7 +1601,8 @@ function _buildAxisPanel() {
       fixedLabel.className = "chart-axis-select";
       fixedLabel.style.opacity = "0.6";
       fixedLabel.style.cursor = "default";
-      fixedLabel.textContent = "Links – Druck [bar]";
+      const axisLbl = AXIS_OPTIONS.find(o => o.id === meta.axis);
+      fixedLabel.textContent = axisLbl ? axisLbl.label : meta.axis;
       row.appendChild(fixedLabel);
     } else {
       const sel = document.createElement("select");
@@ -1636,9 +1660,10 @@ function updateAxisVisibility() {
 
   for (const axisId of Object.keys(scales)) {
     if (axisId === "x") continue;
-    // yPressure always stays visible (has annotations)
+    // yPressure only visible when p1/p2 are shown (ds[0], ds[1])
     if (axisId === "yPressure") {
-      scales[axisId].display = true;
+      const anyP = [0, 1].some(i => combinedChart.getDatasetMeta(i).hidden !== true);
+      scales[axisId].display = anyP;
       continue;
     }
     // Check if any dataset assigned to this axis is visible
