@@ -811,8 +811,7 @@ def _measurement_loop():
                     _flow_stable_since = None
                     _flow_below_since  = None
                     op_label = "Batch-Pause" if settings.get("operation_mode") == "batch" else "Unterbrechung"
-                    learning.add_event("PAUSE_ENDE",
-                                       f"{op_label} beendet nach {pause_dur:.0f} s")
+                    learning.close_event(category="pause")
                     db.insert_service_event("ZYKLUS_PAUSE_ENDE", heta_code,
                                             f"{op_label} nach {pause_dur:.0f} s beendet")
                     with _state_lock:
@@ -868,7 +867,8 @@ def _measurement_loop():
                     # Zyklus pausieren
                     op_label = "Batch-Pause" if settings.get("operation_mode") == "batch" else "Unterbrechung"
                     learning.add_event("PAUSE_START",
-                                       f"{op_label} gestartet – Q={fs.flow_l_min:.1f} l/min")
+                                       f"{op_label} gestartet – Q={fs.flow_l_min:.1f} l/min",
+                                       category="pause")
                     db.insert_service_event("ZYKLUS_PAUSE_START", heta_code,
                                             f"Q={fs.flow_l_min:.1f} l/min unter Schwellwert {flow_thr:.1f} l/min")
                     _flow_below_since  = None
