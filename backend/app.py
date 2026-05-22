@@ -957,9 +957,13 @@ def _measurement_loop():
         if (cycle_active and heta_activated and cycle_start_ts
                 and (time.time() - cycle_start_ts) < 10):
             anomaly, anom_pct = learning.check_start_behavior(heta_code, fs.r_eff)
-            if anomaly and not _state["anomaly_active"]:
+            was_anomaly = _state["anomaly_active"]
+            if anomaly and not was_anomaly:
                 learning.add_event("WARNUNG",
-                    f"Startverhalten-Anomalie: R_eff {anom_pct:+.1f}% zur Referenz")
+                    f"Startverhalten-Anomalie: R_eff {anom_pct:+.1f}% zur Referenz",
+                    category="anomaly")
+            elif not anomaly and was_anomaly:
+                learning.close_event(category="anomaly")
             with _state_lock:
                 _state["anomaly_active"] = anomaly
                 _state["anomaly_percent"] = anom_pct
