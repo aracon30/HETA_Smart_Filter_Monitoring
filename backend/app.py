@@ -967,6 +967,12 @@ def _measurement_loop():
             with _state_lock:
                 _state["anomaly_active"] = anomaly
                 _state["anomaly_percent"] = anom_pct
+        elif cycle_active and _state["anomaly_active"]:
+            # Fenster abgelaufen, aber Anomalie noch offen → einmalig schließen.
+            learning.close_event(category="anomaly")
+            with _state_lock:
+                _state["anomaly_active"] = False
+                _state["anomaly_percent"] = 0.0
 
         # ── Statusänderungen als Ereignis im aktiven Zyklus speichern ────
         prev_status = _state.get("filter_status", STATUS_OK)
