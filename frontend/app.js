@@ -2648,12 +2648,15 @@ function renderCyclesTable(cycles) {
       endStr = dtEnd.toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
     }
 
-    // Duration
-    const durSec = c.duration_seconds ?? 0;
+    // Duration – für laufende Zyklen Echtzeit-Differenz verwenden,
+    // damit _tsPct im Chart-Modal korrekt arbeitet.
+    const durSec = c.end_time
+      ? (c.duration_seconds ?? 0)
+      : (Date.now() / 1000 - (c.start_time ?? 0));
     const durMin = Math.round(durSec / 60);
-    const durStr = durMin >= 60
-      ? `${Math.floor(durMin / 60)}h ${durMin % 60}min`
-      : `${durMin} min`;
+    const durStr = !c.end_time
+      ? "läuft…"
+      : (durMin >= 60 ? `${Math.floor(durMin / 60)}h ${durMin % 60}min` : `${durMin} min`);
 
     // Status
     const ok = c.confirmed_filter_change;
