@@ -19,7 +19,8 @@ let _refCurveCache = null;
 let _refCurveCacheCode = null;
 
 // Zyklusverfolgung für das Referenz-Overlay im Live-Chart
-let _knownCycleStart = null;
+let _knownCycleStart     = null;
+let _knownLiveCycleStart = null;
 
 // Session-Token für Einstellungsbereich (wird im sessionStorage gehalten)
 const TOKEN_KEY = "heta_settings_token";
@@ -857,7 +858,7 @@ function initCharts() {
           usePointStyle: true,
           callbacks: {
             title: items => items[0]
-              ? new Date(items[0].parsed.x).toLocaleTimeString("de-DE")
+              ? `Fortschritt: ${items[0].parsed.x.toFixed(1)} %`
               : "",
             label: ctx => {
               if (ctx.dataset.label.startsWith("_")) return null;
@@ -906,12 +907,20 @@ function initCharts() {
       scales: {
         x: {
           type: "linear",
+          min: 0,
+          max: 100,
+          title: {
+            display: true,
+            text: "Zyklusfortschritt [%]",
+            font: { size: 10 },
+            color: "#64748b",
+          },
           ticks: {
-            maxTicksLimit: 8,
+            maxTicksLimit: 11,
             maxRotation: 0,
             font: { size: 10 },
             color: "#64748b",
-            callback: val => new Date(val).toLocaleTimeString("de-DE"),
+            callback: val => val + " %",
           },
           grid: { color: "rgba(100,130,160,0.15)" },
         },
@@ -962,16 +971,24 @@ function initCharts() {
 
 function pushChartData(status) {
   if (!combinedChart) return;
-  const now = Date.now();
-  const remMin = status.remaining_seconds != null ? status.remaining_seconds / 60 : null;
   const ds = combinedChart.data.datasets;
-  ds[0].data.push({ x: now, y: status.p1_bar ?? null });
-  ds[1].data.push({ x: now, y: status.p2_bar ?? null });
-  ds[2].data.push({ x: now, y: status.dp_bar ?? null });
-  ds[3].data.push({ x: now, y: status.flow_l_min ?? null });
-  ds[4].data.push({ x: now, y: status.temperature_c ?? null });
-  ds[5].data.push({ x: now, y: status.r_rel_factor ?? status.r_eff ?? null });
-  ds[6].data.push({ x: now, y: remMin });
+
+  // Neuen Zyklus erkennen: live-Datasets leeren damit die Kurve von 0 % startet
+  const cycleStart = status.cycle_start_time ?? null;
+  if (cycleStart !== _knownLiveCycleStart) {
+    for (let i = 0; i < 7; i++) ds[i].data = [];
+    _knownLiveCycleStart = cycleStart;
+  }
+
+  const xPct   = status.analysis_cycle_progress_pct ?? 0;
+  const remMin = status.remaining_seconds != null ? status.remaining_seconds / 60 : null;
+  ds[0].data.push({ x: xPct, y: status.p1_bar ?? null });
+  ds[1].data.push({ x: xPct, y: status.p2_bar ?? null });
+  ds[2].data.push({ x: xPct, y: status.dp_bar ?? null });
+  ds[3].data.push({ x: xPct, y: status.flow_l_min ?? null });
+  ds[4].data.push({ x: xPct, y: status.temperature_c ?? null });
+  ds[5].data.push({ x: xPct, y: status.r_rel_factor ?? status.r_eff ?? null });
+  ds[6].data.push({ x: xPct, y: remMin });
   for (let i = 0; i < 7; i++) {
     if (ds[i].data.length > MAX_CHART_POINTS) ds[i].data.shift();
   }
@@ -1015,6 +1032,7 @@ async function updateReferenceOverlay(status) {
       _refreshRefChips();
     }
     _knownCycleStart = null;
+    _knownLiveCycleStart = null;
     return;
   }
 
@@ -1025,8 +1043,6 @@ async function updateReferenceOverlay(status) {
   const refCurve = await _getRefCurve(hetaCode);
   if (!refCurve?.curve?.length) return;
 
-  const startMs  = startTime * 1000;
-  const refDurMs       = (refCurve.reference_duration_seconds || 300) * 1000;
   const tolDp          = refCurve.tolerance_dp_pct   ?? refCurve.tolerance_pct ?? 0.25;
   const tolFlow        = refCurve.tolerance_flow_pct ?? 0.25;
   const tolReff        = refCurve.tolerance_reff_pct ?? 0.25;
@@ -1043,29 +1059,30 @@ async function updateReferenceOverlay(status) {
   const rfUpper = [], rfLower = [], rfCenter = [];
 
   for (const pt of refCurve.curve) {
-    const xMs = startMs + (pt.t_pct / 100) * refDurMs;
+    // x direkt als Zyklusfortschritt in % – passt zur x-Achse der live-Messung
+    const xPct = pt.t_pct;
 
     if (pt.dp != null) {
-      dpCenter.push({ x: xMs, y: pt.dp });
-      dpUpper.push({  x: xMs, y: pt.dp * (1 + tolDp) });
-      dpLower.push({  x: xMs, y: Math.max(0, pt.dp * (1 - tolDp)) });
+      dpCenter.push({ x: xPct, y: pt.dp });
+      dpUpper.push({  x: xPct, y: pt.dp * (1 + tolDp) });
+      dpLower.push({  x: xPct, y: Math.max(0, pt.dp * (1 - tolDp)) });
     }
     if (pt.flow != null) {
-      flCenter.push({ x: xMs, y: pt.flow });
-      flUpper.push({  x: xMs, y: pt.flow * (1 + tolFlow) });
-      flLower.push({  x: xMs, y: Math.max(0, pt.flow * (1 - tolFlow)) });
+      flCenter.push({ x: xPct, y: pt.flow });
+      flUpper.push({  x: xPct, y: pt.flow * (1 + tolFlow) });
+      flLower.push({  x: xPct, y: Math.max(0, pt.flow * (1 - tolFlow)) });
     }
     if (pt.temp != null) {
-      tpCenter.push({ x: xMs, y: pt.temp });
-      tpUpper.push({  x: xMs, y: pt.temp + tolTempC });
-      tpLower.push({  x: xMs, y: pt.temp - tolTempC });
+      tpCenter.push({ x: xPct, y: pt.temp });
+      tpUpper.push({  x: xPct, y: pt.temp + tolTempC });
+      tpLower.push({  x: xPct, y: pt.temp - tolTempC });
     }
     if (pt.r_eff != null) {
       // Normieren auf Widerstandsfaktor: pt.r_eff / reference_r_eff_start
       const rfNorm = reffStartRef > 0 ? pt.r_eff / reffStartRef : pt.r_eff;
-      rfCenter.push({ x: xMs, y: rfNorm });
-      rfUpper.push({  x: xMs, y: rfNorm * (1 + tolReff) });
-      rfLower.push({  x: xMs, y: Math.max(0, rfNorm * (1 - tolReff)) });
+      rfCenter.push({ x: xPct, y: rfNorm });
+      rfUpper.push({  x: xPct, y: rfNorm * (1 + tolReff) });
+      rfLower.push({  x: xPct, y: Math.max(0, rfNorm * (1 - tolReff)) });
     }
   }
 
@@ -1889,6 +1906,7 @@ function clearCharts() {
   combinedChart.data.labels = [];
   combinedChart.data.datasets.forEach(ds => { ds.data = []; });
   _knownCycleStart = null;
+  _knownLiveCycleStart = null;
   _refCurveCache = null;
   _refCurveCacheCode = null;
   combinedChart.update("none");
@@ -2324,6 +2342,7 @@ async function quickLearn() {
     _refCurveCache = null;
     _refCurveCacheCode = null;
     _knownCycleStart = null;
+    _knownLiveCycleStart = null;
   } else {
     showMsg("sim-learn-msg", res.message, true);
     btn.disabled = false;
