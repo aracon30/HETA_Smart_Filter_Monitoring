@@ -1,4 +1,4 @@
-# HETA Smart Filter Monitoring &nbsp;![Version](https://img.shields.io/badge/version-v0.1.1--alpha-blue)
+# HETA Smart Filter Monitoring &nbsp;![Version](https://img.shields.io/badge/version-v0.1.2--alpha-blue)
 
 Industrielles Filterüberwachungssystem für den **Raspberry Pi 5**. Erfasst 4–20-mA-Sensordaten
 via AnoPi Shield (SPI-ADC), berechnet den Filterzustand in Echtzeit und stellt bereit:
