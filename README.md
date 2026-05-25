@@ -3,7 +3,7 @@
 Industrielles Filterüberwachungssystem für den **Raspberry Pi 5**. Erfasst 4–20-mA-Sensordaten
 via AnoPi Shield (SPI-ADC), berechnet den Filterzustand in Echtzeit und stellt bereit:
 
-- **Weboberfläche** (lokal, kein Internet erforderlich) mit Live-Diagrammen und Reststandzeit
+- **Weboberfläche** (lokal, kein Internet erforderlich) mit Live-Ratendiagrammen (Δp mbar/s, ΔQ, ΔT, ΔR_eff über Zyklusfortschritt) und Reststandzeit
 - **OLED-Display** (Waveshare 2.42") mit Encoder-Navigation für den direkten Einsatz am Gerät
 - **MQTT-Interface** für die optionale Anbindung an übergeordnete Leitsysteme
 - **Lernprofil** – nach 3 Filterzyklen sekundengenaue Reststandzeit-Prognose
@@ -177,6 +177,9 @@ Das System passt die Reststandzeit-Anzeige automatisch an das verfügbare Wissen
 Nach 3 Lernzyklen berechnet das System ein Referenzprofil für die nicht-lineare
 dp-Kurve. Die Reststandzeit-Inversion über dieses Profil liefert eine
 präzise lineare Anzeige – auch wenn der Differenzdruck exponentiell steigt.
+Bei **reduzierter Schmutzfracht** (dp steigt langsamer als normal) erkennt die
+Kurveninvertierung den niedrigen Fortschritt und verlängert die angezeigte Restzeit
+automatisch – ohne manuelle Eingriffe.
 
 ### Lernphasen-Reset
 

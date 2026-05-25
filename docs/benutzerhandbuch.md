@@ -226,11 +226,29 @@ Direkt unter dem Statusbereich sehen Sie die aktuellen Messwerte:
 - **T** – Temperatur (°C)
 - **r_eff** – Effektiver Filterwiderstand (bar·min/l)
 
-### Live-Diagramm
+### Live-Diagramm (System-Tab)
 
-Das Diagramm zeigt den zeitlichen Verlauf der Messwerte. Mit dem HETA-Code aktiv
-werden zusätzlich die **Referenzkurve** (gestrichelt) und die **Toleranzbänder**
-eingeblendet, so dass Abweichungen vom Normalverhalten sofort sichtbar sind.
+Das Diagramm auf dem **System-Tab** zeigt die **Änderungsraten** der Messkanäle
+über den **Zyklusfortschritt (0–100 %)** auf der x-Achse – nicht die Absolutwerte
+und nicht die Uhrzeit.
+
+| Kanal | Einheit | Bedeutung |
+|-------|---------|-----------|
+| **Δp** | mbar/s | Beladungsgeschwindigkeit – wie schnell steigt der Differenzdruck? |
+| **ΔQ** | l/min/min | Veränderungsrate des Durchflusses |
+| **ΔT** | °C/min | Temperaturänderungsrate |
+| **ΔR_eff** | µ(b·min/l)/s | Widerstandsänderungsrate |
+
+Mit aktivem HETA-Code und validem Profil werden zusätzlich die gelernten
+**Referenzraten** (gestrichelt) und **Toleranzbänder** eingeblendet. Da Live-Messung
+und Referenz in denselben Einheiten dargestellt werden, sind Abweichungen vom
+Normalverhalten direkt ablesbar – ohne Überlagerung der Kurven.
+
+> **p1 und p2** sind über die Chip-Schaltflächen zuschaltbar und werden als
+> Absolutdruck in bar angezeigt.
+
+> **Zykluswechsel:** Die Kurven werden automatisch gelöscht und beginnen bei 0 %,
+> sobald ein neuer Zyklus startet.
 
 ### Betriebsmodus-Badge
 
@@ -721,7 +739,9 @@ auch wenn dp nicht linear steigt.
 
 **Passt sich automatisch an, wenn:**
 - Die Beladung schneller als üblich verläuft → Restzeit wird kürzer
-- Die Beladung langsamer als üblich verläuft → Restzeit wird länger (gedämpft, max. +2 %/s)
+- Die Beladung langsamer als üblich verläuft (z. B. reduzierte Schmutzfracht) →
+  die Kurveninvertierung erkennt den niedrigen dp-Fortschritt und verlängert die
+  Restzeit automatisch – ohne Eingriff
 
 **Was tun:** Keine Aktion erforderlich. Bei dauerhaft verändertem Betrieb (anderer Filtertyp,
 veränderter Prozess): Lerndaten zurücksetzen, damit das System neu lernt.

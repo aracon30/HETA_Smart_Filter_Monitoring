@@ -372,7 +372,7 @@ Die Anzeige passt sich dem verfügbaren Wissensstand an.
 
 ### Glättungsalgorithmus
 
-Im **BASIS-Modus** (kein Referenzprofil):
+Im **BASIS-Modus** (kein Referenzprofil) – `predictor.update(dp_bar)`:
 ```python
 # Abfall sofort übernehmen; Anstieg max. +5 % pro Tick
 if raw_remaining < last_remaining:
@@ -383,7 +383,15 @@ else:
     last_remaining += 0.4 * (raw_remaining - last_remaining)
 ```
 
-Im **HETA_VALIDIERT-Modus** (Referenzkurven-Inversion):
+Im **HETA_VALIDIERT-Modus** – `predictor.update_with_reference_curve(dp_bar, ref_duration, ref_curve, elapsed)`:
+
+Statt Steigungsberechnung wird die Referenzkurve invertiert:
+1. `t_pct` = Position in der Referenzkurve, wo `dp_ref ≈ dp_bar` (lineare Interpolation)
+2. Tatsächliche Zyklusdauer schätzen: `actual_duration = elapsed / (t_pct / 100)`
+   → reduzierte Last: dp niedrig → t_pct klein → actual_duration groß → Restzeit steigt
+   → erhöhte Last: dp hoch → t_pct groß → actual_duration klein → Restzeit sinkt
+3. `remaining = actual_duration × (1 − t_pct / 100)`
+
 ```python
 # Abstieg sofort; echter Anstieg (ratio > 1.05) sofort; Rauschen sanft glätten
 ratio = remaining / max(last_remaining, 0.1)
@@ -393,10 +401,15 @@ else:
     last_remaining += 0.4 * (remaining - last_remaining)
 ```
 
+> `_dp_history` wird in beiden Methoden gepflegt, damit `get_current_slope()`
+> (für die Prozessanalyse) stets aktuelle Daten liefert.
+
 ### Seed-Mechanismus (Zyklusstart)
 
 Beim Start eines neuen Zyklus wird `predictor.seed(ref_duration)` mit der
-`reference_duration_seconds` des validen Profils aufgerufen (`_seed_predictor_from_profile`):
+`reference_duration_seconds` des validen Profils aufgerufen (`_seed_predictor_from_profile`).
+Der Seeded-Countdown (1 s/Tick) ist nur im BASIS/HETA_LERNEND-Modus aktiv – im
+HETA_VALIDIERT-Modus übernimmt sofort `update_with_reference_curve()`:
 
 ```python
 def seed(self, initial_seconds: float):
@@ -586,6 +599,49 @@ dp ≥ dp_limit
   Schwellwert und Stabilitäts-Fortschrittsbalken. Verschwindet automatisch bei Zyklusstart.
 - **Blau Overlay** (`flow-pause-overlay`): Erscheint wenn `d.cycle_paused === true`. Zeigt aktive
   Messzeit und Pausendauer.
+
+### System-Tab: Live-Chart (combinedChart)
+
+Der kombinierte Chart zeigt **Änderungsraten** (nicht Absolutwerte) über
+**Zyklusfortschritt [%]** auf der x-Achse.
+
+**Live-Datasets (ds[0–6]) – Datenquelle je Kanal:**
+
+| Index | Label | Einheit | Quelle in `/api/status` | y-Achse |
+|-------|-------|---------|-------------------------|---------|
+| 0 | p1 | bar | `p1_bar` | yPressure |
+| 1 | p2 | bar | `p2_bar` | yPressure |
+| 2 | Δp | mbar/s | `analysis_dp_rate_current × 1000` | yDpRate |
+| 3 | Q | l/min/min | `analysis_flow_rate_current × 60` | yFlow |
+| 4 | T | °C/min | `analysis_temp_rate_current × 60` | yTemp |
+| 5 | R_eff | µ(b·min/l)/s | `analysis_reff_rate_current × 1e6` | yReff |
+| 6 | Reststandzeit | min | `remaining_seconds / 60` | yTime |
+
+x-Wert: `analysis_cycle_progress_pct` (0–100 %). Bei Zyklus-Reset (`cycle_start_time` ändert
+sich) werden ds[0–6] automatisch geleert (`_knownLiveCycleStart`-Tracking).
+
+**Referenzoverlay (ds[7–18]) – numerische Ableitung der Referenzkurve:**
+
+Je konsekutives Kurvenpaar `(p0, p1)` mit `dt_s = (p1.t_pct − p0.t_pct) / 100 × ref_duration`:
+
+```
+dpRate   [mbar/s]       = (p1.dp   − p0.dp)   / dt_s × 1000
+flowRate [l/min/min]    = (p1.flow − p0.flow) / dt_s × 60
+tempRate [°C/min]       = (p1.temp − p0.temp) / dt_s × 60
+reffRate [µ(b·min/l)/s] = (p1.r_eff − p0.r_eff) / dt_s × 1e6
+```
+
+x-Wert: `(p0.t_pct + p1.t_pct) / 2`. Toleranzbänder: `±tolXxx` relativ zur Referenzrate.
+
+**Prozessanalyse-Aufruf-Reihenfolge (app.py Messzyklus):**
+
+1. `predictor.update_channels(flow, temp, r_eff)` — aktualisiert Historien
+2. `predictor.update_with_reference_curve()` oder `predictor.update()` — aktualisiert `_dp_history` und berechnet Restzeit
+3. `predictor.get_current_slope()` + `predictor.get_channel_slopes()` — lesen frische Werte
+4. `learning.get_curve_analysis(...)` — verwendet die frischen Steigungen
+
+Diese Reihenfolge stellt sicher, dass `cur_dp_slope` in der Prozessanalyse immer den
+aktuellen Messwert enthält (nicht den des vorherigen Ticks).
 
 ### Tab: Zyklen & Profil
 
