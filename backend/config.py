@@ -68,6 +68,10 @@ _DEFAULTS = {
     "mqtt_broker": "localhost",
     "mqtt_port": 1883,
     "mqtt_client_id": "heta_monitor",
+    # Modbus TCP
+    "modbus_enabled": False,
+    "modbus_host": "0.0.0.0",
+    "modbus_port": 502,
     # OLED-Display (Waveshare 2.42" SSD1309)
     "display_enabled": True,
     "display_use_spi": True,

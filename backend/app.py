@@ -308,6 +308,16 @@ if settings.get("mqtt_enabled", False):
     )
     _mqtt.connect()
 
+# Modbus TCP optional
+_modbus: "Optional[ModbusTCPServer]" = None  # type: ignore[name-defined]
+if settings.get("modbus_enabled", False):
+    from modbus_server import ModbusTCPServer
+    _modbus = ModbusTCPServer(
+        host=settings.get("modbus_host", "0.0.0.0"),
+        port=settings.get("modbus_port", 502),
+    )
+    _modbus.start()
+
 # Display optional
 _display = None
 if settings.get("display_enabled", True):
@@ -1104,6 +1114,10 @@ def _measurement_loop():
         if _mqtt and _mqtt.is_connected:
             _mqtt.publish_measurements(fs, heta_code)
 
+        # Modbus TCP
+        if _modbus and _modbus.is_running:
+            _modbus.update(fs, _state)
+
         # Display aktualisieren
         _status_display_data = {
             "heta_code":   heta_code or "---",
@@ -1679,6 +1693,50 @@ def api_diagnostics():
             "hints": [
                 "MQTT-Broker erreichbar?  ping " + settings.get("mqtt_broker", "localhost"),
                 "Broker-Port und Zugangsdaten in den Einstellungen prüfen",
+            ],
+        })
+
+    # ── Modbus TCP ───────────────────────────────────────────────────────────
+    modbus_enabled = settings.get("modbus_enabled", False)
+    if not modbus_enabled:
+        checks.append({
+            "id": "modbus",
+            "label": "Modbus TCP",
+            "status": "info",
+            "detail": "Modbus TCP deaktiviert (modbus_enabled=false in den Einstellungen)",
+            "hints": [],
+        })
+    elif _modbus is None:
+        checks.append({
+            "id": "modbus",
+            "label": "Modbus TCP",
+            "status": "error",
+            "detail": "Modbus-TCP-Server konnte nicht initialisiert werden",
+            "hints": [
+                "pip install pymodbus",
+                f"Port prüfen: {settings.get('modbus_port', 502)} (Root-Rechte nötig für Port < 1024)",
+            ],
+        })
+    elif _modbus.is_running:
+        checks.append({
+            "id": "modbus",
+            "label": "Modbus TCP",
+            "status": "ok",
+            "detail": (f"Server aktiv auf {settings.get('modbus_host','0.0.0.0')}:"
+                       f"{settings.get('modbus_port', 502)}  ·  11 Holding-Register"),
+            "hints": [],
+        })
+    else:
+        checks.append({
+            "id": "modbus",
+            "label": "Modbus TCP",
+            "status": "warning",
+            "detail": (f"Server nicht aktiv  "
+                       f"({settings.get('modbus_host','0.0.0.0')}:{settings.get('modbus_port',502)})"),
+            "hints": [
+                f"Port {settings.get('modbus_port',502)} bereits belegt?  "
+                f"sudo lsof -i :{settings.get('modbus_port',502)}",
+                "Port < 1024 benötigt Root oder authbind",
             ],
         })
 
