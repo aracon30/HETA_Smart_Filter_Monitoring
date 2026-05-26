@@ -1644,6 +1644,40 @@ footer {
 }
 .btn-close:hover { background: rgba(255,255,255,.15); }
 
+/* Settings Tabs */
+.settings-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,0.02);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.settings-tabs::-webkit-scrollbar { display: none; }
+
+.settings-tab {
+  padding: .65rem 1.1rem;
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s;
+  letter-spacing: .02em;
+}
+.settings-tab:hover { color: var(--text-main); }
+.settings-tab.active {
+  color: var(--heta-blue);
+  border-bottom-color: var(--heta-blue);
+}
+
+.settings-tab-panel { display: none; }
+.settings-tab-panel.active { display: block; }
+
 #settings-login-area,
 #settings-form-area {
   padding: 1.5rem;

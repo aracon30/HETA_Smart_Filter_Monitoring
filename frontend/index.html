@@ -357,130 +357,202 @@
         <div id="settings-login-msg" class="msg"></div>
       </div>
 
+      <!-- Tab-Leiste (nur sichtbar wenn eingeloggt) -->
+      <nav class="settings-tabs hidden" id="settings-tabs" role="tablist">
+        <button class="settings-tab active" data-tab="st-filter"         role="tab">Filter</button>
+        <button class="settings-tab"        data-tab="st-betrieb"        role="tab">Betrieb</button>
+        <button class="settings-tab"        data-tab="st-schnittstellen" role="tab">Schnittstellen</button>
+        <button class="settings-tab"        data-tab="st-system"         role="tab">System</button>
+      </nav>
+
       <div id="settings-form-area" class="hidden">
-        <div class="settings-section">
-          <h3>Filterparameter</h3>
-          <div class="form-grid">
-            <label>
-              Grenzwert Filterwechsel (Δp)
-              <div class="input-unit-row">
-                <input type="number" id="s-dp-limit" min="0.1" max="20" step="0.1" />
-                <span class="unit-label">bar</span>
-              </div>
-              <small>Filterwechsel wird ausgelöst wenn der Differenzdruck diesen Wert überschreitet.</small>
-            </label>
-            <label style="color:var(--text-muted)">
-              Druckabfall bei sauberem Filterelement
-              <div class="input-unit-row" style="opacity:0.6;pointer-events:none">
-                <span id="s-dp-clean-display" style="padding:6px 10px;font-size:0.9rem">–</span>
-                <span class="unit-label">bar</span>
-              </div>
-              <small>Wird automatisch aus den Startwerten der 3 Lernzyklen berechnet.</small>
-            </label>
-            <label>
-              Maximaler Volumenstrom (Sensorendwert 20 mA)
-              <div class="input-unit-row">
-                <input type="number" id="s-flow-max" min="1" max="5000" step="1" />
-                <span class="unit-label">l/min</span>
-              </div>
-            </label>
-            <label>
-              Messbereich Drucksensoren
-              <div class="input-unit-row">
-                <input type="number" id="s-pressure-range" min="1" max="100" step="1" />
-                <span class="unit-label">bar</span>
-              </div>
-            </label>
+        <!-- ═══════════════════════════════════════════════════
+             Tab: Filter
+        ═══════════════════════════════════════════════════ -->
+        <div id="st-filter" class="settings-tab-panel active">
+          <div class="settings-section">
+            <h3>Filterparameter</h3>
+            <div class="form-grid">
+              <label>
+                Grenzwert Filterwechsel (Δp)
+                <div class="input-unit-row">
+                  <input type="number" id="s-dp-limit" min="0.1" max="20" step="0.1" />
+                  <span class="unit-label">bar</span>
+                </div>
+                <small>Filterwechsel wird ausgelöst wenn der Differenzdruck diesen Wert überschreitet.</small>
+              </label>
+              <label style="color:var(--text-muted)">
+                Druckabfall bei sauberem Filterelement
+                <div class="input-unit-row" style="opacity:0.6;pointer-events:none">
+                  <span id="s-dp-clean-display" style="padding:6px 10px;font-size:0.9rem">–</span>
+                  <span class="unit-label">bar</span>
+                </div>
+                <small>Wird automatisch aus den Startwerten der 3 Lernzyklen berechnet.</small>
+              </label>
+              <label>
+                Maximaler Volumenstrom (Sensorendwert 20&nbsp;mA)
+                <div class="input-unit-row">
+                  <input type="number" id="s-flow-max" min="1" max="5000" step="1" />
+                  <span class="unit-label">l/min</span>
+                </div>
+              </label>
+              <label>
+                Messbereich Drucksensoren
+                <div class="input-unit-row">
+                  <input type="number" id="s-pressure-range" min="1" max="100" step="1" />
+                  <span class="unit-label">bar</span>
+                </div>
+              </label>
+            </div>
           </div>
-        </div>
 
-        <div class="settings-section">
-          <h3>Toleranzen</h3>
-          <p class="settings-hint">Maximale Abweichung vom gelernten Referenzprofil. Bis zur Grenze: OK (grün) – bis 2× Grenze: Warnung (gelb) – darüber: Alarm (rot). Betrifft Diagramm-Toleranzband und Analysetabelle.</p>
-          <div class="form-grid">
-            <label>
-              Toleranz Differenzdruck Δp
-              <small>Erlaubte Abweichung in ±%</small>
-              <div class="input-unit-row">
-                <input type="number" id="s-tol-dp" min="1" max="100" step="1" />
-                <span class="unit-label">%</span>
-              </div>
-            </label>
-            <label>
-              Toleranz Widerstandsfaktor
-              <small>Erlaubte Abweichung in ±% (auch für Startanomalien)</small>
-              <div class="input-unit-row">
-                <input type="number" id="s-tol-reff" min="1" max="100" step="1" />
-                <span class="unit-label">%</span>
-              </div>
-            </label>
-            <label>
-              Toleranz Volumenstrom Q
-              <small>Erlaubte Abweichung in ±%</small>
-              <div class="input-unit-row">
-                <input type="number" id="s-tol-flow" min="1" max="100" step="1" />
-                <span class="unit-label">%</span>
-              </div>
-            </label>
-            <label>
-              Toleranz Temperatur
-              <small>Erlaubte Abweichung in ±°C (absolut)</small>
-              <div class="input-unit-row">
-                <input type="number" id="s-tol-temp" min="1" max="50" step="1" />
-                <span class="unit-label">°C</span>
-              </div>
-            </label>
+          <div class="settings-section">
+            <h3>Toleranzen</h3>
+            <p class="settings-hint">Maximale Abweichung vom gelernten Referenzprofil. Bis zur Grenze: OK (grün) – bis 2× Grenze: Warnung (gelb) – darüber: Alarm (rot). Betrifft Diagramm-Toleranzband und Analysetabelle.</p>
+            <div class="form-grid">
+              <label>
+                Toleranz Differenzdruck Δp
+                <small>Erlaubte Abweichung in ±%</small>
+                <div class="input-unit-row">
+                  <input type="number" id="s-tol-dp" min="1" max="100" step="1" />
+                  <span class="unit-label">%</span>
+                </div>
+              </label>
+              <label>
+                Toleranz Widerstandsfaktor
+                <small>Erlaubte Abweichung in ±% (auch für Startanomalien)</small>
+                <div class="input-unit-row">
+                  <input type="number" id="s-tol-reff" min="1" max="100" step="1" />
+                  <span class="unit-label">%</span>
+                </div>
+              </label>
+              <label>
+                Toleranz Volumenstrom Q
+                <small>Erlaubte Abweichung in ±%</small>
+                <div class="input-unit-row">
+                  <input type="number" id="s-tol-flow" min="1" max="100" step="1" />
+                  <span class="unit-label">%</span>
+                </div>
+              </label>
+              <label>
+                Toleranz Temperatur
+                <small>Erlaubte Abweichung in ±°C (absolut)</small>
+                <div class="input-unit-row">
+                  <input type="number" id="s-tol-temp" min="1" max="50" step="1" />
+                  <span class="unit-label">°C</span>
+                </div>
+              </label>
+            </div>
           </div>
-        </div>
 
-        <div class="settings-section">
-          <h3>Temperatursensor</h3>
-          <div class="form-grid">
-            <label>
-              Untere Messbereichsgrenze Temperatur
-              <div class="input-unit-row">
-                <input type="number" id="s-temp-min" min="-200" max="0" step="1" />
-                <span class="unit-label">°C</span>
-              </div>
-            </label>
-            <label>
-              Obere Messbereichsgrenze Temperatur
-              <div class="input-unit-row">
-                <input type="number" id="s-temp-max" min="50" max="500" step="1" />
-                <span class="unit-label">°C</span>
-              </div>
-            </label>
+          <div class="settings-section">
+            <h3>Temperatursensor</h3>
+            <div class="form-grid">
+              <label>
+                Untere Messbereichsgrenze
+                <div class="input-unit-row">
+                  <input type="number" id="s-temp-min" min="-200" max="0" step="1" />
+                  <span class="unit-label">°C</span>
+                </div>
+              </label>
+              <label>
+                Obere Messbereichsgrenze
+                <div class="input-unit-row">
+                  <input type="number" id="s-temp-max" min="50" max="500" step="1" />
+                  <span class="unit-label">°C</span>
+                </div>
+              </label>
+            </div>
           </div>
-        </div>
 
-        <div class="settings-section">
-          <h3>Betrieb</h3>
-          <div class="form-grid">
-            <label>
-              Messintervall
-              <div class="input-unit-row">
-                <input type="number" id="s-interval" min="1" max="60" step="1" />
-                <span class="unit-label">s</span>
-              </div>
-              <small>Zeitabstand zwischen zwei Messwerten.</small>
-            </label>
+          <div class="settings-warning hidden" id="settings-reset-warning">
+            <strong>&#9888; Achtung:</strong> Sie haben lernrelevante Parameter geändert. Das System wird die
+            <strong>3 Lernphasen neu durchlaufen</strong>. Alle bisherigen Lernzyklen und Profile werden gelöscht.
+          </div>
+        </div><!-- /st-filter -->
+
+        <!-- ═══════════════════════════════════════════════════
+             Tab: Betrieb
+        ═══════════════════════════════════════════════════ -->
+        <div id="st-betrieb" class="settings-tab-panel">
+          <div class="settings-section">
+            <h3>Allgemein</h3>
+            <div class="form-grid">
+              <label>
+                Messintervall
+                <div class="input-unit-row">
+                  <input type="number" id="s-interval" min="1" max="60" step="1" />
+                  <span class="unit-label">s</span>
+                </div>
+                <small>Zeitabstand zwischen zwei Messwerten.</small>
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="s-simulation-mode" onchange="onSimModeToggle(this)" />
+                Simulationsmodus
+              </label>
+            </div>
+          </div>
+
+          <div id="sim-mode-warning" class="settings-warning sim-mode-warning hidden">
+            <strong>&#9888; Achtung – Simulationsmodus:</strong>
+            Im Simulationsmodus werden <strong>keine echten Sensordaten</strong> erfasst –
+            alle Messwerte sind künstlich erzeugt. Dieser Modus ist ausschließlich für
+            Tests und Entwicklung vorgesehen.<br>
+            <strong>Für den Produktionsbetrieb muss der Hardwaremodus aktiv sein.</strong>
+          </div>
+
+          <div class="settings-section">
+            <h3>Betriebsweise &amp; Durchflusserkennung</h3>
+            <div class="form-grid">
+              <label>
+                Betriebsweise
+                <select id="s-operation-mode">
+                  <option value="continuous">Dauerbetrieb (kontinuierlich)</option>
+                  <option value="batch">Intervallbetrieb (Batch)</option>
+                </select>
+                <small>Steuert Pausentoleranz und Ereignis-Beschriftung im Zyklus.</small>
+              </label>
+              <label>
+                Durchflussschwellwert (Überschreibung)
+                <div class="input-unit-row">
+                  <input type="number" id="s-flow-threshold" min="0" max="5000" step="0.1" placeholder="Auto" />
+                  <span class="unit-label">l/min</span>
+                </div>
+                <small>Leer lassen für automatische Berechnung aus Betriebsdaten.</small>
+              </label>
+              <label>
+                Stabilitätsfenster (Überschreibung)
+                <div class="input-unit-row">
+                  <input type="number" id="s-flow-stability" min="1" max="300" step="1" placeholder="Auto (10 s)" />
+                  <span class="unit-label">s</span>
+                </div>
+                <small>Sekunden stabilen Durchflusses bevor Zyklus startet. Leer = auto.</small>
+              </label>
+              <label>
+                Pausentoleranz (Überschreibung)
+                <div class="input-unit-row">
+                  <input type="number" id="s-flow-pause-tol" min="10" max="86400" step="10" placeholder="Auto" />
+                  <span class="unit-label">s</span>
+                </div>
+                <small>Max. Pause bevor Zyklus abgebrochen wird. Leer = auto (30 s / 60 s).</small>
+              </label>
+            </div>
+          </div>
+        </div><!-- /st-betrieb -->
+
+        <!-- ═══════════════════════════════════════════════════
+             Tab: Schnittstellen
+        ═══════════════════════════════════════════════════ -->
+        <div id="st-schnittstellen" class="settings-tab-panel">
+          <div class="settings-section">
+            <h3>MQTT</h3>
+            <p class="settings-hint">Optionale Anbindung an einen MQTT-Broker (z.&nbsp;B. Mosquitto, Node-RED, Home&nbsp;Assistant). Messwerte werden nach jedem Zyklus als JSON veröffentlicht.</p>
             <label class="checkbox-label">
-              <input type="checkbox" id="s-simulation-mode" onchange="onSimModeToggle(this)" />
-              Simulationsmodus
-            </label>
-          </div>
-        </div>
-
-        <div class="settings-section">
-          <h3>MQTT</h3>
-          <p class="settings-hint">Optionale Anbindung an einen MQTT-Broker (z.&nbsp;B. Mosquitto, Node-RED, Home&nbsp;Assistant). Messwerte werden nach jedem Zyklus als JSON veröffentlicht.</p>
-          <div class="form-grid">
-            <label class="checkbox-label" style="grid-column:1/-1">
               <input type="checkbox" id="s-mqtt-enabled" onchange="onMqttToggle(this)" />
               MQTT aktivieren
             </label>
-            <div id="s-mqtt-fields">
-              <div class="form-grid" style="margin-top:.4rem">
+            <div id="s-mqtt-fields" class="hidden">
+              <div class="form-grid" style="margin-top:.75rem">
                 <label>
                   Broker-Adresse
                   <input type="text" id="s-mqtt-broker" placeholder="localhost" />
@@ -496,18 +568,16 @@
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="settings-section">
-          <h3>Modbus TCP</h3>
-          <p class="settings-hint">Macht den Raspberry Pi zu einem Modbus-TCP-Slave. SPS und SCADA-Systeme können die 11&nbsp;Holding-Register direkt auslesen (FC&nbsp;3, Slave-ID&nbsp;1).</p>
-          <div class="form-grid">
-            <label class="checkbox-label" style="grid-column:1/-1">
+          <div class="settings-section">
+            <h3>Modbus TCP</h3>
+            <p class="settings-hint">Macht den Raspberry Pi zu einem Modbus-TCP-Slave. SPS und SCADA-Systeme können die 11&nbsp;Holding-Register direkt auslesen (FC&nbsp;3, Slave-ID&nbsp;1).</p>
+            <label class="checkbox-label">
               <input type="checkbox" id="s-modbus-enabled" onchange="onModbusToggle(this)" />
               Modbus TCP aktivieren
             </label>
-            <div id="s-modbus-fields">
-              <div class="form-grid" style="margin-top:.4rem">
+            <div id="s-modbus-fields" class="hidden">
+              <div class="form-grid" style="margin-top:.75rem">
                 <label>
                   Bind-Adresse
                   <input type="text" id="s-modbus-host" placeholder="0.0.0.0" />
@@ -521,120 +591,74 @@
               </div>
             </div>
           </div>
-        </div>
+        </div><!-- /st-schnittstellen -->
 
-        <div class="settings-section">
-          <h3>Betriebsweise &amp; Durchflusserkennung</h3>
-          <div class="form-grid">
-            <label>
-              Betriebsweise
-              <select id="s-operation-mode">
-                <option value="continuous">Dauerbetrieb (kontinuierlich)</option>
-                <option value="batch">Intervallbetrieb (Batch)</option>
-              </select>
-              <small>Steuert Pausentoleranz und Ereignis-Beschriftung im Zyklus.</small>
-            </label>
-            <label>
-              Durchflussschwellwert (Überschreibung)
-              <div class="input-unit-row">
-                <input type="number" id="s-flow-threshold" min="0" max="5000" step="0.1" placeholder="Auto" />
-                <span class="unit-label">l/min</span>
-              </div>
-              <small>Leer lassen für automatische Berechnung aus Betriebsdaten.</small>
-            </label>
-            <label>
-              Stabilitätsfenster (Überschreibung)
-              <div class="input-unit-row">
-                <input type="number" id="s-flow-stability" min="1" max="300" step="1" placeholder="Auto (10 s)" />
-                <span class="unit-label">s</span>
-              </div>
-              <small>Sekunden stabilen Durchflusses bevor Zyklus startet. Leer = auto.</small>
-            </label>
-            <label>
-              Pausentoleranz (Überschreibung)
-              <div class="input-unit-row">
-                <input type="number" id="s-flow-pause-tol" min="10" max="86400" step="10" placeholder="Auto" />
-                <span class="unit-label">s</span>
-              </div>
-              <small>Max. Pause bevor Zyklus abgebrochen wird. Leer = auto (30 s / 60 s).</small>
-            </label>
-          </div>
-        </div>
-
-        <div id="sim-mode-warning" class="settings-warning sim-mode-warning hidden">
-          <strong>&#9888; Achtung – Simulationsmodus:</strong>
-          Im Simulationsmodus werden <strong>keine echten Sensordaten</strong> erfasst –
-          alle Messwerte sind künstlich erzeugt. Dieser Modus ist ausschließlich für
-          Tests und Entwicklung vorgesehen.<br>
-          <strong>Für den Produktionsbetrieb muss der Hardwaremodus aktiv sein.</strong>
-        </div>
-
-        <div class="settings-section">
-          <h3>Passwort ändern</h3>
-          <div class="form-grid">
-            <label>
-              Aktuelles Passwort
-              <input type="password" id="s-old-pw" placeholder="Aktuelles Passwort" autocomplete="current-password" />
-            </label>
-            <label>
-              Neues Passwort
-              <input type="password" id="s-new-pw" placeholder="Neues Passwort (leer = nicht ändern)" autocomplete="new-password" />
-            </label>
-          </div>
-        </div>
-
-        <div class="settings-warning hidden" id="settings-reset-warning">
-          <strong>&#9888; Achtung:</strong> Sie haben lernrelevante Parameter geändert. Das System wird die
-          <strong>3 Lernphasen neu durchlaufen</strong>. Alle bisherigen Lernzyklen und Profile werden gelöscht.
-        </div>
-
-        <div class="settings-section" id="factory-reset-section">
-          <h3>Werksreset</h3>
-          <p class="settings-hint">Setzt das System vollständig zurück: alle Messdaten, Lernzyklen, Profile und die Konfiguration werden unwiderruflich gelöscht. Das System startet danach im Ersteinrichtungs-Modus.</p>
-          <button class="btn btn-danger" onclick="showFactoryResetConfirm()">
-            &#9888; Werksreset durchführen
-          </button>
-          <div id="factory-reset-confirm" class="hidden" style="margin-top:1rem;padding:1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px">
-            <p style="font-weight:700;color:var(--alert-red);margin:0 0 .6rem">Alle Daten werden unwiderruflich gelöscht!</p>
-            <p style="font-size:.86rem;color:var(--text-muted);margin:0 0 .75rem">Tippen Sie <strong style="color:var(--text-main)">RESET</strong> ein und bestätigen Sie mit Ihrem Passwort.</p>
-            <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:.6rem">
+        <!-- ═══════════════════════════════════════════════════
+             Tab: System
+        ═══════════════════════════════════════════════════ -->
+        <div id="st-system" class="settings-tab-panel">
+          <div class="settings-section">
+            <h3>Passwort ändern</h3>
+            <div class="form-grid">
               <label>
-                Bestätigung
-                <input type="text" id="factory-reset-confirm-text" placeholder='Tippen Sie "RESET"' autocomplete="off" />
+                Aktuelles Passwort
+                <input type="password" id="s-old-pw" placeholder="Aktuelles Passwort" autocomplete="current-password" />
               </label>
               <label>
-                Passwort
-                <input type="password" id="factory-reset-pw" placeholder="Aktuelles Passwort" autocomplete="current-password" />
+                Neues Passwort
+                <input type="password" id="s-new-pw" placeholder="Neues Passwort (leer = nicht ändern)" autocomplete="new-password" />
               </label>
             </div>
-            <div style="display:flex;gap:.6rem;margin-top:.75rem;align-items:center">
-              <button class="btn btn-danger" onclick="confirmFactoryReset()">&#9888; Endgültig zurücksetzen</button>
-              <button class="btn btn-ghost" onclick="hideFactoryResetConfirm()">Abbrechen</button>
-              <span id="factory-reset-msg" class="msg" style="margin:0"></span>
+          </div>
+
+          <div class="settings-section diag-section">
+            <h3>Hardware-Diagnose</h3>
+            <p class="settings-hint">Prüft alle angeschlossenen Komponenten und zeigt Fehlerursachen mit Lösungshinweisen.</p>
+            <button class="btn btn-secondary" id="btn-diag" onclick="runDiagnostics()">
+              &#128270; Selbstcheck starten
+            </button>
+            <div id="diag-results" class="diag-results hidden"></div>
+          </div>
+
+          <div class="settings-section update-section">
+            <h3>Software-Update</h3>
+            <p class="settings-hint">
+              Holt den aktuellen Stand von GitHub (<code>git pull</code>) und startet den Dienst
+              automatisch neu, wenn Änderungen vorhanden sind.
+            </p>
+            <button class="btn btn-secondary" id="btn-git-update" onclick="updateFromGit()">
+              &#8595; Update von GitHub holen
+            </button>
+            <pre id="update-output" class="update-output hidden"></pre>
+          </div>
+
+          <div class="settings-section" id="factory-reset-section">
+            <h3>Werksreset</h3>
+            <p class="settings-hint">Setzt das System vollständig zurück: alle Messdaten, Lernzyklen, Profile und die Konfiguration werden unwiderruflich gelöscht. Das System startet danach im Ersteinrichtungs-Modus.</p>
+            <button class="btn btn-danger" onclick="showFactoryResetConfirm()">
+              &#9888; Werksreset durchführen
+            </button>
+            <div id="factory-reset-confirm" class="hidden" style="margin-top:1rem;padding:1rem;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);border-radius:8px">
+              <p style="font-weight:700;color:var(--alert-red);margin:0 0 .6rem">Alle Daten werden unwiderruflich gelöscht!</p>
+              <p style="font-size:.86rem;color:var(--text-muted);margin:0 0 .75rem">Tippen Sie <strong style="color:var(--text-main)">RESET</strong> ein und bestätigen Sie mit Ihrem Passwort.</p>
+              <div class="form-grid" style="grid-template-columns:1fr 1fr;gap:.6rem">
+                <label>
+                  Bestätigung
+                  <input type="text" id="factory-reset-confirm-text" placeholder='Tippen Sie "RESET"' autocomplete="off" />
+                </label>
+                <label>
+                  Passwort
+                  <input type="password" id="factory-reset-pw" placeholder="Aktuelles Passwort" autocomplete="current-password" />
+                </label>
+              </div>
+              <div style="display:flex;gap:.6rem;margin-top:.75rem;align-items:center">
+                <button class="btn btn-danger" onclick="confirmFactoryReset()">&#9888; Endgültig zurücksetzen</button>
+                <button class="btn btn-ghost" onclick="hideFactoryResetConfirm()">Abbrechen</button>
+                <span id="factory-reset-msg" class="msg" style="margin:0"></span>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div class="settings-section diag-section">
-          <h3>Hardware-Diagnose</h3>
-          <p class="settings-hint">Prüft alle angeschlossenen Komponenten und zeigt Fehlerursachen mit Lösungshinweisen.</p>
-          <button class="btn btn-secondary" id="btn-diag" onclick="runDiagnostics()">
-            &#128270; Selbstcheck starten
-          </button>
-          <div id="diag-results" class="diag-results hidden"></div>
-        </div>
-
-        <div class="settings-section update-section">
-          <h3>Software-Update</h3>
-          <p class="settings-hint">
-            Holt den aktuellen Stand von GitHub (<code>git pull</code>) und startet den Dienst
-            automatisch neu, wenn Änderungen vorhanden sind.
-          </p>
-          <button class="btn btn-secondary" id="btn-git-update" onclick="updateFromGit()">
-            &#8595; Update von GitHub holen
-          </button>
-          <pre id="update-output" class="update-output hidden"></pre>
-        </div>
+        </div><!-- /st-system -->
 
         <div class="modal-footer">
           <button class="btn btn-ghost" onclick="settingsLogout()">Abmelden</button>

@@ -337,14 +337,33 @@ async function confirmFactoryReset() {
 function showSettingsLogin() {
   document.getElementById("settings-login-area").classList.remove("hidden");
   document.getElementById("settings-form-area").classList.add("hidden");
+  document.getElementById("settings-tabs")?.classList.add("hidden");
   setTimeout(() => document.getElementById("settings-pw-input")?.focus(), 100);
 }
 
 function showSettingsForm() {
   document.getElementById("settings-login-area").classList.add("hidden");
+  document.getElementById("settings-tabs")?.classList.remove("hidden");
   document.getElementById("settings-form-area").classList.remove("hidden");
   loadSettingsIntoForm();
   watchSettingsChanges();
+  initSettingsTabs();
+}
+
+function initSettingsTabs() {
+  const nav = document.getElementById("settings-tabs");
+  if (!nav || nav.dataset.tabsInit) return;
+  nav.dataset.tabsInit = "1";
+  nav.addEventListener("click", e => {
+    const btn = e.target.closest(".settings-tab");
+    if (!btn) return;
+    nav.querySelectorAll(".settings-tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    const target = btn.dataset.tab;
+    document.querySelectorAll(".settings-tab-panel").forEach(p => {
+      p.classList.toggle("active", p.id === target);
+    });
+  });
 }
 
 async function settingsLogin() {
