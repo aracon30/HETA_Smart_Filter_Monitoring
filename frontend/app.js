@@ -407,6 +407,25 @@ async function loadSettingsIntoForm() {
     const tolEl = document.getElementById("s-flow-pause-tol");
     if (tolEl) tolEl.value = s.flow_pause_tolerance_seconds != null ? s.flow_pause_tolerance_seconds : "";
 
+    // MQTT
+    const mqttCb = document.getElementById("s-mqtt-enabled");
+    if (mqttCb) {
+      mqttCb.checked = !!s.mqtt_enabled;
+      document.getElementById("s-mqtt-fields")?.classList.toggle("hidden", !s.mqtt_enabled);
+    }
+    setInputVal("s-mqtt-broker",    s.mqtt_broker    ?? "localhost");
+    setInputVal("s-mqtt-port",      s.mqtt_port      ?? 1883);
+    setInputVal("s-mqtt-client-id", s.mqtt_client_id ?? "heta_monitor");
+
+    // Modbus TCP
+    const modbusCb = document.getElementById("s-modbus-enabled");
+    if (modbusCb) {
+      modbusCb.checked = !!s.modbus_enabled;
+      document.getElementById("s-modbus-fields")?.classList.toggle("hidden", !s.modbus_enabled);
+    }
+    setInputVal("s-modbus-host", s.modbus_host ?? "0.0.0.0");
+    setInputVal("s-modbus-port", s.modbus_port ?? 502);
+
     // dp_clean aus Profil laden (wird aus Lernzyklen berechnet)
     const hetaCode = window._lastStatus?.heta_code;
     if (hetaCode) {
@@ -469,6 +488,15 @@ async function saveSettings() {
     tolerance_reff_pct: parseFloat(document.getElementById("s-tol-reff").value) / 100,
     tolerance_flow_pct: parseFloat(document.getElementById("s-tol-flow").value) / 100,
     tolerance_temp_c:   parseFloat(document.getElementById("s-tol-temp").value),
+    // MQTT
+    mqtt_enabled:    document.getElementById("s-mqtt-enabled")?.checked ?? false,
+    mqtt_broker:     document.getElementById("s-mqtt-broker")?.value.trim()    || "localhost",
+    mqtt_port:       parseInt(document.getElementById("s-mqtt-port")?.value, 10) || 1883,
+    mqtt_client_id:  document.getElementById("s-mqtt-client-id")?.value.trim() || "heta_monitor",
+    // Modbus TCP
+    modbus_enabled:  document.getElementById("s-modbus-enabled")?.checked ?? false,
+    modbus_host:     document.getElementById("s-modbus-host")?.value.trim()    || "0.0.0.0",
+    modbus_port:     parseInt(document.getElementById("s-modbus-port")?.value, 10) || 502,
   };
   if (newPw) { payload.new_password = newPw; payload.old_password = oldPw; }
 
@@ -2470,6 +2498,14 @@ function onSimModeToggle(checkbox) {
   const warnEl = document.getElementById("sim-mode-warning");
   if (!warnEl) return;
   warnEl.classList.toggle("hidden", !checkbox.checked);
+}
+
+function onMqttToggle(checkbox) {
+  document.getElementById("s-mqtt-fields")?.classList.toggle("hidden", !checkbox.checked);
+}
+
+function onModbusToggle(checkbox) {
+  document.getElementById("s-modbus-fields")?.classList.toggle("hidden", !checkbox.checked);
 }
 
 async function apiFetch(path, method = "GET", body = null) {

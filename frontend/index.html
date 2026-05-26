@@ -472,6 +472,58 @@
         </div>
 
         <div class="settings-section">
+          <h3>MQTT</h3>
+          <p class="settings-hint">Optionale Anbindung an einen MQTT-Broker (z.&nbsp;B. Mosquitto, Node-RED, Home&nbsp;Assistant). Messwerte werden nach jedem Zyklus als JSON veröffentlicht.</p>
+          <div class="form-grid">
+            <label class="checkbox-label" style="grid-column:1/-1">
+              <input type="checkbox" id="s-mqtt-enabled" onchange="onMqttToggle(this)" />
+              MQTT aktivieren
+            </label>
+            <div id="s-mqtt-fields">
+              <div class="form-grid" style="margin-top:.4rem">
+                <label>
+                  Broker-Adresse
+                  <input type="text" id="s-mqtt-broker" placeholder="localhost" />
+                </label>
+                <label>
+                  Port
+                  <input type="number" id="s-mqtt-port" min="1" max="65535" step="1" placeholder="1883" />
+                </label>
+                <label>
+                  Client-ID
+                  <input type="text" id="s-mqtt-client-id" placeholder="heta_monitor" />
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Modbus TCP</h3>
+          <p class="settings-hint">Macht den Raspberry Pi zu einem Modbus-TCP-Slave. SPS und SCADA-Systeme können die 11&nbsp;Holding-Register direkt auslesen (FC&nbsp;3, Slave-ID&nbsp;1).</p>
+          <div class="form-grid">
+            <label class="checkbox-label" style="grid-column:1/-1">
+              <input type="checkbox" id="s-modbus-enabled" onchange="onModbusToggle(this)" />
+              Modbus TCP aktivieren
+            </label>
+            <div id="s-modbus-fields">
+              <div class="form-grid" style="margin-top:.4rem">
+                <label>
+                  Bind-Adresse
+                  <input type="text" id="s-modbus-host" placeholder="0.0.0.0" />
+                  <small>0.0.0.0 = alle Netzwerkinterfaces</small>
+                </label>
+                <label>
+                  Port
+                  <input type="number" id="s-modbus-port" min="1" max="65535" step="1" placeholder="502" />
+                  <small>Port 502 benötigt Root-Rechte. Empfehlung: 5020</small>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
           <h3>Betriebsweise &amp; Durchflusserkennung</h3>
           <div class="form-grid">
             <label>

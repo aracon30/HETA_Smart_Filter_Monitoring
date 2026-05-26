@@ -2082,6 +2082,43 @@ def api_settings_post():
     with _state_lock:
         _state["simulation_mode"] = settings["simulation_mode"]
 
+    # MQTT neu starten wenn sich relevante Parameter geändert haben
+    _mqtt_keys = {"mqtt_enabled", "mqtt_broker", "mqtt_port", "mqtt_client_id"}
+    if _mqtt_keys & set(data.keys()):
+        global _mqtt
+        if _mqtt:
+            try:
+                _mqtt.disconnect()
+            except Exception:
+                pass
+            _mqtt = None
+        if settings.get("mqtt_enabled", False):
+            from mqtt_client import MQTTClient
+            _mqtt = MQTTClient(
+                broker=settings.get("mqtt_broker", "localhost"),
+                port=settings.get("mqtt_port", 1883),
+                client_id=settings.get("mqtt_client_id", "heta_monitor"),
+            )
+            _mqtt.connect()
+
+    # Modbus TCP neu starten wenn sich relevante Parameter geändert haben
+    _modbus_keys = {"modbus_enabled", "modbus_host", "modbus_port"}
+    if _modbus_keys & set(data.keys()):
+        global _modbus
+        if _modbus:
+            try:
+                _modbus.stop()
+            except Exception:
+                pass
+            _modbus = None
+        if settings.get("modbus_enabled", False):
+            from modbus_server import ModbusTCPServer
+            _modbus = ModbusTCPServer(
+                host=settings.get("modbus_host", "0.0.0.0"),
+                port=settings.get("modbus_port", 502),
+            )
+            _modbus.start()
+
     # Lerndaten zurücksetzen wenn nötig
     if learning_reset_needed:
         global _smoothed_health_pct
