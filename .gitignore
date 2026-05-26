@@ -3,12 +3,15 @@ __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
-.venv/
-venv/
-env/
+*.egg
 *.egg-info/
 dist/
 build/
+.venv/
+venv/
+env/
+.env
+*.env
 
 # Laufzeit-Daten (lokal erzeugt, nicht versionieren)
 data/
