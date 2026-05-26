@@ -418,7 +418,37 @@ Prozentuale Abweichung, ab der eine Warnung ausgelöst wird (Standard: 25 %).
 Messintervall, Sitzungs-Timeout, Log-Level.
 
 #### MQTT (optional)
-Verbindung zu einem MQTT-Broker für die Anbindung an übergeordnete Systeme.
+Verbindung zu einem MQTT-Broker für die Anbindung an Cloud-Systeme, Node-RED oder Home Assistant.
+Aktivierung: `mqtt_enabled = true` in `config/settings.local.json`.
+
+#### Modbus TCP (optional)
+Macht den Raspberry Pi zu einem **Modbus-TCP-Slave**, den jede SPS oder jedes SCADA-System
+direkt auslesen kann – ohne Broker oder Middleware.
+
+| Register | Wert | Einheit |
+|----------|------|---------|
+| 0 | Druck p1 | mbar (×1000) |
+| 1 | Druck p2 | mbar (×1000) |
+| 2 | Differenzdruck dp | 0,1 mbar (×10000) |
+| 3 | Durchfluss | 0,1 l/min (×10) |
+| 4 | Temperatur | 0,1 °C + Offset 500 |
+| 5 | Widerstandsfaktor R_eff | ×1000 |
+| 6 | Filtergesundheit | 0,1 % (×10) |
+| 7 | Reststandzeit | Sekunden |
+| 8 | Alarm-Flag | 0=OK / 1=Wechsel / 2=Fehler |
+| 9 | Zyklenanzahl | – |
+| 10 | Statuskode | 0=INIT / 1=Laufend / 2=Wechsel / 3=Fehler |
+
+Aktivierung in `config/settings.local.json`:
+```json
+{
+  "modbus_enabled": true,
+  "modbus_host": "0.0.0.0",
+  "modbus_port": 5020
+}
+```
+> Port 502 (Modbus-Standard) benötigt Root-Rechte auf Linux.
+> Für den Testbetrieb empfiehlt sich Port **5020** (kein Root nötig).
 
 #### Software-Update
 Klicken Sie auf **„Update von GitHub holen"**, um die neueste Version zu installieren.
@@ -942,8 +972,9 @@ wurde zurückgesetzt. Schließen Sie den Einrichtungsassistenten vollständig ab
 **Wie sichere ich meine Messdaten?**
 
 Unter Einstellungen (⚙) finden Sie die Funktion **„CSV-Export"** – damit laden Sie
-alle Messdaten als Datei herunter. Alternativ können Sie Daten via MQTT in ein
-übergeordnetes System übertragen (Einstellungen → MQTT).
+alle Messdaten als Datei herunter. Alternativ können Sie Daten via **MQTT** in ein
+Cloud-System oder via **Modbus TCP** direkt an eine SPS übertragen
+(Einstellungen → MQTT bzw. `modbus_enabled` in der Konfiguration).
 
 **Was bedeutet „Simulationsmodus" auf der Messe?**
 

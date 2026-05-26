@@ -17,7 +17,8 @@ HETA_Smart_Filter_Monitoring/
 │   ├── database.py         SQLite-Datenbankmodul + Lerndaten-Reset
 │   ├── display.py          OLED-Display-Steuerung (luma.oled + PIL-Layout)
 │   ├── navigation.py       Drehencoder-Navigation (direktes GPIO via gpiozero)
-│   └── mqtt_client.py      Optionaler MQTT-Client (paho-mqtt)
+│   ├── mqtt_client.py      Optionaler MQTT-Client (paho-mqtt)
+│   └── modbus_server.py    Optionaler Modbus-TCP-Slave (pymodbus, 11 Holding-Register)
 ├── frontend/
 │   ├── index.html          Single-Page Dashboard + Onboarding + Einstellungs-Modal
 │   ├── style.css           Industrielles Stylesheet (HETA-Blau)
@@ -913,6 +914,33 @@ read_sensors() → Kanal nicht lesbar
 | `mqtt_broker` | `"localhost"` | Hostname oder IP des MQTT-Brokers |
 | `mqtt_port` | `1883` | Port des MQTT-Brokers |
 | `mqtt_client_id` | `"heta_monitor"` | MQTT Client-ID |
+
+**Modbus TCP** (optional)
+
+| Parameter | Standard | Beschreibung |
+|-----------|---------|-------------|
+| `modbus_enabled` | `false` | Modbus-TCP-Server aktivieren |
+| `modbus_host` | `"0.0.0.0"` | Bind-Adresse (alle Interfaces) |
+| `modbus_port` | `502` | TCP-Port (Standard Modbus; < 1024 → Root / authbind) |
+
+Registermap (Holding Registers, Function Code 3, Slave-ID 1):
+
+| Adresse | Inhalt | Skalierung | Wertebereich |
+|---------|--------|-----------|-------------|
+| 0 | p1_bar | ×1000 | mbar |
+| 1 | p2_bar | ×1000 | mbar |
+| 2 | dp_bar | ×10000 | 0,1 mbar |
+| 3 | flow_l_min | ×10 | 0,1 l/min |
+| 4 | temperature_c | ×10 + 500 | 0,1 °C (Offset für neg. Werte) |
+| 5 | r_eff | ×1000 | µ(bar·min/l) |
+| 6 | filter_health_percent | ×10 | 0,1 % |
+| 7 | remaining_seconds | ×1 | s (0xFFFF = unbekannt) |
+| 8 | alarm_flag | – | 0=OK / 1=WECHSEL / 2=FEHLER |
+| 9 | cycle_count | ×1 | – |
+| 10 | status_code | – | 0=INIT / 1=LAUFEND / 2=WECHSEL / 3=FEHLER |
+
+Der Server wird als Daemon-Thread gestartet und aktualisiert die Register nach jedem Messzyklus.
+Implementierung: `backend/modbus_server.py`, Bibliothek: `pymodbus >= 3.6`.
 
 **OLED-Display** (Waveshare 2.42" SSD1309)
 

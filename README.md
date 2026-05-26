@@ -5,7 +5,8 @@ via AnoPi Shield (SPI-ADC), berechnet den Filterzustand in Echtzeit und stellt b
 
 - **Weboberfläche** (lokal, kein Internet erforderlich) mit Live-Ratendiagrammen (Δp mbar/s, ΔQ, ΔT, ΔR_eff über Zyklusfortschritt) und Reststandzeit
 - **OLED-Display** (Waveshare 2.42") mit Encoder-Navigation für den direkten Einsatz am Gerät
-- **MQTT-Interface** für die optionale Anbindung an übergeordnete Leitsysteme
+- **MQTT-Interface** für die optionale Anbindung an Cloud-Systeme und IoT-Broker
+- **Modbus-TCP-Server** für die direkte Anbindung an SPS / SCADA-Leitsysteme (11 Holding-Register)
 - **Lernprofil** – nach 3 Filterzyklen sekundengenaue Reststandzeit-Prognose
 
 **Betriebsmodi:**
@@ -111,6 +112,7 @@ luma.oled, Pillow           – OLED-Display
 gpiozero (≥ 2.0)            – Encoder-GPIO
 lgpio                       – GPIO-Backend für Pi 5 (via apt, nicht pip)
 paho-mqtt                   – Optionaler MQTT-Client
+pymodbus (≥ 3.6)            – Optionaler Modbus-TCP-Server
 spidev                      – SPI-ADC (AnoPi Shield)
 ```
 
@@ -221,6 +223,9 @@ gespeichert. `git pull` überschreibt diese Datei nie.
 | `required_cycles_for_profile` | `3` | | Zyklen bis valides Profil |
 | `webserver_port` | `8080` | | HTTP-Port der Weboberfläche |
 | `mqtt_enabled` | `false` | | MQTT-Client aktivieren |
+| `modbus_enabled` | `false` | | Modbus-TCP-Server aktivieren |
+| `modbus_host` | `"0.0.0.0"` | | Bind-Adresse des Modbus-Servers |
+| `modbus_port` | `502` | | TCP-Port (Port < 1024 benötigt Root / authbind) |
 | `display_enabled` | `true` | | OLED-Display aktivieren |
 | `navigation_enabled` | `true` | | Encoder-Navigation aktivieren |
 
@@ -268,7 +273,8 @@ HETA_Smart_Filter_Monitoring/
 │   ├── database.py         SQLite-Datenbankmodul
 │   ├── display.py          OLED-Steuerung (luma.oled, PIL, 6 Bildschirme)
 │   ├── navigation.py       ANO-Encoder-Navigation (gpiozero)
-│   └── mqtt_client.py      Optionaler MQTT-Client (paho-mqtt)
+│   ├── mqtt_client.py      Optionaler MQTT-Client (paho-mqtt)
+│   └── modbus_server.py    Optionaler Modbus-TCP-Server (pymodbus)
 ├── frontend/
 │   ├── index.html          Dashboard, Onboarding, Einstellungs-Modal
 │   ├── style.css           HETA-Industriedesign (dunkles Theme)
