@@ -4,7 +4,7 @@
 #
 # Führt ein lokales Software-Update durch:
 #   1. Einstellungen nach settings.local.json migrieren (einmalig)
-#   2. git pull
+#   2. git pull – bei keinen Änderungen wird abgebrochen
 #   3. Python-Pakete aktualisieren
 #   4. Dienst neu starten
 #
@@ -31,11 +31,6 @@ cd "${PROJECT_DIR}"
 # -----------------------------------------------------------
 # 1. Einstellungen migrieren (einmalig, wenn nötig)
 # -----------------------------------------------------------
-# Falls settings.json lokal verändert wurde und settings.local.json
-# noch nicht existiert: Benutzerdaten nach settings.local.json
-# übertragen und settings.json auf den Git-Stand zurücksetzen.
-# Danach sind künftige git pulls ohne Konflikte möglich.
-
 if [ ! -f "${SETTINGS_LOCAL}" ] && ! git diff --quiet "${SETTINGS_JSON}" 2>/dev/null; then
     echo ""
     echo "[1/4] Einstellungen migrieren..."
@@ -50,11 +45,34 @@ else
 fi
 
 # -----------------------------------------------------------
-# 2. Git pull
+# 2. Git pull – prüfen ob Änderungen vorhanden sind
 # -----------------------------------------------------------
 echo ""
-echo "[2/4] Quellcode aktualisieren (git pull)..."
-git pull --ff-only
+echo "[2/4] Quellcode prüfen (git pull)..."
+
+GIT_OUTPUT=$(git pull --ff-only 2>&1)
+GIT_RC=$?
+
+echo "${GIT_OUTPUT}"
+
+if [ ${GIT_RC} -ne 0 ]; then
+    echo ""
+    echo "============================================================"
+    echo "  ✗ git pull fehlgeschlagen (Exit-Code ${GIT_RC})."
+    echo "  Verbindung und Remote-URL prüfen:"
+    echo "    git remote -v"
+    echo "============================================================"
+    exit ${GIT_RC}
+fi
+
+if echo "${GIT_OUTPUT}" | grep -q "Already up to date."; then
+    echo ""
+    echo "============================================================"
+    echo "  ✓ Kein Update verfügbar – bereits auf dem aktuellen Stand."
+    echo "  Der Dienst wird nicht neu gestartet."
+    echo "============================================================"
+    exit 0
+fi
 
 # -----------------------------------------------------------
 # 3. Python-Pakete aktualisieren
@@ -94,7 +112,7 @@ fi
 # -----------------------------------------------------------
 echo ""
 echo "============================================================"
-echo "  Update abgeschlossen."
+echo "  ✓ Update abgeschlossen."
 echo ""
 echo "  Weboberfläche:  http://$(hostname -I | awk '{print $1}'):8080"
 echo "  Logs:           journalctl -u ${SERVICE_NAME} -f"
