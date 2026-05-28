@@ -1002,3 +1002,17 @@ Bis zur eingestellten Pausentoleranz (Standard: 30 s im Dauerbetrieb, 60 s im
 Intervallbetrieb). Danach wird der Zyklus abgebrochen. Für regelmäßig längere Pausen:
 Intervallbetrieb wählen und die manuelle Pausentoleranz entsprechend setzen
 (Einstellungen → Betriebsweise & Durchflusserkennung).
+
+
+---
+
+## Kontakt & Support
+
+Bei technischen Fragen, Problemen bei der Inbetriebnahme oder für Service-Anfragen:
+
+**E-Mail:** [service@heta.de](mailto:service@heta.de)
+
+Bitte geben Sie in Ihrer Anfrage folgende Informationen an:
+- Softwareversion (sichtbar im Footer der Web-Oberfläche)
+- HETA-Code des verwendeten Filters
+- Beschreibung des Problems sowie ggf. Screenshot der Diagnoseseite
