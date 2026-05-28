@@ -18,9 +18,6 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 
-def clamp(value: float, low: float, high: float) -> float:
-    return max(low, min(high, value))
-
 # Anzeigemodi
 MODE_BASIS      = "BASIS"
 MODE_LERNEND    = "HETA_LERNEND"

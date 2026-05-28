@@ -21,20 +21,6 @@ fordert den Bediener zur Prüfung auf.
 
 ---
 
-## Inhaltsverzeichnis
-
-1. [Hardware](#hardware)
-2. [Installation](#installation)
-3. [Ersteinrichtung (Onboarding)](#ersteinrichtung-onboarding)
-4. [HETA-Code und Prognose](#heta-code-und-prognose)
-5. [Konfiguration](#konfiguration)
-6. [Software-Update](#software-update)
-7. [Projektstruktur](#projektstruktur)
-8. [REST-API](#rest-api)
-9. [Fehlersuche](#fehlersuche)
-
----
-
 ## Hardware
 
 | Komponente              | Funktion                                            |
@@ -56,70 +42,40 @@ Vollständige Pinbelegungen, Skalierungsformeln und Anschlussdiagramme:
 
 ## Installation
 
-### Voraussetzungen
-
-- Raspberry Pi 5, Raspberry Pi OS Lite 64-bit (Bookworm)
-- SSH-Zugriff oder direktes Terminal
-- SPI aktiviert: `sudo raspi-config` → Interface Options → SPI → Enable
-
-### Schnellstart
+**Voraussetzungen:** Raspberry Pi 5, Raspberry Pi OS Lite 64-bit (Bookworm), SPI aktiviert
+(`sudo raspi-config` → Interface Options → SPI → Enable)
 
 ```bash
-# 1. Repository klonen
 git clone https://github.com/aracon30/HETA_Smart_Filter_Monitoring.git
 cd HETA_Smart_Filter_Monitoring
-
-# 2. Installationsskript ausführen
-#    Richtet Python-venv, systemd-Service und Verzeichnisse ein
-chmod +x scripts/install.sh
-./scripts/install.sh
-
-# 3. Raspberry Pi neu starten (aktiviert SPI-Treiber)
+chmod +x scripts/install.sh && ./scripts/install.sh
 sudo reboot
-
-# 4. Service starten
 sudo systemctl start heta-monitor
 ```
 
-Weboberfläche öffnen: `http://<IP-Adresse>:8080`
-
-IP-Adresse ermitteln: `hostname -I`  
-Alternativ: OLED-Display → Bildschirm 5 (Netzwerk)
-
-### Manueller Start (Entwicklung / Debugging)
+Weboberfläche: `http://<IP-Adresse>:8080`  (IP ermitteln: `hostname -I`)
 
 ```bash
+# Entwicklung / manueller Start
 ./scripts/start.sh
-# oder:
-source .venv/bin/activate
-python3 backend/app.py
+
+# Systemd
+sudo systemctl enable heta-monitor    # Autostart beim Boot
+sudo systemctl status heta-monitor    # Laufstatus
+journalctl -u heta-monitor -f         # Live-Log
 ```
 
-### Autostart via systemd
+**Abhängigkeiten** (werden von `install.sh` installiert):
 
-```bash
-sudo systemctl enable heta-monitor    # Autostart beim Boot aktivieren
-sudo systemctl status heta-monitor    # Laufstatus prüfen
-journalctl -u heta-monitor -f         # Log live verfolgen
-journalctl -u heta-monitor -n 50      # Letzte 50 Log-Zeilen
-```
-
-### Abhängigkeiten
-
-```
-flask, flask-cors           – Web-Backend
-luma.oled, Pillow           – OLED-Display
-gpiozero (≥ 2.0)            – Encoder-GPIO
-lgpio                       – GPIO-Backend für Pi 5 (via apt, nicht pip)
-paho-mqtt                   – Optionaler MQTT-Client
-pymodbus (≥ 3.6)            – Optionaler Modbus-TCP-Server
-spidev                      – SPI-ADC (AnoPi Shield)
-```
-
-```bash
-# lgpio für Pi 5 (muss via apt installiert werden)
-sudo apt-get install -y python3-lgpio
-```
+| Paket | Zweck | Installation |
+|-------|-------|-------------|
+| flask, flask-cors | Web-Backend | pip |
+| luma.oled, Pillow | OLED-Display | pip |
+| gpiozero ≥ 2.0 | Encoder-GPIO | pip |
+| lgpio | GPIO-Backend Pi 5 | `sudo apt-get install python3-lgpio` |
+| paho-mqtt | MQTT (optional) | pip |
+| pymodbus ≥ 3.6 | Modbus TCP (optional) | pip |
+| spidev | SPI-ADC | pip |
 
 ---
 
