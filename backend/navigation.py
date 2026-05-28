@@ -20,8 +20,7 @@ Pinbelegung (BCM-Nummerierung, konfigurierbar in config/settings.json):
 """
 
 import logging
-import threading
-from typing import Callable, Optional
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +52,7 @@ class NavigationController:
                  pin_sw1:  int = 21, pin_sw2:  int = 12,
                  pin_sw3:  int = 13, pin_sw4:  int = 19,
                  pin_sw5:  int = 26):
-        self._hw: Optional[dict] = None
+        self._hw: dict | None = None
         self._simulated = False
         self._handlers: list[Callable] = []
         self._running   = False
@@ -162,7 +161,7 @@ class NavigationController:
     # Diagnose
     # ------------------------------------------------------------------
 
-    def get_encoder_steps(self) -> Optional[int]:
+    def get_encoder_steps(self) -> int | None:
         """Gibt die aktuelle Encoder-Schrittposition zurück (für Diagnose)."""
         if self._hw:
             try:

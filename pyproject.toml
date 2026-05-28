@@ -1,0 +1,30 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+src = ["backend"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B904",   # raise without from in except (existing code)
+    "B905",   # zip() without strict= (not needed for same-length iterables)
+    "SIM105", # use contextlib.suppress (existing code style)
+    "SIM108", # use ternary operator (readability preference)
+    "UP007",  # use X | Y for unions (prefer Optional for clarity)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/app.py" = ["E402"]  # module-level imports not at top (sys.path manipulation)
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

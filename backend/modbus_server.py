@@ -22,7 +22,6 @@ Unbekannte Werte:    0xFFFF (65535)
 import logging
 import threading
 import time
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -70,17 +69,17 @@ class ModbusTCPServer:
         self._host = host
         self._port = port
         self._server = None
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._context = None
         self._running = False
 
     def start(self) -> bool:
         """Startet den Modbus-TCP-Server im Hintergrundthread."""
         try:
-            from pymodbus.datastore import (          # type: ignore
+            from pymodbus.datastore import (  # type: ignore
                 ModbusSequentialDataBlock,
-                ModbusSlaveContext,
                 ModbusServerContext,
+                ModbusSlaveContext,
             )
             from pymodbus.server import StartTcpServer  # type: ignore
 

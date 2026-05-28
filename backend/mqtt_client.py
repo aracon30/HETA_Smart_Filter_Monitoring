@@ -9,9 +9,8 @@ Topics:
 """
 
 import json
-import time
 import logging
-from typing import Optional
+import time
 
 logger = logging.getLogger(__name__)
 

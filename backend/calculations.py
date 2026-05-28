@@ -2,10 +2,9 @@
 Berechnungsmodul – Differenzdruck, Filterwiderstand, Filterzustand und Statuslogik.
 """
 
-import math
 import logging
+import math
 from dataclasses import dataclass
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +114,7 @@ def calculate_filter_state(
     anomaly_active: bool = False,
     anomaly_percent: float = 0.0,
     min_flow: float = 0.1,
-    dp_override: Optional[float] = None,
+    dp_override: float | None = None,
 ) -> FilterState:
     """
     Führt alle Berechnungen für einen Messzeitpunkt durch und liefert

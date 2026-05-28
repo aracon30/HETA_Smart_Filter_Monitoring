@@ -5,8 +5,8 @@ Der Aktivierungsalgorithmus muss exakt mit dem separaten
 HTML-PIN-Generator übereinstimmen.
 """
 
-import re
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 

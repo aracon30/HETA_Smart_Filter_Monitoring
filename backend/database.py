@@ -2,13 +2,12 @@
 Datenbankmodul – SQLite-Datenbank für Messwerte, Filterzyklen, Profile und Serviceereignisse.
 """
 
-import sqlite3
-import os
 import csv
 import logging
+import os
+import sqlite3
 import time
 from contextlib import contextmanager
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -293,7 +292,7 @@ class Database:
                     last_updated                 = excluded.last_updated
             """, data)
 
-    def get_profile(self, heta_code: str) -> Optional[dict]:
+    def get_profile(self, heta_code: str) -> dict | None:
         """Gibt das gespeicherte HETA-Profil zurück oder None."""
         with self._conn() as conn:
             row = conn.execute(

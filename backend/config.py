@@ -10,10 +10,10 @@ Alle Einstellungsänderungen (Onboarding, Einstellungsbereich) werden in
 settings.local.json gespeichert – git pull überschreibt sie nie.
 """
 
-import json
-import os
 import hashlib
+import json
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +108,7 @@ def load_settings() -> dict:
 
     # Schicht 2: git-versionierte Standardwerte
     try:
-        with open(_CONFIG_PATH, "r", encoding="utf-8") as f:
+        with open(_CONFIG_PATH, encoding="utf-8") as f:
             loaded = json.load(f)
         settings.update(loaded)
         logger.info("Basiskonfiguration aus %s geladen.", _CONFIG_PATH)
@@ -120,7 +120,7 @@ def load_settings() -> dict:
     # Schicht 3: lokale Übersteuerungen (gitignored, git-pull-sicher)
     local_exists = False
     try:
-        with open(_CONFIG_LOCAL_PATH, "r", encoding="utf-8") as f:
+        with open(_CONFIG_LOCAL_PATH, encoding="utf-8") as f:
             local = json.load(f)
         settings.update(local)
         local_exists = True

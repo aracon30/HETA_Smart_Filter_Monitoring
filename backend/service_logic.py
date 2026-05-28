@@ -2,13 +2,17 @@
 Servicelogik – erzeugt Serviceempfehlungen, Ersatzteilbestellungen und Serviceberichte.
 """
 
-import json
-import time
 import logging
-from typing import Optional
+import time
 
-from calculations import (STATUS_OK, STATUS_BEOBACHTEN, STATUS_WECHSEL,
-                          STATUS_WECHSEL_BESTAETIGEN, STATUS_WARNUNG, STATUS_FEHLER)
+from calculations import (
+    STATUS_BEOBACHTEN,
+    STATUS_FEHLER,
+    STATUS_OK,
+    STATUS_WARNUNG,
+    STATUS_WECHSEL,
+    STATUS_WECHSEL_BESTAETIGEN,
+)
 
 logger = logging.getLogger(__name__)
 

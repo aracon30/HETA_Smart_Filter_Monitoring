@@ -10,12 +10,11 @@ Kanalbelegung:
 Alle Sensoren liefern 4–20 mA Signale.
 """
 
-import math
-import time
 import logging
+import math
 import threading
+import time
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +77,7 @@ def _scale_flow(ma: float, flow_max: float = 150.0) -> float:
 # Hardware-Lesefunktion (AnoPi Shield via SPI/ADC)
 # ---------------------------------------------------------------------------
 
-def _read_anopi_channel(channel: int) -> Optional[float]:
+def _read_anopi_channel(channel: int) -> float | None:
     """
     Liest einen analogen Kanal vom AnoPi Shield via SPI-ADC (MCP3208, 12 Bit).
     Gibt den skalierten mA-Wert (4–20 mA) zurück oder None bei Hardwarefehler.
