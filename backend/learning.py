@@ -7,10 +7,9 @@ und Temperatur (20 Stützpunkte von 0 % bis 100 % der Referenzzyklusdauer).
 """
 
 import json
-import time
 import logging
+import time
 from dataclasses import dataclass, field
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +46,7 @@ class LearningManager:
         self.db = database
         self.required_cycles = required_cycles
         self.tolerance_reff_pct = tolerance_reff_pct
-        self._active_cycle: Optional[ActiveCycle] = None
+        self._active_cycle: ActiveCycle | None = None
 
     # ------------------------------------------------------------------
     # Zyklus-Verwaltung
@@ -89,7 +88,7 @@ class LearningManager:
 
     def end_cycle(self, confirmed: bool, end_r_eff: float, end_dp: float,
                   end_time: float = None,
-                  active_seconds: float = None) -> Optional[dict]:
+                  active_seconds: float = None) -> dict | None:
         """
         Schließt den aktiven Zyklus ab und speichert ihn in der Datenbank.
         end_time: Zeitpunkt an dem dp-Limit erreicht wurde (exkl. Wartezeit auf Bestätigung).
@@ -386,10 +385,10 @@ class LearningManager:
     def get_curve_analysis(self, heta_code: str, elapsed_seconds: float,
                            current_dp: float, current_r_eff: float,
                            current_flow: float, current_temp: float,
-                           current_dp_slope: Optional[float] = None,
-                           current_flow_slope: Optional[float] = None,
-                           current_temp_slope: Optional[float] = None,
-                           current_reff_slope: Optional[float] = None) -> Optional[dict]:
+                           current_dp_slope: float | None = None,
+                           current_flow_slope: float | None = None,
+                           current_temp_slope: float | None = None,
+                           current_reff_slope: float | None = None) -> dict | None:
         """
         Vergleicht aktuelle Messwerte mit der gelernten Referenzkurve.
 
@@ -425,10 +424,6 @@ class LearningManager:
         ref = self._interpolate_curve(curve, t_pct)
         if not ref:
             return None
-
-        ref_reff = ref.get("r_eff") or 0.0
-        ref_flow = ref.get("flow")  or 0.0
-        ref_temp = ref.get("temp")  or 0.0
 
         def pct_dev(cur, ref_val):
             if ref_val and abs(ref_val) > 1e-9:
@@ -474,7 +469,7 @@ class LearningManager:
         }
 
     @staticmethod
-    def _interpolate_curve(curve: list, t_pct: float) -> Optional[dict]:
+    def _interpolate_curve(curve: list, t_pct: float) -> dict | None:
         """Lineare Interpolation zwischen zwei Stützpunkten der Referenzkurve."""
         if not curve:
             return None
@@ -580,7 +575,7 @@ class LearningManager:
         v_total = (curve[-1].get(field) or 0.0) - (curve[0].get(field) or 0.0)
         return v_total / ref_duration
 
-    def get_profile(self, heta_code: str) -> Optional[dict]:
+    def get_profile(self, heta_code: str) -> dict | None:
         """Gibt das Referenzprofil zurück oder None."""
         return self.db.get_profile(heta_code)
 
@@ -617,7 +612,7 @@ class LearningManager:
         return anomaly, round(deviation * 100, 1)
 
     @property
-    def active_cycle(self) -> Optional[ActiveCycle]:
+    def active_cycle(self) -> ActiveCycle | None:
         return self._active_cycle
 
     def add_event(self, severity: str, message: str, category: str = ""):

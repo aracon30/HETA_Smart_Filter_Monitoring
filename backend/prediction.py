@@ -11,9 +11,7 @@ Drei Anzeigemodi:
                    Minutengenaue, geglättete Reststandzeit.
 """
 
-import math
 import logging
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -95,8 +93,8 @@ class PredictionEngine:
         self.dp_clean = dp_clean
         self.min_slope = min_slope
 
-        self._last_remaining: Optional[float] = None
-        self._seeded_ceiling: Optional[float] = None  # verhindert Sprünge nach dem Seed
+        self._last_remaining: float | None = None
+        self._seeded_ceiling: float | None = None  # verhindert Sprünge nach dem Seed
         self._dp_history: list[float] = []
         self._history_window: int = 30
 
@@ -105,7 +103,7 @@ class PredictionEngine:
         self._temp_history:  list[float] = []
         self._reff_history:  list[float] = []
 
-    def update(self, dp_bar: float) -> Optional[float]:
+    def update(self, dp_bar: float) -> float | None:
         """
         Berechnet Reststandzeit aus der gemessenen dp-Steigung.
 
@@ -142,9 +140,7 @@ class PredictionEngine:
 
         raw_remaining = max(0.0, (self.dp_limit - dp_bar) / max(slope, self.min_slope))
 
-        if self._last_remaining is None:
-            self._last_remaining = raw_remaining
-        elif raw_remaining < self._last_remaining:
+        if self._last_remaining is None or raw_remaining < self._last_remaining:
             self._last_remaining = raw_remaining
         else:
             if raw_remaining > self._last_remaining * 1.05:
@@ -240,12 +236,12 @@ class PredictionEngine:
         closest = min(pts, key=lambda p: abs(p[1] - dp_bar))
         return closest[0]
 
-    def _calculate_slope(self) -> Optional[float]:
+    def _calculate_slope(self) -> float | None:
         """Lineare Regression über das dp-Messfenster."""
         return self._linear_slope(self._dp_history, clamp_positive=True)
 
     @staticmethod
-    def _linear_slope(history: list, clamp_positive: bool = False) -> Optional[float]:
+    def _linear_slope(history: list, clamp_positive: bool = False) -> float | None:
         """Lineare Regression über einen beliebigen Messverlauf (1 Index = 1 Sekunde)."""
         n = len(history)
         if n < 5:
@@ -270,7 +266,7 @@ class PredictionEngine:
             if len(hist) > self._history_window:
                 hist.pop(0)
 
-    def get_current_slope(self) -> Optional[float]:
+    def get_current_slope(self) -> float | None:
         """Gibt die aktuelle dp-Steigung (bar/s) zurück, oder None wenn zu wenig Daten."""
         return self._calculate_slope()
 
@@ -306,7 +302,7 @@ class PredictionEngine:
     # Ausgabe
     # ------------------------------------------------------------------
 
-    def get_status(self, remaining_seconds: Optional[float],
+    def get_status(self, remaining_seconds: float | None,
                    heta_activated: bool,
                    profile_valid: bool,
                    learned_cycles: int,
@@ -337,7 +333,7 @@ class PredictionEngine:
             "required_cycles": required_cycles,
         }
 
-    def _format_for_mode(self, seconds: Optional[float], mode: str) -> str:
+    def _format_for_mode(self, seconds: float | None, mode: str) -> str:
         """Wählt die passende Formatierung je nach Anzeigemodus."""
         if seconds is None:
             return "Wird berechnet …"

@@ -5,18 +5,16 @@ Startet den Flask-Webserver, den Messzyklus-Thread und koordiniert
 alle Module (Sensoren, Berechnungen, Datenbank, Lernmodul, Prognose, Display).
 """
 
-import os
-import sys
-import subprocess
-import time
 import json
-import socket
-import secrets
 import logging
+import os
+import secrets
+import socket
+import subprocess
+import sys
 import threading
+import time
 from collections import deque
-from datetime import datetime
-from typing import Optional
 
 # Projektverzeichnis in sys.path eintragen damit relative Imports funktionieren
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,22 +23,35 @@ sys.path.insert(0, os.path.join(_BASE_DIR, "backend"))
 from flask import Flask, jsonify, request, send_from_directory
 from flask_cors import CORS
 
-from config import settings, save_settings, get_abs_path, hash_password, verify_password
-from sensors import (read_sensors, reset_simulation, full_reset_simulation,
-                     update_simulation_params, probe_hardware, check_hardware_sensors,
-                     set_simulation_scenario_params, get_simulation_scenario_params,
-                     clear_simulation_rates, get_simulation_rates_active,
-                     get_simulation_estimated_cycle_secs)
-from calculations import (calculate_filter_state, FilterState,
-                          calculate_filter_health_from_r_eff,
-                          STATUS_OK, STATUS_WARNUNG, STATUS_FEHLER,
-                          STATUS_WECHSEL, STATUS_WECHSEL_BESTAETIGEN)
-from heta_code import verify_activation, validate_heta_format, get_demo_info
+from calculations import (
+    FilterState,
+)
+from config import get_abs_path, hash_password, save_settings, settings, verify_password
 from database import Database
+from diagnostics import run_diagnostics as _run_diagnostics
+from heta_code import get_demo_info, verify_activation
 from learning import LearningManager
+from measurement import MeasurementLoop
 from prediction import PredictionEngine
-from service_logic import (build_service_payload, generate_service_recommendation,
-                            generate_spare_parts_order, generate_service_report)
+from sensors import (
+    check_hardware_sensors,
+    clear_simulation_rates,
+    full_reset_simulation,
+    get_simulation_estimated_cycle_secs,
+    get_simulation_rates_active,
+    get_simulation_scenario_params,
+    probe_hardware,
+    read_sensors,
+    reset_simulation,
+    set_simulation_scenario_params,
+    update_simulation_params,
+)
+from service_logic import (
+    build_service_payload,
+    generate_service_recommendation,
+    generate_service_report,
+    generate_spare_parts_order,
+)
 
 # ---------------------------------------------------------------------------
 # Logging konfigurieren
@@ -164,13 +175,10 @@ _state_lock = threading.Lock()
 # Rollierender Puffer für dp-Anstiegsschätzung: (timestamp, dp_bar)
 _dp_rate_buffer: deque = deque(maxlen=60)
 
-# Geglätteter Beladungsgrad mit Ratchet-Filter (in Prozent, None = nicht initialisiert)
-_smoothed_health_pct: Optional[float] = None
-
-# Zeitstempel seit dem Durchfluss-/dp-Bedingung erstmals erfüllt (Stabilitätsfenster)
-_flow_stable_since: Optional[float] = None
-# Zeitstempel seit dem Durchfluss das erste Mal unter Schwellwert fiel (Pause-Toleranz)
-_flow_below_since: Optional[float] = None
+# Veränderliche Referenzen auf MQTT- und Modbus-Dienste (für MeasurementLoop)
+_loop_services: dict = {"mqtt": None, "modbus": None}
+# MeasurementLoop-Instanz (wird in _start_measurement_thread erstellt)
+_loop: MeasurementLoop | None = None
 
 _state = {
     # Betriebsmodus
@@ -309,7 +317,7 @@ if settings.get("mqtt_enabled", False):
     _mqtt.connect()
 
 # Modbus TCP optional
-_modbus: "Optional[ModbusTCPServer]" = None  # type: ignore[name-defined]
+_modbus: "ModbusTCPServer | None" = None  # type: ignore[name-defined]
 if settings.get("modbus_enabled", False):
     from modbus_server import ModbusTCPServer
     _modbus = ModbusTCPServer(
@@ -317,6 +325,9 @@ if settings.get("modbus_enabled", False):
         port=settings.get("modbus_port", 502),
     )
     _modbus.start()
+
+_loop_services["mqtt"] = _mqtt
+_loop_services["modbus"] = _modbus
 
 # Display optional
 _display = None
@@ -411,7 +422,6 @@ class _DisplayController:
 
     def _handle(self, event: str):
         from navigation import NavigationEvent
-        from display import SCREEN_FILTER_CHANGE
 
         if event in (NavigationEvent.ROTATE_RIGHT, NavigationEvent.RIGHT):
             self._screen_idx = (self._screen_idx + 1) % len(self._screens)
@@ -454,7 +464,8 @@ class _DisplayController:
             )
         else:
             self._confirm_armed = False
-            _do_confirm_filter_change()
+            if _loop:
+                _loop.confirm_filter_change()
             # Zurück zum Status-Bildschirm
             self._screen_idx = 0
             self._display.show_status(self._last_status_data)
@@ -464,8 +475,14 @@ class _DisplayController:
     # ------------------------------------------------------------------
 
     def _refresh_display(self):
-        from display import (SCREEN_STATUS, SCREEN_HETA, SCREEN_FILTER_CHANGE,
-                              SCREEN_SERVICE, SCREEN_HISTORY, SCREEN_NETWORK)
+        from display import (
+            SCREEN_FILTER_CHANGE,
+            SCREEN_HETA,
+            SCREEN_HISTORY,
+            SCREEN_NETWORK,
+            SCREEN_SERVICE,
+            SCREEN_STATUS,
+        )
 
         screen = self._screens[self._screen_idx]
 
@@ -599,592 +616,42 @@ def _update_auto_thresholds(active_cycle_samples: list):
         logger.info("Auto-Durchflussschwellwert aktualisiert: %.1f l/min", new_threshold)
 
 
-def _measurement_loop():
-    """Haupt-Messzyklus – läuft in einem Hintergrund-Thread."""
-    interval = settings.get("sampling_interval_seconds", 1)
 
-    logger.info("Messzyklus gestartet (Intervall: %ds).", interval)
-    _dp_rate_buffer.clear()
-
-    while _state["running"]:
-        t_start = time.time()
-        # dp_limit aus Einstellungen; dp_clean aus gemessenem Profil (Ø start_dp
-        # der Lernzyklen), Fallback auf Einstellungswert solange kein Profil.
-        dp_limit = settings.get("dp_limit_bar", 2.5)
-        _loop_profile = learning.get_profile(_state.get("heta_code", ""))
-        dp_clean = ((_loop_profile.get("reference_dp_clean") or 0.0)
-                    if _loop_profile and (_loop_profile.get("reference_dp_clean") or 0.0) > 0
-                    else settings.get("dp_clean_bar", 0.2))
-
-        with _state_lock:
-            sim_mode          = _state["simulation_mode"]
-            awaiting          = _state["awaiting_confirmation"]
-            heta_code         = _state["heta_code"]
-            heta_activated    = _state["heta_activated"]
-            cycle_active      = _state["cycle_active"]
-            waiting_for_flow  = _state["waiting_for_flow"]
-            cycle_paused      = _state["cycle_paused"]
-
-        if awaiting:
-            time.sleep(interval)
-            continue
-
-        # Sensoren lesen
-        readings = read_sensors(
-            simulation=sim_mode,
-            pressure_range=settings.get("pressure_range_bar", 10.0),
-            temperature_min=settings.get("temperature_min_c", -50.0),
-            temperature_max=settings.get("temperature_max_c", 150.0),
-            flow_max=settings.get("flow_max_l_min", 150.0),
-        )
-
-        p1 = readings["p1"]
-        p2 = readings["p2"]
-        temp = readings["temperature"]
-        flow = readings["flow"]
-        sensor_mode = readings["mode"]
-
-        # Sensorfehler im Hardwaremodus: Messung sofort stoppen, Bediener informieren
-        if sensor_mode == "sensor_fault":
-            failed_ch = readings.get("failed_channels", [])
-            failed_names = readings.get("failed_names", [])
-            msg = f"Sensorfehler: {', '.join(failed_names)} – Messung gestoppt."
-            logger.error("Messung gestoppt wegen Sensorfehler auf Kanal(en) %s.", failed_ch)
-            learning.abort_cycle()
-            with _state_lock:
-                _state["running"]               = False
-                _state["sensor_fault"]          = True
-                _state["sensor_fault_channels"] = failed_ch
-                _state["sensor_fault_message"]  = msg
-                _state["filter_status"]         = "FEHLER"
-                _state["sensor_error"]          = True
-                _state["cycle_active"]          = False
-                _state["cycle_start_time"]      = None
-                _state["cycle_dp_reached_time"] = None
-                _state["last_update"]           = time.strftime("%Y-%m-%dT%H:%M:%S")
-            break
-
-        sensor_error = not (p1.is_valid and p2.is_valid and temp.is_valid and flow.is_valid)
-
-        # Plausibilitätsprüfung im Realbetrieb: p2 > p1 ist physikalisch nicht möglich
-        if (sensor_mode == "hardware" and not sensor_error
-                and p1.is_valid and p2.is_valid
-                and p2.value > p1.value + 0.05):
-            logger.warning(
-                "Plausibilitätswarnung: p2 (%.3f bar) > p1 (%.3f bar) – "
-                "Sensorkabel vertauscht oder Druckverhältnisse unplausibel.",
-                p2.value, p1.value,
-            )
-
-        # Berechnungen
-        # dp_direct: Simulationsmodus liefert dp als Primärwert – verhindert
-        # Gleitkomma-Artefakte durch p1-p2-Subtraktion in calculate_filter_state.
-        dp_direct = readings.get("dp_direct")
-        fs: FilterState = calculate_filter_state(
-            p1_bar=p1.value,
-            p2_bar=p2.value,
-            flow_l_min=flow.value,
-            temperature_c=temp.value,
-            dp_clean=dp_clean,
-            dp_limit=dp_limit,
-            awaiting_confirmation=awaiting,
-            sensor_error=sensor_error,
-            anomaly_active=_state["anomaly_active"],
-            anomaly_percent=_state["anomaly_percent"],
-            dp_override=dp_direct,
-        )
-
-        # ── Profil laden (einmalig pro Loop-Iteration) ────────────────────
-        profile       = learning.get_profile(heta_code) if heta_code else None
-        profile_valid = bool(profile and profile.get("profile_valid")) and heta_activated
-        cycles_count  = (profile.get("cycles_count", 0) if profile else 0) if heta_code else 0
-
-        # ── Beladungsgrad via R_eff ──────────────────────────────────────
-        # Bevorzugt R_eff-basiert (reagiert auf Δp UND Durchflussänderungen).
-        # Ratchet: schnell steigen (Filter beladen), langsam fallen.
-        global _smoothed_health_pct
-        # R_eff-basierter Beladungsgrad nur wenn Profil VALIDE ist –
-        # während der Lernphase bleibt die dp-Formel aktiv, damit
-        # kein Methodenwechsel mitten im Lernzyklus auftritt.
-        r_eff_clean_ref = r_eff_limit_ref = None
-        if profile_valid and profile:
-            r_eff_clean_ref = (profile.get("reference_r_eff_start")
-                               or profile.get("reference_r_eff"))
-            r_eff_limit_ref = profile.get("reference_r_eff_end") or 0.0
-            if not r_eff_limit_ref:
-                # Fallback für alte Profile ohne reference_r_eff_end
-                ref_flow = profile.get("reference_avg_flow") or 0.0
-                if ref_flow > 0.1:
-                    r_eff_limit_ref = dp_limit / ref_flow
-
-        if r_eff_clean_ref and r_eff_limit_ref and fs.r_eff > 0:
-            raw_health, _ = calculate_filter_health_from_r_eff(
-                fs.r_eff, r_eff_clean_ref, r_eff_limit_ref
-            )
-        else:
-            raw_health = fs.filter_health_percent  # Fallback: dp-basiert
-
-        if _smoothed_health_pct is None:
-            _smoothed_health_pct = raw_health
-        elif raw_health < _smoothed_health_pct:
-            # Filter belädt sich → health sinkt → leicht geglättet (schnell)
-            _smoothed_health_pct += 0.35 * (raw_health - _smoothed_health_pct)
-        else:
-            # Filter könnte sich scheinbar verbessern → sehr langsam (max 0.3 %/s)
-            _smoothed_health_pct = min(raw_health, _smoothed_health_pct + 0.3)
-
-        smoothed_health = round(_smoothed_health_pct, 1)
-
-        # ── Durchfluss-Zustandsmaschine ───────────────────────────────────
-        global _flow_stable_since, _flow_below_since
-        flow_thr, stab_secs, pause_tol = _get_flow_thresholds()
-        flow_ok = (fs.flow_l_min >= flow_thr and fs.dp_bar >= dp_clean * 0.5
-                   and not sensor_error)
-        now_ts  = time.time()
-
-        # Im Simulationsmodus: Durchflussprüfung komplett deaktivieren.
-        # Die Simulation steuert den Durchfluss intern – das Warten auf
-        # stabilen Fluss würde Schnellstart und Lernzyklen blockieren.
-        if sim_mode:
-            if waiting_for_flow:
-                _flow_stable_since = None
-                if heta_code:
-                    learning.start_cycle(heta_code, fs.r_eff, fs.dp_bar)
-                    _seed_predictor_from_profile(heta_code)
-                with _state_lock:
-                    _state["waiting_for_flow"]     = False
-                    _state["cycle_active"]         = bool(heta_code)
-                    _state["cycle_start_time"]     = now_ts
-                    _state["cycle_active_seconds"] = 0.0
-                    _state["cycle_paused"]         = False
-                waiting_for_flow = False
-                cycle_active     = bool(heta_code)
-                cycle_paused     = False
-            elif cycle_paused:
-                with _state_lock:
-                    _state["cycle_paused"]           = False
-                    _state["cycle_pause_start_time"] = None
-                cycle_paused = False
-
-        elif waiting_for_flow and not awaiting:
-            # Overlay-Werte für Frontend live aktualisieren
-            stable_pct = 0
-            if flow_ok:
-                if _flow_stable_since is None:
-                    _flow_stable_since = now_ts
-                elapsed_stable = now_ts - _flow_stable_since
-                stable_pct = min(100, int(elapsed_stable / max(stab_secs, 1) * 100))
-                if elapsed_stable >= stab_secs:
-                    # Bedingung stabil lang genug → Zyklus starten
-                    _flow_stable_since = None
-                    _flow_below_since  = None
-                    if heta_code:
-                        learning.start_cycle(heta_code, fs.r_eff, fs.dp_bar)
-                        _seed_predictor_from_profile(heta_code)
-                    with _state_lock:
-                        _state["waiting_for_flow"]    = False
-                        _state["cycle_active"]        = True if heta_code else False
-                        _state["cycle_start_time"]    = now_ts
-                        _state["cycle_active_seconds"] = 0.0
-                    cycle_active     = bool(heta_code)
-                    waiting_for_flow = False
-                    logger.info("Durchfluss stabil – Zyklus gestartet (Q=%.1f l/min, dp=%.3f bar).",
-                                fs.flow_l_min, fs.dp_bar)
-            else:
-                _flow_stable_since = None  # Stabilitätsfenster zurücksetzen
-
-            with _state_lock:
-                _state["flow_check_q"]   = round(fs.flow_l_min, 1)
-                _state["flow_check_dp"]  = round(fs.dp_bar, 3)
-                _state["flow_threshold"] = round(flow_thr, 1)
-                _state["flow_stable_pct"] = stable_pct
-
-            if waiting_for_flow:
-                # Display-Update und Weiter im Loop (keine Messwert-Aufzeichnung)
-                if _display:
-                    _display.show_waiting_for_flow(
-                        fs.flow_l_min, flow_thr, fs.dp_bar, dp_clean * 0.5,
-                        stable_pct, stab_secs,
-                    )
-                with _state_lock:
-                    _state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                time.sleep(interval)
-                continue
-
-        elif not sim_mode and cycle_paused and not awaiting:
-            if flow_ok:
-                if _flow_stable_since is None:
-                    _flow_stable_since = now_ts
-                if now_ts - _flow_stable_since >= stab_secs:
-                    # Zyklus fortsetzen
-                    pause_dur = now_ts - (_state.get("cycle_pause_start_time") or now_ts)
-                    _flow_stable_since = None
-                    _flow_below_since  = None
-                    op_label = "Batch-Pause" if settings.get("operation_mode") == "batch" else "Unterbrechung"
-                    learning.close_event(category="pause")
-                    db.insert_service_event("ZYKLUS_PAUSE_ENDE", heta_code,
-                                            f"{op_label} nach {pause_dur:.0f} s beendet")
-                    with _state_lock:
-                        _state["cycle_paused"]           = False
-                        _state["cycle_pause_start_time"] = None
-                    cycle_paused = False
-                    logger.info("Zyklus fortgesetzt nach %.0f s Pause.", pause_dur)
-            else:
-                _flow_stable_since = None
-                # Maximale Pausendauer prüfen
-                pause_start = _state.get("cycle_pause_start_time") or now_ts
-                max_pause   = settings.get("flow_max_pause_days", 7) * 86400
-                if now_ts - pause_start >= max_pause:
-                    logger.warning("Maximale Pausendauer überschritten – Zyklus abgebrochen.")
-                    learning.abort_cycle()
-                    db.insert_service_event("ZYKLUS_ABGEBROCHEN", heta_code,
-                                            f"Kein Durchfluss seit {max_pause/86400:.0f} Tagen")
-                    with _state_lock:
-                        _state["cycle_paused"]           = False
-                        _state["cycle_active"]           = False
-                        _state["cycle_pause_start_time"] = None
-                        _state["waiting_for_flow"]       = True
-                    cycle_paused = False
-                    cycle_active = False
-
-            with _state_lock:
-                _state["flow_check_q"]  = round(fs.flow_l_min, 1)
-                _state["flow_threshold"] = round(flow_thr, 1)
-
-            if cycle_paused:
-                if _display:
-                    pause_secs = now_ts - (_state.get("cycle_pause_start_time") or now_ts)
-                    _display.show_cycle_paused(
-                        _state.get("cycle_active_seconds", 0.0), pause_secs
-                    )
-                with _state_lock:
-                    _state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
-                time.sleep(interval)
-                continue
-
-        elif not sim_mode and cycle_active and not awaiting and not sensor_error:
-            # Zyklus aktiv – Betriebszeit zählen und Pause prüfen
-            if flow_ok:
-                _flow_below_since = None
-                with _state_lock:
-                    _state["cycle_active_seconds"] = (
-                        _state.get("cycle_active_seconds", 0.0) + interval
-                    )
-            else:
-                if _flow_below_since is None:
-                    _flow_below_since = now_ts
-                elif now_ts - _flow_below_since >= pause_tol:
-                    # Zyklus pausieren
-                    op_label = "Batch-Pause" if settings.get("operation_mode") == "batch" else "Unterbrechung"
-                    learning.add_event("PAUSE_START",
-                                       f"{op_label} gestartet – Q={fs.flow_l_min:.1f} l/min",
-                                       category="pause")
-                    db.insert_service_event("ZYKLUS_PAUSE_START", heta_code,
-                                            f"Q={fs.flow_l_min:.1f} l/min unter Schwellwert {flow_thr:.1f} l/min")
-                    _flow_below_since  = None
-                    _flow_stable_since = None
-                    with _state_lock:
-                        _state["cycle_paused"]           = True
-                        _state["cycle_pause_start_time"] = now_ts
-                    cycle_paused = True
-                    logger.info("Zyklus pausiert – Q=%.1f l/min < Schwellwert %.1f l/min.",
-                                fs.flow_l_min, flow_thr)
-
-        elif not cycle_active and not waiting_for_flow and not cycle_paused and not awaiting:
-            # Kein Zyklus und nicht wartend → in waiting_for_flow gehen
-            with _state_lock:
-                _state["waiting_for_flow"] = True
-            waiting_for_flow = True
-
-        # ── Kurvenbasierter Profilvergleich ───────────────────────────────
-        with _state_lock:
-            cycle_start_ts    = _state.get("cycle_start_time")
-            cycle_active_secs = _state.get("cycle_active_seconds", 0.0)
-        elapsed = cycle_active_secs if cycle_active_secs > 0 else (
-            (now_ts - cycle_start_ts) if cycle_start_ts else 0.0
-        )
-
-        an_active = profile_valid and heta_activated and not sensor_error
-        an_ready  = False
-        analysis  = None
-        cycle_progress_pct = 0.0
-        analysis_elapsed   = 0.0
-        dp_slope_ref   = dp_slope_cur   = dp_dev   = 0.0
-        flow_slope_ref = flow_slope_cur = flow_dev = 0.0
-        temp_slope_ref = temp_slope_cur = temp_dev = 0.0
-        reff_slope_ref = reff_slope_cur = reff_dev = 0.0
-
-        # ── Kanalsteigungen und dp-History aktualisieren (vor Kurvenanalyse) ─
-        # Reihenfolge wichtig: erst update → dann get_current_slope(),
-        # damit die Analyse den aktuellen Messwert enthält.
-        predictor.update_channels(fs.flow_l_min, fs.temperature_c, fs.r_eff)
-
-        # ── Reststandzeit berechnen ───────────────────────────────────────
-        # Bei validiertem Profil: Referenzkurve invertieren → passt sich sofort
-        # an reduzierte/erhöhte Schmutzfracht an (kein sek.-weiser Countdown).
-        # Ohne valides Profil: dp-Steigung (Seeded-Ceiling-Fallback).
-        if profile_valid and profile:
-            _rc_json = profile.get("reference_curve_json")
-            _rc_dur  = profile.get("reference_duration_seconds", 0.0)
-            if _rc_json and _rc_dur > 0:
-                try:
-                    _rc = json.loads(_rc_json) if isinstance(_rc_json, str) else _rc_json
-                    remaining_s = predictor.update_with_reference_curve(
-                        fs.dp_bar, _rc_dur, _rc, elapsed
-                    )
-                except Exception as _e:
-                    logger.warning("update_with_reference_curve Fehler: %s", _e)
-                    remaining_s = predictor.update(fs.dp_bar)
-            else:
-                remaining_s = predictor.update(fs.dp_bar)
-        else:
-            remaining_s = predictor.update(fs.dp_bar)
-
-        # ── Kurvenbasierter Profilvergleich (nach dp-Update, Steigungen frisch) ─
-        if an_active and cycle_active:
-            try:
-                ch_slopes = predictor.get_channel_slopes()
-                analysis = learning.get_curve_analysis(
-                    heta_code, elapsed,
-                    fs.dp_bar, fs.r_eff, fs.flow_l_min, fs.temperature_c,
-                    current_dp_slope=predictor.get_current_slope(),
-                    current_flow_slope=ch_slopes["flow"],
-                    current_temp_slope=ch_slopes["temp"],
-                    current_reff_slope=ch_slopes["r_eff"],
-                )
-            except Exception as _e:
-                logger.warning("Kurvenanalyse-Fehler: %s", _e, exc_info=True)
-                analysis = None
-            if analysis:
-                an_ready           = True
-                cycle_progress_pct = analysis["cycle_progress_pct"]
-                analysis_elapsed   = analysis["elapsed_seconds"]
-                dp_slope_ref       = analysis["ref_dp_slope"]
-                dp_slope_cur       = analysis["cur_dp_slope"]   or 0.0
-                dp_dev             = analysis["dp_deviation_pct"]
-                flow_slope_ref     = analysis["ref_flow_slope"]
-                flow_slope_cur     = analysis["cur_flow_slope"]  or 0.0
-                flow_dev           = analysis["flow_deviation_pct"]
-                temp_slope_ref     = analysis["ref_temp_slope"]
-                temp_slope_cur     = analysis["cur_temp_slope"]  or 0.0
-                temp_dev           = analysis["temp_deviation_pct"]
-                reff_slope_ref     = analysis["ref_reff_slope"]
-                reff_slope_cur     = analysis["cur_reff_slope"]  or 0.0
-                reff_dev           = analysis["r_eff_deviation_pct"]
-
-        # ── Lernwert erfassen (mit Beladungsgrad und Reststandzeit) ───────
-        if cycle_active and not sensor_error:
-            learning.record_sample(
-                fs.flow_l_min, fs.temperature_c, fs.dp_bar, fs.r_eff,
-                p1=fs.p1_bar, p2=fs.p2_bar, timestamp=time.time(),
-                filter_health_percent=smoothed_health,
-                remaining_seconds=remaining_s,
-            )
-
-        # ── Startverhalten prüfen (erste 10 Sekunden) ────────────────────
-        if (cycle_active and heta_activated and cycle_start_ts
-                and (time.time() - cycle_start_ts) < 10):
-            anomaly, anom_pct = learning.check_start_behavior(heta_code, fs.r_eff)
-            # Atomar lesen + schreiben unter _state_lock; learning-Calls danach.
-            with _state_lock:
-                was_anomaly = _state["anomaly_active"]
-                _state["anomaly_active"] = anomaly
-                _state["anomaly_percent"] = anom_pct
-            if anomaly and not was_anomaly:
-                learning.add_event("WARNUNG",
-                    f"Startverhalten-Anomalie: R_eff {anom_pct:+.1f}% zur Referenz",
-                    category="anomaly")
-            elif not anomaly and was_anomaly:
-                learning.close_event(category="anomaly")
-        elif cycle_active:
-            # Fenster abgelaufen – Anomalie ggf. einmalig schließen.
-            with _state_lock:
-                close_anomaly = _state["anomaly_active"]
-                if close_anomaly:
-                    _state["anomaly_active"] = False
-                    _state["anomaly_percent"] = 0.0
-            if close_anomaly:
-                learning.close_event(category="anomaly")
-
-        # ── Statusänderungen als Ereignis im aktiven Zyklus speichern ────
-        prev_status = _state.get("filter_status", STATUS_OK)
-        if fs.status != prev_status and cycle_active:
-            if fs.status == STATUS_FEHLER:
-                learning.add_event("FEHLER", "Sensorfehler erkannt", category="status")
-            elif fs.status == STATUS_WARNUNG:
-                learning.add_event("WARNUNG", "Anomales Beladungsverhalten erkannt", category="status")
-            elif fs.status in (STATUS_WECHSEL, STATUS_WECHSEL_BESTAETIGEN):
-                learning.add_event("WECHSEL",
-                    f"Filterwechsel erforderlich – Δp={fs.dp_bar:.3f} bar", category="status")
-            elif prev_status in (STATUS_FEHLER, STATUS_WARNUNG) and fs.status == STATUS_OK:
-                learning.close_event(category="status")
-
-        # ── Abweichungs-Perioden tracken (Δp, Q, R_eff) ─────────────────
-        if cycle_active and an_ready and profile_valid:
-            tol_dp   = settings.get("tolerance_dp_pct",   0.25) * 100
-            tol_flow = settings.get("tolerance_flow_pct", 0.25) * 100
-            tol_reff = settings.get("tolerance_reff_pct", 0.25) * 100
-            checks = [
-                ("dp",   dp_dev,   tol_dp,   f"Δp-Abweichung: +{dp_dev:.0f}% zur Referenz"),
-                ("flow", flow_dev, tol_flow, f"Durchfluss-Abweichung: {flow_dev:.0f}% zur Referenz"),
-                ("reff", reff_dev, tol_reff, f"Filterwiderstand-Abweichung: +{reff_dev:.0f}% zur Referenz"),
-            ]
-            # Read-Modify-Write atomar unter _state_lock – verhindert Race mit
-            # API-Handlern (Filterwechsel, Reset), die _dev_active zurücksetzen.
-            with _state_lock:
-                dev_active = _state.get("_dev_active", {"dp": False, "flow": False, "reff": False})
-                for ch, dev, tol, msg in checks:
-                    exceeds = abs(dev) > tol
-                    was_active = dev_active.get(ch, False)
-                    if exceeds and not was_active:
-                        learning.add_event("ABWEICHUNG", msg, category=f"dev_{ch}")
-                        dev_active[ch] = True
-                    elif not exceeds and was_active:
-                        learning.close_event(category=f"dev_{ch}")
-                        dev_active[ch] = False
-                _state["_dev_active"] = dev_active
-
-        # ── Prognosestatus ────────────────────────────────────────────────
-        req_cycles  = settings.get("required_cycles_for_profile", 3)
-        pred_status = predictor.get_status(
-            remaining_seconds=remaining_s,
-            heta_activated=heta_activated,
-            profile_valid=profile_valid,
-            learned_cycles=cycles_count,
-            required_cycles=req_cycles,
-        )
-
-        # ── Filterwechsel erkennen ────────────────────────────────────────
-        if fs.dp_bar >= dp_limit and not awaiting and cycle_active:
-            logger.warning("Filterwechsel-Grenzwert überschritten! dp=%.3f >= %.2f",
-                           fs.dp_bar, dp_limit)
-            with _state_lock:
-                _state["awaiting_confirmation"]  = True
-                _state["cycle_dp_reached_time"]  = time.time()
-            if _display_ctrl:
-                _display_ctrl.navigate_to_filter_change()
-                _display.show_filter_change(fs.dp_bar, dp_limit, armed=False, awaiting=True)
-            elif _display:
-                _display.show_filter_change(fs.dp_bar, dp_limit, armed=False, awaiting=True)
-            if _mqtt:
-                _mqtt.publish_alarm("WECHSEL", "Filterwechsel erforderlich!", heta_code)
-
-        # ── Serviceempfehlung ─────────────────────────────────────────────
-        rec = generate_service_recommendation(fs, pred_status, health_percent=smoothed_health)
-
-        # ── Datenbank ─────────────────────────────────────────────────────
-        db.insert_measurement({
-            "timestamp": time.time(),
-            "p1_bar": fs.p1_bar,
-            "p2_bar": fs.p2_bar,
-            "dp_bar": fs.dp_bar,
-            "flow_l_min": fs.flow_l_min,
-            "temperature_c": fs.temperature_c,
-            "r_eff": fs.r_eff,
-            "filter_health_percent": smoothed_health,
-            "status": fs.status,
-            "heta_code": heta_code,
-            "sensor_mode": sensor_mode,
-        })
-
-        # ── dp-Puffer aktualisieren (Fallback-Prognose) ───────────────────
-        _dp_rate_buffer.append((time.time(), fs.dp_bar))
-
-        with _state_lock:
-            _state.update({
-                "analysis_active":              an_active,
-                "analysis_ready":               an_ready,
-                "analysis_cycle_progress_pct":  cycle_progress_pct,
-                "analysis_elapsed_seconds":     analysis_elapsed,
-                "analysis_dp_rate_ref":         dp_slope_ref,
-                "analysis_dp_rate_current":     dp_slope_cur,
-                "analysis_dp_deviation_pct":    dp_dev,
-                "analysis_flow_rate_ref":       flow_slope_ref,
-                "analysis_flow_rate_current":   flow_slope_cur,
-                "analysis_flow_deviation_pct":  flow_dev,
-                "analysis_temp_rate_ref":       temp_slope_ref,
-                "analysis_temp_rate_current":   temp_slope_cur,
-                "analysis_temp_deviation_pct":  temp_dev,
-                "analysis_reff_rate_ref":       reff_slope_ref,
-                "analysis_reff_rate_current":   reff_slope_cur,
-                "analysis_reff_deviation_pct":  reff_dev,
-            })
-
-        # MQTT
-        if _mqtt and _mqtt.is_connected:
-            _mqtt.publish_measurements(fs, heta_code)
-
-        # Modbus TCP
-        if _modbus and _modbus.is_running:
-            _modbus.update(fs, _state)
-
-        # Display aktualisieren
-        _status_display_data = {
-            "heta_code":   heta_code or "---",
-            "mode":        "SIM" if sim_mode else "HW",
-            "p1":          fs.p1_bar,
-            "p2":          fs.p2_bar,
-            "dp":          fs.dp_bar,
-            "dp_limit":    dp_limit,
-            "flow":        fs.flow_l_min,
-            "temperature": fs.temperature_c,
-            "remaining":   pred_status["remaining_display"],
-            "status":      fs.status,
-        }
-        if _display_ctrl:
-            _display_ctrl.update_status(_status_display_data)
-        elif _display:
-            _display.show_status(_status_display_data)
-
-        # Systemzustand aktualisieren
-        with _state_lock:
-            _state.update({
-                "sensor_mode": sensor_mode,
-                "p1_bar": fs.p1_bar,
-                "p2_bar": fs.p2_bar,
-                "dp_bar": fs.dp_bar,
-                "flow_l_min": fs.flow_l_min,
-                "temperature_c": fs.temperature_c,
-                "r_eff": fs.r_eff,
-                "r_rel_factor": round(fs.r_eff / r_eff_clean_ref, 4) if (r_eff_clean_ref and r_eff_clean_ref > 0) else None,
-                "filter_health_percent": smoothed_health,
-                "filter_status": fs.status,
-                "sensor_error": fs.sensor_error,
-                "remaining_display": pred_status["remaining_display"],
-                "remaining_seconds": pred_status["remaining_seconds"],
-                "prediction_mode": pred_status["prediction_mode"],
-                "learned_cycles": cycles_count,
-                "required_cycles": req_cycles,
-                "profile_status": "VALIDIERT" if profile_valid else "LERNEND",
-                "reference_dp_clean": (_loop_profile.get("reference_dp_clean") or 0.0) if _loop_profile else 0.0,
-                "show_filter_health": heta_activated,
-                "service_message": rec["message"],
-                "service_priority": rec["priority"],
-                "last_update": time.strftime("%Y-%m-%dT%H:%M:%S"),
-                "sim_rates_active": get_simulation_rates_active(),
-                "sim_estimated_cycle_secs": round(get_simulation_estimated_cycle_secs(), 1),
-                "operation_mode": settings.get("operation_mode", "continuous"),
-            })
-
-        loop_elapsed = time.time() - t_start
-        sleep_time = max(0.0, interval - loop_elapsed)
-        time.sleep(sleep_time)
-
-    logger.info("Messzyklus beendet.")
-
-
-_measure_thread: threading.Thread = None
+_loop_thread: threading.Thread = None
 
 
 def _start_measurement_thread():
-    global _measure_thread
-    if _measure_thread and _measure_thread.is_alive():
+    global _loop_thread, _loop
+    if _loop_thread and _loop_thread.is_alive():
         # Alter Thread lebt noch; running wurde vom Aufrufer bereits auf True gesetzt,
         # sodass der Thread nach seinem sleep() einfach weiterläuft — kein neuer Thread.
         return
     _state["running"] = True
-    _measure_thread = threading.Thread(target=_measurement_loop, daemon=True)
-    _measure_thread.start()
+    _loop = MeasurementLoop(
+        state=_state,
+        state_lock=_state_lock,
+        settings=settings,
+        db=db,
+        learning=learning,
+        predictor=predictor,
+        dp_rate_buffer=_dp_rate_buffer,
+        sensor_manager=None,
+        sim_manager=None,
+        display=_display,
+        display_ctrl=_display_ctrl,
+        services=_loop_services,
+        fn_read_sensors=read_sensors,
+        fn_update_auto_thresholds=_update_auto_thresholds,
+        fn_seed_predictor=_seed_predictor_from_profile,
+        fn_get_flow_thresholds=_get_flow_thresholds,
+        fn_get_sim_rates=get_simulation_rates_active,
+        fn_get_sim_cycle_secs=get_simulation_estimated_cycle_secs,
+        fn_generate_service_rec=generate_service_recommendation,
+        fn_reset_simulation=reset_simulation,
+        fn_get_status_display_data=None,
+    )
+    _loop_thread = threading.Thread(target=_loop.run, daemon=True, name="measurement")
+    _loop_thread.start()
 
 
 # ---------------------------------------------------------------------------
@@ -1212,7 +679,7 @@ def help_page():
 
     doc_path = os.path.join(_BASE_DIR, "docs", "benutzerhandbuch.md")
     try:
-        with open(doc_path, "r", encoding="utf-8") as f:
+        with open(doc_path, encoding="utf-8") as f:
             raw = f.read()
     except FileNotFoundError:
         raw = "# Benutzerhandbuch\n\nDie Datei `docs/benutzerhandbuch.md` wurde nicht gefunden."
@@ -1444,8 +911,8 @@ def api_heta_reset_cycles():
     db.reset_cycles_for_heta(heta_code)
 
     # Prognose-Modell zurücksetzen
-    global _smoothed_health_pct
-    _smoothed_health_pct = None
+    if _loop:
+        _loop.mstate.smoothed_health_pct = None
     predictor.reset()
     _dp_rate_buffer.clear()
 
@@ -1472,507 +939,30 @@ def api_heta_reset_cycles():
     })
 
 
-def _do_confirm_filter_change():
-    """Führt die Filterwechsel-Bestätigung durch (REST-API und Display-Controller)."""
-    global _flow_stable_since, _flow_below_since
-
-    with _state_lock:
-        heta_code        = _state["heta_code"]
-        cycle_was_active = _state["cycle_active"]
-        active_secs      = _state.get("cycle_active_seconds", 0.0)
-
-    if cycle_was_active and learning.active_cycle:
-        with _state_lock:
-            current_r        = _state["r_eff"]
-            current_dp       = _state["dp_bar"]
-            dp_reached_time  = _state.get("cycle_dp_reached_time")
-        # Auto-Schwellwerte aus Zyklus-Samples aktualisieren
-        if heta_code:
-            try:
-                samples = [{"dp_bar": s, "flow_l_min": f}
-                           for s, f in zip(
-                               learning.active_cycle.dp_samples,
-                               learning.active_cycle.flow_samples,
-                           )]
-                _update_auto_thresholds(samples)
-            except Exception:
-                pass
-        learning.end_cycle(confirmed=True,
-                           end_r_eff=current_r,
-                           end_dp=current_dp,
-                           end_time=dp_reached_time,
-                           active_seconds=active_secs if active_secs > 0 else None)
-
-    global _smoothed_health_pct
-    _smoothed_health_pct = None
-    predictor.reset()
-    _dp_rate_buffer.clear()
-    _flow_stable_since = None
-    _flow_below_since  = None
-    reset_simulation()
-
-    with _state_lock:
-        _state["awaiting_confirmation"]  = False
-        _state["cycle_active"]           = False
-        _state["cycle_paused"]           = False
-        _state["waiting_for_flow"]       = True   # Warten auf Durchfluss nach Wechsel
-        _state["cycle_start_time"]       = None
-        _state["cycle_dp_reached_time"]  = None
-        _state["cycle_active_seconds"]   = 0.0
-        _state["cycle_pause_start_time"] = None
-        _state["anomaly_active"]        = False
-        _state["_dev_active"]          = {"dp": False, "flow": False, "reff": False}
-        _state["anomaly_percent"]        = 0.0
-
-    db.insert_service_event("FILTERWECHSEL_BESTAETIGT", heta_code,
-                            json.dumps({"timestamp": time.time()}))
-    logger.info("Filterwechsel bestätigt – warte auf Durchfluss für neuen Zyklus.")
 
 
 @app.route("/api/diagnostics", methods=["GET"])
 def api_diagnostics():
     """Selbstcheck aller Komponenten basierend auf tatsächlichem Laufzeitzustand."""
-    import platform
-
-    checks = []
-
-    # ── System ──────────────────────────────────────────────────────────────
-    checks.append({
-        "id": "system",
-        "label": "System",
-        "status": "ok",
-        "detail": (f"Python {sys.version.split()[0]}  ·  "
-                   f"{platform.machine()}  ·  "
-                   f"{platform.system()} {platform.release()}"),
-        "hints": [],
-    })
-
-    # ── Software-Version ────────────────────────────────────────────────────
-    try:
-        gres = subprocess.run(
-            ["git", "log", "--oneline", "-1"],
-            capture_output=True, text=True, timeout=5, cwd=_BASE_DIR,
-        )
-        git_info = gres.stdout.strip() if gres.returncode == 0 else "unbekannt"
-    except Exception:
-        git_info = "git nicht verfügbar"
-    checks.append({
-        "id": "git",
-        "label": "Software-Version (Git)",
-        "status": "ok",
-        "detail": git_info,
-        "hints": [],
-    })
-
-    # ── Betriebsmodus ───────────────────────────────────────────────────────
-    with _state_lock:
-        sim_mode    = _state["simulation_mode"]
-        hw_avail    = _state.get("sensor_hw_available", False)
-        meas_running = _state["running"]
-        awaiting     = _state["awaiting_confirmation"]
-        cycle_active = _state["cycle_active"]
-        sensor_fault = _state.get("sensor_fault", False)
-        sensor_err   = _state.get("sensor_error", False)
-        heta_code    = _state.get("heta_code", "")
-
-    if sim_mode:
-        mode_status = "info"
-        mode_detail = "Simulationsmodus aktiv"
-        if hw_avail:
-            mode_detail += " (Hardware erkannt – Echtbetrieb verfügbar)"
-        else:
-            mode_detail += " – kein AnoPi Shield gefunden"
-        mode_hints = (["Für Echtbetrieb: simulation_mode=false in den Einstellungen"]
-                      if hw_avail else [])
-    else:
-        if sensor_fault:
-            mode_status = "error"
-            mode_detail = f"Hardware-Modus – Sensorfehler: {_state.get('sensor_fault_message', '')}"
-            mode_hints  = ["Verkabelung aller 4 Kanäle prüfen", "Sensorneuprüfung über den Button starten"]
-        elif sensor_err:
-            mode_status = "warning"
-            mode_detail = "Hardware-Modus – Sensorlesefehler (Messung läuft)"
-            mode_hints  = ["Sensor-Kabelverbindungen prüfen"]
-        else:
-            mode_status = "ok"
-            mode_detail = "Hardware-Modus – AnoPi Shield aktiv"
-            mode_hints  = []
-    checks.append({
-        "id": "mode",
-        "label": "Betriebsmodus",
-        "status": mode_status,
-        "detail": mode_detail,
-        "hints": mode_hints,
-    })
-
-    # ── Messzyklus ──────────────────────────────────────────────────────────
-    if not meas_running and not awaiting:
-        cyc_status = "warning"
-        cyc_detail = "Messung gestoppt"
-        cyc_hints  = ["Messung über den Start-Button starten"]
-    elif awaiting:
-        cyc_status = "warning"
-        cyc_detail = "Messung pausiert – Filterwechsel bestätigen"
-        cyc_hints  = ["Filterwechsel durchführen und bestätigen um fortzufahren"]
-    elif cycle_active:
-        cyc_status = "ok"
-        cyc_detail = f"Messung läuft – Zyklus aktiv{(' · ' + heta_code) if heta_code else ''}"
-        cyc_hints  = []
-    else:
-        cyc_status = "ok"
-        cyc_detail = "Messung läuft – warte auf Zyklusstart (dp unterhalb Startschwelle)"
-        cyc_hints  = []
-    checks.append({
-        "id": "measurement",
-        "label": "Messzyklus",
-        "status": cyc_status,
-        "detail": cyc_detail,
-        "hints": cyc_hints,
-    })
-
-    # ── Datenbank ─────────────────────────────────────────────────────────────
-    try:
-        with db._conn() as _dbcon:
-            meas_count  = _dbcon.execute("SELECT COUNT(*) FROM measurements").fetchone()[0]
-            cycle_count = _dbcon.execute("SELECT COUNT(*) FROM filter_cycles").fetchone()[0]
-        checks.append({
-            "id": "database",
-            "label": "Datenbank (SQLite)",
-            "status": "ok",
-            "detail": (f"{meas_count} Messwerte  ·  {cycle_count} Filterzyklen  ·  "
-                       f"Pfad: {db.db_path}"),
-            "hints": [],
-        })
-    except Exception as exc:
-        checks.append({
-            "id": "database",
-            "label": "Datenbank (SQLite)",
-            "status": "error",
-            "detail": f"Datenbankfehler: {exc}",
-            "hints": ["data/-Verzeichnis vorhanden?", "Schreibrechte prüfen"],
-        })
-
-    # ── MQTT ────────────────────────────────────────────────────────────────
-    mqtt_enabled = settings.get("mqtt_enabled", False)
-    if not mqtt_enabled:
-        checks.append({
-            "id": "mqtt",
-            "label": "MQTT",
-            "status": "info",
-            "detail": "MQTT deaktiviert (mqtt_enabled=false in den Einstellungen)",
-            "hints": [],
-        })
-    elif _mqtt is None:
-        checks.append({
-            "id": "mqtt",
-            "label": "MQTT",
-            "status": "error",
-            "detail": "MQTT-Client konnte nicht initialisiert werden",
-            "hints": [
-                "pip install paho-mqtt",
-                f"Broker-Adresse prüfen: {settings.get('mqtt_broker','localhost')}:{settings.get('mqtt_port',1883)}",
-            ],
-        })
-    elif _mqtt.is_connected:
-        checks.append({
-            "id": "mqtt",
-            "label": "MQTT",
-            "status": "ok",
-            "detail": (f"Verbunden mit {settings.get('mqtt_broker','localhost')}:"
-                       f"{settings.get('mqtt_port',1883)}  ·  "
-                       f"Client-ID: {settings.get('mqtt_client_id','heta_monitor')}"),
-            "hints": [],
-        })
-    else:
-        checks.append({
-            "id": "mqtt",
-            "label": "MQTT",
-            "status": "warning",
-            "detail": (f"Nicht verbunden mit "
-                       f"{settings.get('mqtt_broker','localhost')}:{settings.get('mqtt_port',1883)}"),
-            "hints": [
-                "MQTT-Broker erreichbar?  ping " + settings.get("mqtt_broker", "localhost"),
-                "Broker-Port und Zugangsdaten in den Einstellungen prüfen",
-            ],
-        })
-
-    # ── Modbus TCP ───────────────────────────────────────────────────────────
-    modbus_enabled = settings.get("modbus_enabled", False)
-    if not modbus_enabled:
-        checks.append({
-            "id": "modbus",
-            "label": "Modbus TCP",
-            "status": "info",
-            "detail": "Modbus TCP deaktiviert (modbus_enabled=false in den Einstellungen)",
-            "hints": [],
-        })
-    elif _modbus is None:
-        checks.append({
-            "id": "modbus",
-            "label": "Modbus TCP",
-            "status": "error",
-            "detail": "Modbus-TCP-Server konnte nicht initialisiert werden",
-            "hints": [
-                "pip install pymodbus",
-                f"Port prüfen: {settings.get('modbus_port', 502)} (Root-Rechte nötig für Port < 1024)",
-            ],
-        })
-    elif _modbus.is_running:
-        checks.append({
-            "id": "modbus",
-            "label": "Modbus TCP",
-            "status": "ok",
-            "detail": (f"Server aktiv auf {settings.get('modbus_host','0.0.0.0')}:"
-                       f"{settings.get('modbus_port', 502)}  ·  11 Holding-Register"),
-            "hints": [],
-        })
-    else:
-        checks.append({
-            "id": "modbus",
-            "label": "Modbus TCP",
-            "status": "warning",
-            "detail": (f"Server nicht aktiv  "
-                       f"({settings.get('modbus_host','0.0.0.0')}:{settings.get('modbus_port',502)})"),
-            "hints": [
-                f"Port {settings.get('modbus_port',502)} bereits belegt?  "
-                f"sudo lsof -i :{settings.get('modbus_port',502)}",
-                "Port < 1024 benötigt Root oder authbind",
-            ],
-        })
-
-    # ── OLED-Display ─────────────────────────────────────────────────────────
-    if not settings.get("display_enabled", True):
-        checks.append({
-            "id": "display",
-            "label": "OLED-Display (SSD1309)",
-            "status": "info",
-            "detail": "Display deaktiviert (display_enabled=false in den Einstellungen)",
-            "hints": [],
-        })
-    elif _display is None:
-        checks.append({
-            "id": "display",
-            "label": "OLED-Display (SSD1309)",
-            "status": "error",
-            "detail": "Display-Modul konnte beim Start nicht geladen werden",
-            "hints": [
-                "pip install luma.oled",
-                "Logs prüfen: journalctl -u heta-monitor | grep -i display",
-            ],
-        })
-    elif _display.is_simulated:
-        use_spi = settings.get("display_use_spi", True)
-        if use_spi:
-            spi_port   = settings.get("display_spi_port", 0)
-            spi_device = settings.get("display_spi_device", 0)
-            dc  = settings.get("display_gpio_dc", 25)
-            rst = settings.get("display_gpio_rst", 27)
-            hw_hints = [
-                f"SPI-Verbindung: DC→GPIO{dc}, RST→GPIO{rst}, DIN→GPIO10, CLK→GPIO11, CS→GPIO8",
-                f"SPI-Bus prüfen: ls /dev/spidev{spi_port}.{spi_device}",
-                "SPI aktivieren: sudo raspi-config → Interface Options → SPI",
-                "pip install luma.oled",
-            ]
-        else:
-            addr = settings.get("display_i2c_address", 60)
-            hw_hints = [
-                f"I2C-Adresse: 0x{addr:02X}  ·  I2C-Bus prüfen: ls /dev/i2c*",
-                "I2C aktivieren: sudo raspi-config → Interface Options → I2C",
-                "i2c-Gerät scannen: sudo i2cdetect -y 1",
-            ]
-        checks.append({
-            "id": "display",
-            "label": "OLED-Display (SSD1309)",
-            "status": "warning",
-            "detail": "Kein Hardware-Display erkannt – läuft im Simulationsmodus (kein Ausgabegerät)",
-            "hints": hw_hints,
-        })
-    else:
-        try:
-            _display.show_network(_get_local_ip(), settings.get("webserver_port", 8080), "DIAGNOSE")
-            checks.append({
-                "id": "display",
-                "label": "OLED-Display (SSD1309)",
-                "status": "ok",
-                "detail": "Display aktiv – Testbild erfolgreich gerendert",
-                "hints": [],
-            })
-        except Exception as exc:
-            checks.append({
-                "id": "display",
-                "label": "OLED-Display (SSD1309)",
-                "status": "error",
-                "detail": f"Render-Fehler: {exc}",
-                "hints": ["Verkabelung prüfen", "sudo pip install --upgrade luma.oled"],
-            })
-
-    # ── SPI-Bus (nur relevant wenn Display SPI nutzt oder Hardware-Modus aktiv)
-    display_uses_spi = settings.get("display_enabled", True) and settings.get("display_use_spi", True)
-    if display_uses_spi or not sim_mode:
-        spi_port   = settings.get("display_spi_port", 0)
-        spi_device = settings.get("display_spi_device", 0)
-        spi_dev    = f"/dev/spidev{spi_port}.{spi_device}"
-        spi_exists = os.path.exists(spi_dev)
-        checks.append({
-            "id": "spi",
-            "label": f"SPI-Bus ({spi_dev})",
-            "status": "ok" if spi_exists else "error",
-            "detail": f"{spi_dev} {'gefunden' if spi_exists else 'nicht gefunden – SPI nicht aktiviert'}",
-            "hints": [] if spi_exists else [
-                "SPI aktivieren: sudo raspi-config → Interface Options → SPI",
-                "Neustart: sudo reboot",
-                "Prüfen: ls /dev/spidev*",
-            ],
-        })
-
-    # ── I2C-Bus (nur relevant wenn Display I2C nutzt) ────────────────────────
-    display_uses_i2c = settings.get("display_enabled", True) and not settings.get("display_use_spi", True)
-    if display_uses_i2c:
-        i2c_dev    = "/dev/i2c-1"
-        i2c_exists = os.path.exists(i2c_dev)
-        checks.append({
-            "id": "i2c_bus",
-            "label": f"I2C-Bus ({i2c_dev})",
-            "status": "ok" if i2c_exists else "error",
-            "detail": f"{i2c_dev} {'gefunden' if i2c_exists else 'nicht gefunden – I2C nicht aktiviert'}",
-            "hints": [] if i2c_exists else [
-                "I2C aktivieren: sudo raspi-config → Interface Options → I2C",
-                "Neustart: sudo reboot",
-                "Prüfen: ls /dev/i2c*",
-            ],
-        })
-
-    # ── ANO-Encoder ──────────────────────────────────────────────────────────
-    if not settings.get("navigation_enabled", True):
-        checks.append({
-            "id": "encoder",
-            "label": "ANO-Encoder (GPIO)",
-            "status": "info",
-            "detail": "Encoder deaktiviert (navigation_enabled=false in den Einstellungen)",
-            "hints": [],
-        })
-    elif _navigation is None:
-        checks.append({
-            "id": "encoder",
-            "label": "ANO-Encoder (GPIO)",
-            "status": "error",
-            "detail": "Encoder-Modul konnte beim Start nicht geladen werden",
-            "hints": [
-                "pip install gpiozero lgpio",
-                "Logs prüfen: journalctl -u heta-monitor | grep -i encoder",
-            ],
-        })
-    elif _navigation.is_simulated:
-        enc_pins = {
-            "ENCA": settings.get("encoder_pin_enca", 16),
-            "ENCB": settings.get("encoder_pin_encb", 20),
-            "SW1":  settings.get("encoder_pin_sw1", 21),
-            "SW2":  settings.get("encoder_pin_sw2", 12),
-            "SW3":  settings.get("encoder_pin_sw3", 13),
-            "SW4":  settings.get("encoder_pin_sw4", 19),
-            "SW5":  settings.get("encoder_pin_sw5", 26),
-        }
-        pin_summary = "  ·  ".join(f"{n}=GPIO{p}" for n, p in enc_pins.items())
-        checks.append({
-            "id": "encoder",
-            "label": "ANO-Encoder (GPIO)",
-            "status": "warning",
-            "detail": f"Kein Hardware-Encoder erkannt – läuft im Simulationsmodus  ·  {pin_summary}",
-            "hints": [
-                "Encoder anschließen: ENCA, ENCB, SW1–SW5, COMA→GND, COMB→GND",
-                "GPIO-Pins in den Einstellungen prüfen",
-                "pip install gpiozero lgpio",
-            ],
-        })
-    else:
-        steps = _navigation.get_encoder_steps()
-        checks.append({
-            "id": "encoder",
-            "label": "ANO-Encoder (GPIO)",
-            "status": "ok",
-            "detail": f"Encoder aktiv – Schrittposition: {steps}",
-            "hints": [],
-        })
-
-    # ── Sensoren / AnoPi Shield ───────────────────────────────────────────────
-    if sim_mode:
-        checks.append({
-            "id": "sensors",
-            "label": "Sensoren (4–20 mA / AnoPi Shield)",
-            "status": "info",
-            "detail": (f"Simulationsmodus – Sensor-Hardware nicht geprüft"
-                       + ("  ·  AnoPi Shield erreichbar" if hw_avail else "  ·  kein AnoPi Shield erkannt")),
-            "hints": (["Für Echtbetrieb: simulation_mode=false in den Einstellungen"]
-                      if hw_avail else []),
-        })
-    elif not hw_avail:
-        checks.append({
-            "id": "sensors",
-            "label": "Sensoren (4–20 mA / AnoPi Shield)",
-            "status": "error",
-            "detail": "AnoPi Shield nicht erreichbar – SPI-Kommunikation fehlgeschlagen",
-            "hints": [
-                "AnoPi Shield korrekt aufgesteckt?",
-                "SPI-Bus aktiv? (ls /dev/spidev*)",
-                "pip install spidev",
-            ],
-        })
-    else:
-        try:
-            import spidev  # type: ignore
-            _spi = spidev.SpiDev()
-            _spi.open(0, 0)
-            _spi.max_speed_hz = 1_350_000
-            raw = _spi.xfer2([1, (8 + 0) << 4, 0])
-            _spi.close()
-            adc_raw = ((raw[1] & 3) << 8) + raw[2]
-            checks.append({
-                "id": "sensors",
-                "label": "Sensoren (4–20 mA / AnoPi Shield)",
-                "status": "ok",
-                "detail": f"AnoPi Shield antwortet – ADC Kanal 0 Rohwert: {adc_raw} / 4095",
-                "hints": [],
-            })
-        except ImportError:
-            checks.append({
-                "id": "sensors",
-                "label": "Sensoren (4–20 mA / AnoPi Shield)",
-                "status": "error",
-                "detail": "spidev-Bibliothek nicht installiert",
-                "hints": ["pip install spidev"],
-            })
-        except Exception as exc:
-            checks.append({
-                "id": "sensors",
-                "label": "Sensoren (4–20 mA / AnoPi Shield)",
-                "status": "error",
-                "detail": f"SPI-Lesefehler: {exc}",
-                "hints": [
-                    "AnoPi Shield korrekt aufgesteckt?",
-                    "SPI-Gerätekonflikte? (Display und Shield auf unterschiedlichen CE)",
-                ],
-            })
-
-    # ── Gesamtstatus ──────────────────────────────────────────────────────────
-    statuses = [c["status"] for c in checks]
-    if "error" in statuses:
-        overall = "error"
-    elif "warning" in statuses:
-        overall = "warning"
-    else:
-        overall = "ok"
-
-    return jsonify({
-        "overall": overall,
-        "timestamp": time.time(),
-        "checks": checks,
-    })
+    return jsonify(_run_diagnostics(
+        state=_state,
+        state_lock=_state_lock,
+        settings=settings,
+        db=db,
+        base_dir=_BASE_DIR,
+        get_local_ip=_get_local_ip,
+        mqtt=_mqtt,
+        modbus=_modbus,
+        display=_display,
+        navigation=_navigation,
+    ))
 
 
 @app.route("/api/filter/confirm-change", methods=["POST"])
 def api_confirm_filter_change():
     """Bestätigt den Filterwechsel und startet einen neuen Zyklus."""
-    _do_confirm_filter_change()
+    if _loop:
+        _loop.confirm_filter_change()
     return jsonify({"success": True, "message": "Filterwechsel bestätigt. Neuer Zyklus startet."})
 
 
@@ -2118,11 +1108,13 @@ def api_settings_post():
                 port=settings.get("modbus_port", 502),
             )
             _modbus.start()
+        _loop_services["mqtt"] = _mqtt
+        _loop_services["modbus"] = _modbus
 
     # Lerndaten zurücksetzen wenn nötig
     if learning_reset_needed:
-        global _smoothed_health_pct
-        _smoothed_health_pct = None
+        if _loop:
+            _loop.mstate.smoothed_health_pct = None
         db.reset_all_learning_data()
         predictor.reset()
         reset_simulation()
@@ -2228,8 +1220,8 @@ def api_factory_reset():
     settings.update(_load_settings())
 
     # 4. Laufzeitstatus zurücksetzen
-    global _smoothed_health_pct
-    _smoothed_health_pct = None
+    if _loop:
+        _loop.mstate.smoothed_health_pct = None
     predictor.reset()
     reset_simulation()
     learning.tolerance_reff_pct = settings.get("tolerance_reff_pct", 0.25)
@@ -2331,11 +1323,11 @@ def api_simulation_start():
     """Startet den Simulationsmodus und den Messzyklus. Setzt immer am Zyklusanfang an."""
     if not settings.get("onboarding_complete", False):
         return jsonify({"success": False, "message": "Onboarding nicht abgeschlossen."}), 403
-    global _smoothed_health_pct
     learning.abort_cycle()
     reset_simulation()
     predictor.reset()
-    _smoothed_health_pct = None
+    if _loop:
+        _loop.mstate.smoothed_health_pct = None
     with _state_lock:
         # running=True muss VOR _start_measurement_thread gesetzt werden: läuft der alte
         # Thread nach einem Stop noch im sleep(), sieht er running=True und macht weiter
@@ -2362,7 +1354,6 @@ def api_simulation_start():
 @app.route("/api/simulation/stop", methods=["POST"])
 def api_simulation_stop():
     """Stoppt den Messzyklus und verwirft einen eventuell laufenden Zyklus."""
-    global _smoothed_health_pct
     clear_simulation_rates()
     learning.abort_cycle()
     with _state_lock:
@@ -2375,18 +1366,19 @@ def api_simulation_stop():
         _state["anomaly_active"]        = False
         _state["_dev_active"]          = {"dp": False, "flow": False, "reff": False}
         _state["anomaly_percent"]        = 0.0
-    _smoothed_health_pct = None
+    if _loop:
+        _loop.mstate.smoothed_health_pct = None
     return jsonify({"success": True, "message": "Simulation gestoppt."})
 
 
 @app.route("/api/simulation/reset", methods=["POST"])
 def api_simulation_reset():
     """Setzt Simulation und Prognose zurück."""
-    global _smoothed_health_pct
     clear_simulation_rates()
     full_reset_simulation()
     predictor.reset()
-    _smoothed_health_pct = None
+    if _loop:
+        _loop.mstate.smoothed_health_pct = None
     with _state_lock:
         _state["cycle_active"]           = False
         _state["sim_rates_active"]       = False
@@ -2418,7 +1410,6 @@ def api_simulation_quick_learn():
 
     dp_clean          = settings.get("dp_clean_bar", 0.2)
     dp_limit          = settings.get("dp_limit_bar", 2.5)
-    flow_max          = settings.get("flow_max_l_min", 150.0)
     sampling_interval = settings.get("sampling_interval_seconds", 1)
     # Zyklusdauer aus Simulator ableiten (dirt_rate_factor bestimmt die Dauer)
     sc_params     = get_simulation_scenario_params()
@@ -2516,8 +1507,8 @@ def api_simulation_quick_learn():
 
     # Simulation auf Schritt 0 zurücksetzen damit der nächste Zyklus
     # mit sauberem Startwert beginnt (kein dp-Offset aus alten Schritten).
-    global _smoothed_health_pct
-    _smoothed_health_pct = None
+    if _loop:
+        _loop.mstate.smoothed_health_pct = None
     reset_simulation()
     learning._active_cycle = None   # laufenden Zyklus verwerfen (Daten vor Quick-Learn)
     with _state_lock:
@@ -2613,7 +1604,6 @@ def api_service_request():
     with _state_lock:
         current = dict(_state)
 
-    from calculations import FilterState
     fs = FilterState(
         p1_bar=current["p1_bar"],
         p2_bar=current["p2_bar"],
