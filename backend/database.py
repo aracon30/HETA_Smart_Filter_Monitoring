@@ -111,13 +111,13 @@ class Database:
         with self._conn() as conn:
             existing = {r[1] for r in conn.execute("PRAGMA table_info(heta_profiles)").fetchall()}
             for col, typ, default in [
-                ("reference_avg_flow",         "REAL", "0.0"),
-                ("reference_avg_temp",         "REAL", "20.0"),
-                ("reference_curve_json",       "TEXT", "NULL"),
+                ("reference_avg_flow", "REAL", "0.0"),
+                ("reference_avg_temp", "REAL", "20.0"),
+                ("reference_curve_json", "TEXT", "NULL"),
                 ("reference_duration_seconds", "REAL", "0.0"),
-                ("reference_r_eff_start",      "REAL", "0.0"),
-                ("reference_r_eff_end",        "REAL", "0.0"),
-                ("reference_dp_clean",         "REAL", "0.0"),
+                ("reference_r_eff_start", "REAL", "0.0"),
+                ("reference_r_eff_end", "REAL", "0.0"),
+                ("reference_dp_clean", "REAL", "0.0"),
             ]:
                 if col not in existing:
                     conn.execute(f"ALTER TABLE heta_profiles ADD COLUMN {col} {typ} DEFAULT {default}")
@@ -127,7 +127,7 @@ class Database:
             existing = {r[1] for r in conn.execute("PRAGMA table_info(cycle_samples)").fetchall()}
             for col, typ, default in [
                 ("filter_health_percent", "REAL", "NULL"),
-                ("remaining_seconds",     "REAL", "NULL"),
+                ("remaining_seconds", "REAL", "NULL"),
             ]:
                 if col not in existing:
                     conn.execute(f"ALTER TABLE cycle_samples ADD COLUMN {col} {typ} DEFAULT {default}")
@@ -161,9 +161,7 @@ class Database:
     def get_latest_measurements(self, limit: int = 100) -> list:
         """Gibt die letzten N Messwerte zurück."""
         with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM measurements ORDER BY timestamp DESC LIMIT ?", (limit,)
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM measurements ORDER BY timestamp DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
 
     def get_measurements_since(self, since_timestamp: float) -> list:
@@ -265,7 +263,8 @@ class Database:
         data.setdefault("reference_r_eff_start", 0.0)
         data.setdefault("reference_r_eff_end", 0.0)
         with self._conn() as conn:
-            conn.execute("""
+            conn.execute(
+                """
                 INSERT INTO heta_profiles
                     (heta_code, reference_r_eff, reference_loading_rate,
                      reference_avg_flow, reference_avg_temp,
@@ -290,14 +289,14 @@ class Database:
                     cycles_count                 = excluded.cycles_count,
                     profile_valid                = excluded.profile_valid,
                     last_updated                 = excluded.last_updated
-            """, data)
+            """,
+                data,
+            )
 
     def get_profile(self, heta_code: str) -> dict | None:
         """Gibt das gespeicherte HETA-Profil zurück oder None."""
         with self._conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM heta_profiles WHERE heta_code = ?", (heta_code,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM heta_profiles WHERE heta_code = ?", (heta_code,)).fetchone()
         return dict(row) if row else None
 
     def reset_cycles_for_heta(self, heta_code: str):
@@ -344,9 +343,7 @@ class Database:
     def get_service_events(self, limit: int = 50) -> list:
         """Gibt die letzten Serviceereignisse zurück."""
         with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM service_events ORDER BY timestamp DESC LIMIT ?", (limit,)
-            ).fetchall()
+            rows = conn.execute("SELECT * FROM service_events ORDER BY timestamp DESC LIMIT ?", (limit,)).fetchall()
         return [dict(r) for r in rows]
 
     # ------------------------------------------------------------------

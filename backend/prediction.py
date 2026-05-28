@@ -17,9 +17,9 @@ logger = logging.getLogger(__name__)
 
 
 # Anzeigemodi
-MODE_BASIS      = "BASIS"
-MODE_LERNEND    = "HETA_LERNEND"
-MODE_VALIDIERT  = "HETA_VALIDIERT"
+MODE_BASIS = "BASIS"
+MODE_LERNEND = "HETA_LERNEND"
+MODE_VALIDIERT = "HETA_VALIDIERT"
 
 
 def _format_basis_range(seconds: float) -> str:
@@ -33,7 +33,7 @@ def _format_basis_range(seconds: float) -> str:
         return "< 1 Std."
 
     hours = seconds / 3600.0
-    days  = hours / 24.0
+    days = hours / 24.0
 
     if days >= 5:
         return "> 5 Tage"
@@ -99,9 +99,9 @@ class PredictionEngine:
         self._history_window: int = 30
 
         # Multi-Kanal-Verlauf für Q, T, R_eff
-        self._flow_history:  list[float] = []
-        self._temp_history:  list[float] = []
-        self._reff_history:  list[float] = []
+        self._flow_history: list[float] = []
+        self._temp_history: list[float] = []
+        self._reff_history: list[float] = []
 
     def update(self, dp_bar: float) -> float | None:
         """
@@ -209,12 +209,11 @@ class PredictionEngine:
             return 0.0
 
         # Sammle (t_pct, dp) – nur gültige Punkte
-        pts = [(p["t_pct"], p["dp"]) for p in curve
-               if p.get("t_pct") is not None and p.get("dp") is not None]
+        pts = [(p["t_pct"], p["dp"]) for p in curve if p.get("t_pct") is not None and p.get("dp") is not None]
         if not pts:
             return 0.0
 
-        pts.sort(key=lambda x: x[0])   # nach t_pct (aufsteigend)
+        pts.sort(key=lambda x: x[0])  # nach t_pct (aufsteigend)
 
         # Rand-Clamps
         if dp_bar <= pts[0][1]:
@@ -226,7 +225,7 @@ class PredictionEngine:
         for i in range(len(pts) - 1):
             t_lo, dp_lo = pts[i]
             t_hi, dp_hi = pts[i + 1]
-            if dp_hi <= dp_lo:          # nicht-monotone Stelle überspringen
+            if dp_hi <= dp_lo:  # nicht-monotone Stelle überspringen
                 continue
             if dp_lo <= dp_bar <= dp_hi:
                 frac = (dp_bar - dp_lo) / (dp_hi - dp_lo)
@@ -248,7 +247,7 @@ class PredictionEngine:
             return None
         x_mean = (n - 1) / 2.0
         y_mean = sum(history) / n
-        numerator   = sum((i - x_mean) * (history[i] - y_mean) for i in range(n))
+        numerator = sum((i - x_mean) * (history[i] - y_mean) for i in range(n))
         denominator = sum((i - x_mean) ** 2 for i in range(n))
         if denominator == 0:
             return None
@@ -281,7 +280,7 @@ class PredictionEngine:
     def reset(self):
         """Setzt die Prognose zurück (z.B. nach Filterwechsel oder Neukonfiguration)."""
         self._last_remaining = None
-        self._seeded_ceiling  = None
+        self._seeded_ceiling = None
         self._dp_history.clear()
         self._flow_history.clear()
         self._temp_history.clear()
@@ -290,8 +289,8 @@ class PredictionEngine:
     def seed(self, initial_seconds: float):
         """Setzt den Startwert der Reststandzeit aus der Referenzdauer."""
         if initial_seconds > 0:
-            self._last_remaining  = float(initial_seconds)
-            self._seeded_ceiling  = float(initial_seconds)  # kein Sprung über diesen Wert
+            self._last_remaining = float(initial_seconds)
+            self._seeded_ceiling = float(initial_seconds)  # kein Sprung über diesen Wert
 
     def update_limits(self, dp_limit: float, dp_clean: float):
         """Aktualisiert die Grenzwerte ohne Neustart."""
@@ -302,11 +301,14 @@ class PredictionEngine:
     # Ausgabe
     # ------------------------------------------------------------------
 
-    def get_status(self, remaining_seconds: float | None,
-                   heta_activated: bool,
-                   profile_valid: bool,
-                   learned_cycles: int,
-                   required_cycles: int = 3) -> dict:
+    def get_status(
+        self,
+        remaining_seconds: float | None,
+        heta_activated: bool,
+        profile_valid: bool,
+        learned_cycles: int,
+        required_cycles: int = 3,
+    ) -> dict:
         """
         Gibt das vollständige Prognose-Statusobjekt zurück.
 

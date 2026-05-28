@@ -17,8 +17,8 @@ import os
 
 logger = logging.getLogger(__name__)
 
-_BASE_DIR        = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_CONFIG_PATH     = os.path.join(_BASE_DIR, "config", "settings.json")
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_CONFIG_PATH = os.path.join(_BASE_DIR, "config", "settings.json")
 _CONFIG_LOCAL_PATH = os.path.join(_BASE_DIR, "config", "settings.local.json")
 
 # Standardwerte falls settings.json nicht vorhanden
@@ -41,25 +41,25 @@ _DEFAULTS = {
     "db_path": "data/heta_monitor.db",
     "export_path": "exports/",
     "log_path": "logs/",
-    "tolerance_dp_pct":   0.25,
+    "tolerance_dp_pct": 0.25,
     "tolerance_reff_pct": 0.25,
     "tolerance_flow_pct": 0.25,
-    "tolerance_temp_c":   10.0,
+    "tolerance_temp_c": 10.0,
     "required_cycles_for_profile": 3,
     # Simulation – feste Basiswerte
-    "sim_p1_base_bar":   4.0,
-    "sim_q_base_l_min":  145.0,
-    "sim_t_base_c":      25.0,
+    "sim_p1_base_bar": 4.0,
+    "sim_q_base_l_min": 145.0,
+    "sim_t_base_c": 25.0,
     "smoothing_factor": 0.15,
     "max_increase_percent_per_update": 2,
     "max_decrease_percent_per_update": 8,
     "min_slope": 0.001,
     # Zyklusstart-Verhalten (Durchflusserkennung)
-    "operation_mode": "continuous",          # "continuous" | "batch"
-    "flow_start_threshold_l_min": None,      # None = automatisch berechnet
-    "flow_stability_seconds": None,          # None = automatisch (Standard: 10 s)
-    "flow_pause_tolerance_seconds": None,    # None = automatisch (30/60 s)
-    "flow_max_pause_days": 7,               # Zyklus-Abbruch nach X Tagen ohne Durchfluss
+    "operation_mode": "continuous",  # "continuous" | "batch"
+    "flow_start_threshold_l_min": None,  # None = automatisch berechnet
+    "flow_stability_seconds": None,  # None = automatisch (Standard: 10 s)
+    "flow_pause_tolerance_seconds": None,  # None = automatisch (30/60 s)
+    "flow_max_pause_days": 7,  # Zyklus-Abbruch nach X Tagen ohne Durchfluss
     # Auto-berechnete Schwellwerte (werden nach jedem Zyklus aktualisiert):
     "flow_start_threshold_auto": 0.0,
     "flow_stability_seconds_auto": 10,
@@ -84,11 +84,11 @@ _DEFAULTS = {
     "navigation_enabled": True,
     "encoder_pin_enca": 16,
     "encoder_pin_encb": 20,
-    "encoder_pin_sw1":  21,   # Mitte / OK
-    "encoder_pin_sw2":  12,   # Unten
-    "encoder_pin_sw3":  13,   # Rechts
-    "encoder_pin_sw4":  19,   # Oben
-    "encoder_pin_sw5":  26,   # Links
+    "encoder_pin_sw1": 21,  # Mitte / OK
+    "encoder_pin_sw2": 12,  # Unten
+    "encoder_pin_sw3": 13,  # Rechts
+    "encoder_pin_sw4": 19,  # Oben
+    "encoder_pin_sw5": 26,  # Links
 }
 
 

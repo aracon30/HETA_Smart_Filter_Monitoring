@@ -21,13 +21,12 @@ class MQTTClient:
     Wird nur gestartet wenn mqtt_enabled=true in settings.json.
     """
 
-    TOPIC_STATUS       = "heta/filter/status"
+    TOPIC_STATUS = "heta/filter/status"
     TOPIC_MEASUREMENTS = "heta/filter/measurements"
-    TOPIC_SERVICE      = "heta/filter/service"
-    TOPIC_ALARM        = "heta/filter/alarm"
+    TOPIC_SERVICE = "heta/filter/service"
+    TOPIC_ALARM = "heta/filter/alarm"
 
-    def __init__(self, broker: str = "localhost", port: int = 1883,
-                 client_id: str = "heta_monitor"):
+    def __init__(self, broker: str = "localhost", port: int = 1883, client_id: str = "heta_monitor"):
         self._broker = broker
         self._port = port
         self._client_id = client_id
@@ -38,6 +37,7 @@ class MQTTClient:
         """Verbindet mit dem MQTT-Broker."""
         try:
             import paho.mqtt.client as mqtt  # type: ignore
+
             self._client = mqtt.Client(client_id=self._client_id)
             self._client.on_connect = self._on_connect
             self._client.on_disconnect = self._on_disconnect
@@ -57,7 +57,7 @@ class MQTTClient:
             logger.info("MQTT getrennt.")
 
     def _on_connect(self, client, userdata, flags, rc):
-        self._connected = (rc == 0)
+        self._connected = rc == 0
         if self._connected:
             logger.info("MQTT verbunden (rc=%d).", rc)
         else:

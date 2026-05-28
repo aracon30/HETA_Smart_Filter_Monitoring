@@ -27,43 +27,47 @@ import logging
 logger = logging.getLogger(__name__)
 
 # ── Displaykonstanten ──────────────────────────────────────────────────────────
-DISPLAY_WIDTH  = 128
+DISPLAY_WIDTH = 128
 DISPLAY_HEIGHT = 64
 
 # GPIO-Pins (BCM) – Waveshare 2.42" OLED SSD1309
-_SPI_GPIO_DC  = 25
+_SPI_GPIO_DC = 25
 _SPI_GPIO_RST = 27
 
 # Layout-Konstanten
-_HDR_H  = 12   # Header-Höhe
-_LINE0  = 13   # erste Inhaltszeile
-_LINE1  = 22
-_LINE2  = 31
-_LINE3  = 40
-_LINE4  = 49
-_DOTS_Y = 60   # y-Position Navigationspunkte
+_HDR_H = 12  # Header-Höhe
+_LINE0 = 13  # erste Inhaltszeile
+_LINE1 = 22
+_LINE2 = 31
+_LINE3 = 40
+_LINE4 = 49
+_DOTS_Y = 60  # y-Position Navigationspunkte
 
 # Bildschirmnamen
-SCREEN_STATUS        = "Status"
-SCREEN_HETA          = "HETA-Code"
+SCREEN_STATUS = "Status"
+SCREEN_HETA = "HETA-Code"
 SCREEN_FILTER_CHANGE = "Filterwechsel"
-SCREEN_SERVICE       = "Service"
-SCREEN_HISTORY       = "Historie"
-SCREEN_NETWORK       = "Netzwerk"
+SCREEN_SERVICE = "Service"
+SCREEN_HISTORY = "Historie"
+SCREEN_NETWORK = "Netzwerk"
 
 SCREENS = [
-    SCREEN_STATUS, SCREEN_HETA, SCREEN_FILTER_CHANGE,
-    SCREEN_SERVICE, SCREEN_HISTORY, SCREEN_NETWORK,
+    SCREEN_STATUS,
+    SCREEN_HETA,
+    SCREEN_FILTER_CHANGE,
+    SCREEN_SERVICE,
+    SCREEN_HISTORY,
+    SCREEN_NETWORK,
 ]
 
 # Status-Kurzbezeichnungen für das Abzeichen rechts neben dp
 _STATUS_BADGE = {
-    "OK":                    "OK",
-    "BEOBACHTEN":            "??",
-    "WECHSEL":               "!!",
-    "WECHSEL_BESTAETIGEN":   "!!",
-    "WARNUNG":               "!!",
-    "FEHLER":                "ERR",
+    "OK": "OK",
+    "BEOBACHTEN": "??",
+    "WECHSEL": "!!",
+    "WECHSEL_BESTAETIGEN": "!!",
+    "WARNUNG": "!!",
+    "FEHLER": "ERR",
 }
 
 
@@ -73,19 +77,24 @@ class OLEDDisplay:
     Fällt bei fehlender Hardware auf Simulationsmodus (Textlog) zurück.
     """
 
-    def __init__(self, use_spi: bool = True, spi_port: int = 0, spi_device: int = 0,
-                 gpio_dc: int = _SPI_GPIO_DC, gpio_rst: int = _SPI_GPIO_RST,
-                 i2c_address: int = 0x3C):
-        self._device     = None
-        self._font       = None   # 9 pt – Header
-        self._font_sm    = None   # 8 pt – Inhalt
-        self._simulated  = False
-        self._nav_idx    = 0      # aktiver Navigationspunkt
+    def __init__(
+        self,
+        use_spi: bool = True,
+        spi_port: int = 0,
+        spi_device: int = 0,
+        gpio_dc: int = _SPI_GPIO_DC,
+        gpio_rst: int = _SPI_GPIO_RST,
+        i2c_address: int = 0x3C,
+    ):
+        self._device = None
+        self._font = None  # 9 pt – Header
+        self._font_sm = None  # 8 pt – Inhalt
+        self._simulated = False
+        self._nav_idx = 0  # aktiver Navigationspunkt
         self._current_screen = SCREEN_STATUS
 
         try:
-            self._init_hardware(use_spi, spi_port, spi_device,
-                                gpio_dc, gpio_rst, i2c_address)
+            self._init_hardware(use_spi, spi_port, spi_device, gpio_dc, gpio_rst, i2c_address)
         except Exception as exc:
             logger.warning("OLED-Hardware nicht verfügbar: %s – Simulationsmodus.", exc)
             self._simulated = True
@@ -98,25 +107,25 @@ class OLEDDisplay:
         if use_spi:
             from luma.core.interface.serial import spi  # type: ignore
             from luma.oled.device import ssd1309  # type: ignore
-            serial = spi(port=spi_port, device=spi_device,
-                         gpio_DC=gpio_dc, gpio_RST=gpio_rst)
+
+            serial = spi(port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=gpio_rst)
         else:
             from luma.core.interface.serial import i2c  # type: ignore
             from luma.oled.device import ssd1309  # type: ignore
+
             serial = i2c(port=1, address=i2c_addr)
 
         self._device = ssd1309(serial, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT)
 
         ttf = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
         try:
-            self._font    = ImageFont.truetype(ttf, 9)
+            self._font = ImageFont.truetype(ttf, 9)
             self._font_sm = ImageFont.truetype(ttf, 8)
         except OSError:
-            self._font    = ImageFont.load_default()
+            self._font = ImageFont.load_default()
             self._font_sm = self._font
 
-        logger.info("OLED initialisiert (%s, DC=GPIO%d, RST=GPIO%d).",
-                    "SPI" if use_spi else "I2C", gpio_dc, gpio_rst)
+        logger.info("OLED initialisiert (%s, DC=GPIO%d, RST=GPIO%d).", "SPI" if use_spi else "I2C", gpio_dc, gpio_rst)
 
     # ── Öffentliche Schnittstelle ──────────────────────────────────────────────
 
@@ -143,19 +152,19 @@ class OLEDDisplay:
         """
         self._current_screen = SCREEN_STATUS
 
-        p1        = data.get("p1", 0.0)
-        p2        = data.get("p2", 0.0)
-        dp        = data.get("dp", 0.0)
-        dp_limit  = data.get("dp_limit", 2.5)
-        flow      = data.get("flow", 0.0)
-        temp      = data.get("temperature", 0.0)
+        p1 = data.get("p1", 0.0)
+        p2 = data.get("p2", 0.0)
+        dp = data.get("dp", 0.0)
+        dp_limit = data.get("dp_limit", 2.5)
+        flow = data.get("flow", 0.0)
+        temp = data.get("temperature", 0.0)
         remaining = data.get("remaining", "---")
-        status    = data.get("status", "OK")
-        mode      = data.get("mode", "SIM")
+        status = data.get("status", "OK")
+        mode = data.get("mode", "SIM")
 
-        ratio  = min(1.0, dp / dp_limit) if dp_limit > 0 else 0.0
-        pct    = int(ratio * 100)
-        badge  = _STATUS_BADGE.get(status, status[:3])
+        ratio = min(1.0, dp / dp_limit) if dp_limit > 0 else 0.0
+        pct = int(ratio * 100)
+        badge = _STATUS_BADGE.get(status, status[:3])
 
         def draw_fn(d):
             # ── Header ──
@@ -164,14 +173,12 @@ class OLEDDisplay:
             d.text((104, 2), mode, fill="black", font=self._font_sm)
 
             # ── p1 / p2 ──
-            d.text((0, _LINE0), f"p1:{p1:.2f}   p2:{p2:.2f} bar",
-                   fill="white", font=self._font_sm)
+            d.text((0, _LINE0), f"p1:{p1:.2f}   p2:{p2:.2f} bar", fill="white", font=self._font_sm)
 
             # ── dp + Status-Abzeichen ──
             d.text((0, _LINE1), f"dp: {dp:.3f} bar", fill="white", font=self._font_sm)
             bx = 99
-            d.rectangle([(bx, _LINE1 - 1), (127, _LINE1 + 9)],
-                         outline="white", fill="black")
+            d.rectangle([(bx, _LINE1 - 1), (127, _LINE1 + 9)], outline="white", fill="black")
             tw = self._text_w(d, badge, self._font_sm)
             d.text((bx + (29 - tw) // 2, _LINE1), badge, fill="white", font=self._font_sm)
 
@@ -188,19 +195,24 @@ class OLEDDisplay:
 
             self._draw_dots(d)
 
-        self._render(draw_fn,
-                     f"dp={dp:.3f} Q={flow:.0f} T={temp:.1f} | {remaining} | {status}")
+        self._render(draw_fn, f"dp={dp:.3f} Q={flow:.0f} T={temp:.1f} | {remaining} | {status}")
 
-    def show_heta_code(self, heta_code: str, activated: bool,
-                       learned_cycles: int = 0, required_cycles: int = 3,
-                       prediction_mode: str = "BASIS"):
+    def show_heta_code(
+        self,
+        heta_code: str,
+        activated: bool,
+        learned_cycles: int = 0,
+        required_cycles: int = 3,
+        prediction_mode: str = "BASIS",
+    ):
         """HETA-Code-Bildschirm mit Aktivierungs- und Lernstatus."""
         self._current_screen = SCREEN_HETA
 
-        code_txt  = heta_code if heta_code else "(kein Code)"
-        act_txt   = "✓ AKTIV" if activated else "  INAKTIV"
-        mode_txt  = {"BASIS": "BASIS", "HETA_LERNEND": "LERNEND",
-                     "HETA_VALIDIERT": "VALIDIERT"}.get(prediction_mode, prediction_mode)
+        code_txt = heta_code if heta_code else "(kein Code)"
+        act_txt = "✓ AKTIV" if activated else "  INAKTIV"
+        mode_txt = {"BASIS": "BASIS", "HETA_LERNEND": "LERNEND", "HETA_VALIDIERT": "VALIDIERT"}.get(
+            prediction_mode, prediction_mode
+        )
 
         def draw_fn(d):
             self._draw_header(d, "HETA-CODE")
@@ -219,19 +231,19 @@ class OLEDDisplay:
                 if i < learned_cycles:
                     d.rectangle([(bx, by), (bx + 10, by + 8)], fill="white")
                 else:
-                    d.rectangle([(bx, by), (bx + 10, by + 8)],
-                                 outline="white", fill="black")
+                    d.rectangle([(bx, by), (bx + 10, by + 8)], outline="white", fill="black")
 
             d.text((0, _LINE3), f"Prognose: {mode_txt}", fill="white", font=self._font_sm)
 
             self._draw_dots(d)
 
-        self._render(draw_fn,
-                     f"HETA={code_txt} {'AKTIV' if activated else 'INAKTIV'} "
-                     f"Zyklen={learned_cycles}/{required_cycles} {mode_txt}")
+        self._render(
+            draw_fn,
+            f"HETA={code_txt} {'AKTIV' if activated else 'INAKTIV'} "
+            f"Zyklen={learned_cycles}/{required_cycles} {mode_txt}",
+        )
 
-    def show_filter_change(self, dp_bar: float, dp_limit: float,
-                           armed: bool = False, awaiting: bool = False):
+    def show_filter_change(self, dp_bar: float, dp_limit: float, armed: bool = False, awaiting: bool = False):
         """
         Filterwechsel-Bildschirm mit zweistufiger Bestätigungslogik.
 
@@ -242,30 +254,28 @@ class OLEDDisplay:
         self._current_screen = SCREEN_FILTER_CHANGE
 
         ratio = min(1.0, dp_bar / dp_limit) if dp_limit > 0 else 0.0
-        pct   = int(ratio * 100)
+        pct = int(ratio * 100)
 
         if armed:
-            header   = "SICHER? BESTAETIGEN?"
-            line3    = "OK = Ja, wechseln"
-            line4    = "<  = Nein, abbrechen"
+            header = "SICHER? BESTAETIGEN?"
+            line3 = "OK = Ja, wechseln"
+            line4 = "<  = Nein, abbrechen"
         elif awaiting:
-            header   = "!! FILTERWECHSEL !!"
-            line3    = "OK = Bestaetigen"
-            line4    = "<  = Abbrechen"
+            header = "!! FILTERWECHSEL !!"
+            line3 = "OK = Bestaetigen"
+            line4 = "<  = Abbrechen"
         else:
-            header   = "FILTERWECHSEL"
-            line3    = "Kein Wechsel"
-            line4    = "noetig"
+            header = "FILTERWECHSEL"
+            line3 = "Kein Wechsel"
+            line4 = "noetig"
 
         def draw_fn(d):
             self._draw_header(d, header)
 
             # dp-Anzeige
             limit_note = " (LIMIT!)" if dp_bar >= dp_limit else ""
-            d.text((0, _LINE0), f"dp: {dp_bar:.3f} bar{limit_note}",
-                   fill="white", font=self._font_sm)
-            d.text((0, _LINE1), f"Limit: {dp_limit:.2f} bar",
-                   fill="white", font=self._font_sm)
+            d.text((0, _LINE0), f"dp: {dp_bar:.3f} bar{limit_note}", fill="white", font=self._font_sm)
+            d.text((0, _LINE1), f"Limit: {dp_limit:.2f} bar", fill="white", font=self._font_sm)
 
             # Fortschrittsbalken (volle Breite)
             self._draw_bar(d, 0, _LINE2, 102, 6, ratio)
@@ -284,7 +294,7 @@ class OLEDDisplay:
         self._current_screen = SCREEN_SERVICE
 
         # Nachricht in maximal 3 Zeilen umbrechen (≤ 21 Zeichen)
-        words   = message.split()
+        words = message.split()
         lines_m = []
         current = ""
         for word in words:
@@ -334,17 +344,18 @@ class OLEDDisplay:
             else:
                 y_positions = [_LINE0, _LINE1, _LINE2, _LINE3]
                 for i, cycle in enumerate(cycles[:4]):
-                    dur_s   = cycle.get("duration_seconds", 0) or 0
+                    dur_s = cycle.get("duration_seconds", 0) or 0
                     dur_min = int(dur_s // 60)
-                    ts      = cycle.get("end_time") or cycle.get("start_time", 0)
+                    ts = cycle.get("end_time") or cycle.get("start_time", 0)
                     # Datum aus Unix-Timestamp
                     try:
                         import time as _time
+
                         date_str = _time.strftime("%d.%m.%y", _time.localtime(ts))
                     except Exception:
                         date_str = "-----"
 
-                    line = f"#{i+1}: {dur_min:>4} min  {date_str}"
+                    line = f"#{i + 1}: {dur_min:>4} min  {date_str}"
                     d.text((0, y_positions[i]), line, fill="white", font=self._font_sm)
 
             self._draw_dots(d)
@@ -376,6 +387,7 @@ class OLEDDisplay:
 
     def show_message(self, title: str, message: str):
         """Einfache Nachrichtenanzeige (z. B. Startbildschirm)."""
+
         def draw_fn(d):
             self._draw_header(d, title[:20])
             d.text((0, _LINE1), message[:21], fill="white", font=self._font_sm)
@@ -383,27 +395,30 @@ class OLEDDisplay:
 
         self._render(draw_fn, f"{title}: {message}")
 
-    def show_waiting_for_flow(self, q_val: float, q_thr: float,
-                              dp_val: float, dp_thr: float,
-                              stable_pct: int, stab_secs: float):
+    def show_waiting_for_flow(
+        self, q_val: float, q_thr: float, dp_val: float, dp_thr: float, stable_pct: int, stab_secs: float
+    ):
         """Wartet auf stabilen Durchfluss nach Filterwechsel / Systemstart."""
-        q_ok  = q_val  >= q_thr
+        q_ok = q_val >= q_thr
         dp_ok = dp_val >= dp_thr
 
         def draw_fn(d):
             self._draw_header(d, "WARTE AUF DURCHFL.")
-            d.text((0, _LINE1), f"Q:  {q_val:5.1f}/{q_thr:.1f} l/min",
-                   fill="white", font=self._font_sm)
-            d.text((0, _LINE2), f"Qp: {'OK ' if q_ok else 'N  '} | dp {'OK' if dp_ok else 'N '}",
-                   fill="white", font=self._font_sm)
+            d.text((0, _LINE1), f"Q:  {q_val:5.1f}/{q_thr:.1f} l/min", fill="white", font=self._font_sm)
+            d.text(
+                (0, _LINE2),
+                f"Qp: {'OK ' if q_ok else 'N  '} | dp {'OK' if dp_ok else 'N '}",
+                fill="white",
+                font=self._font_sm,
+            )
             self._draw_bar(d, 0, _LINE3, DISPLAY_WIDTH, 6, stable_pct / 100)
-            d.text((0, _LINE4), f"Stabil {stable_pct:3d}% / {stab_secs:.0f}s",
-                   fill="white", font=self._font_sm)
+            d.text((0, _LINE4), f"Stabil {stable_pct:3d}% / {stab_secs:.0f}s", fill="white", font=self._font_sm)
 
         self._render(draw_fn, f"WaitFlow Q={q_val:.1f}/{q_thr:.1f} stable={stable_pct}%")
 
     def show_cycle_paused(self, active_seconds: float, pause_seconds: float):
         """Zyklus pausiert wegen fehlendem Durchfluss."""
+
         def _fmt(s: float) -> str:
             s = int(max(0, s))
             h, m = divmod(s, 3600)
@@ -414,14 +429,10 @@ class OLEDDisplay:
 
         def draw_fn(d):
             self._draw_header(d, "ZYKLUS PAUSIERT")
-            d.text((0, _LINE1), "Kein Durchfluss",
-                   fill="white", font=self._font_sm)
-            d.text((0, _LINE2), f"Betr.: {_fmt(active_seconds)}",
-                   fill="white", font=self._font_sm)
-            d.text((0, _LINE3), f"Pause: {_fmt(pause_seconds)}",
-                   fill="white", font=self._font_sm)
-            d.text((0, _LINE4), "Warte auf Durchfluss",
-                   fill="white", font=self._font_sm)
+            d.text((0, _LINE1), "Kein Durchfluss", fill="white", font=self._font_sm)
+            d.text((0, _LINE2), f"Betr.: {_fmt(active_seconds)}", fill="white", font=self._font_sm)
+            d.text((0, _LINE3), f"Pause: {_fmt(pause_seconds)}", fill="white", font=self._font_sm)
+            d.text((0, _LINE4), "Warte auf Durchfluss", fill="white", font=self._font_sm)
 
         self._render(draw_fn, f"CyclePaused active={active_seconds:.0f}s pause={pause_seconds:.0f}s")
 
@@ -432,7 +443,7 @@ class OLEDDisplay:
         draw.rectangle([(0, 0), (DISPLAY_WIDTH - 1, _HDR_H - 1)], fill="white")
         draw.line([(0, _HDR_H), (DISPLAY_WIDTH - 1, _HDR_H)], fill="white")
         tw = self._text_w(draw, title, self._font_sm)
-        x  = max(1, (DISPLAY_WIDTH - tw) // 2)
+        x = max(1, (DISPLAY_WIDTH - tw) // 2)
         draw.text((x, 2), title, fill="black", font=self._font_sm)
 
     def _draw_bar(self, draw, x: int, y: int, w: int, h: int, ratio: float):
@@ -445,19 +456,17 @@ class OLEDDisplay:
 
     def _draw_dots(self, draw):
         """Navigationspunkte: aktiver = gefüllt, inaktive = Umrandung."""
-        n      = len(SCREENS)
-        dw     = 5   # Breite eines Punktes
-        gap    = 3   # Abstand zwischen Punkten
-        total  = n * dw + (n - 1) * gap
-        sx     = (DISPLAY_WIDTH - total) // 2
+        n = len(SCREENS)
+        dw = 5  # Breite eines Punktes
+        gap = 3  # Abstand zwischen Punkten
+        total = n * dw + (n - 1) * gap
+        sx = (DISPLAY_WIDTH - total) // 2
         for i in range(n):
             bx = sx + i * (dw + gap)
             if i == self._nav_idx:
-                draw.rectangle([(bx, _DOTS_Y), (bx + dw - 1, _DOTS_Y + 2)],
-                                fill="white")
+                draw.rectangle([(bx, _DOTS_Y), (bx + dw - 1, _DOTS_Y + 2)], fill="white")
             else:
-                draw.rectangle([(bx, _DOTS_Y), (bx + dw - 1, _DOTS_Y + 2)],
-                                outline="white", fill="black")
+                draw.rectangle([(bx, _DOTS_Y), (bx + dw - 1, _DOTS_Y + 2)], outline="white", fill="black")
 
     @staticmethod
     def _text_w(draw, text: str, font) -> int:
@@ -477,6 +486,7 @@ class OLEDDisplay:
             return
         try:
             from luma.core.render import canvas  # type: ignore
+
             with canvas(self._device) as draw:
                 draw_fn(draw)
         except Exception as exc:

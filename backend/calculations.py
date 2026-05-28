@@ -20,6 +20,7 @@ STATUS_FEHLER = "FEHLER"
 @dataclass
 class FilterState:
     """Vollständiger berechneter Filterzustand für einen Messzeitpunkt."""
+
     p1_bar: float
     p2_bar: float
     dp_bar: float
@@ -43,8 +44,7 @@ def calculate_differential_pressure(p1: float, p2: float) -> float:
     return max(0.0, p1 - p2)
 
 
-def calculate_r_eff(dp_bar: float, flow_l_min: float,
-                    min_flow: float = 0.1) -> float:
+def calculate_r_eff(dp_bar: float, flow_l_min: float, min_flow: float = 0.1) -> float:
     """Effektiver Filterwiderstand r_eff = dp / max(Q, min_flow)."""
     return dp_bar / max(flow_l_min, min_flow)
 
@@ -84,10 +84,13 @@ def calculate_filter_health_from_r_eff(
     return round(100.0 * (1.0 - usage), 1), round(usage, 4)
 
 
-def determine_status(dp_bar: float, dp_limit: float,
-                     awaiting_confirmation: bool = False,
-                     sensor_error: bool = False,
-                     anomaly_active: bool = False) -> str:
+def determine_status(
+    dp_bar: float,
+    dp_limit: float,
+    awaiting_confirmation: bool = False,
+    sensor_error: bool = False,
+    anomaly_active: bool = False,
+) -> str:
     """Bestimmt den Filterstatus anhand der Statuslogik."""
     if sensor_error:
         return STATUS_FEHLER
@@ -141,8 +144,7 @@ def calculate_filter_state(
     r_eff = calculate_r_eff(dp, flow_l_min, min_flow)
     usage = calculate_usage(dp, dp_clean, dp_limit)
     health = calculate_filter_health(usage)
-    status = determine_status(dp, dp_limit, awaiting_confirmation,
-                               sensor_error, anomaly_active)
+    status = determine_status(dp, dp_limit, awaiting_confirmation, sensor_error, anomaly_active)
 
     return FilterState(
         p1_bar=round(p1_bar, 3),

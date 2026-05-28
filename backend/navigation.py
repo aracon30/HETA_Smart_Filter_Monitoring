@@ -27,13 +27,14 @@ logger = logging.getLogger(__name__)
 
 class NavigationEvent:
     """Repräsentiert ein einzelnes Navigationsereignis."""
-    ROTATE_LEFT  = "ROTATE_LEFT"
+
+    ROTATE_LEFT = "ROTATE_LEFT"
     ROTATE_RIGHT = "ROTATE_RIGHT"
-    PRESS        = "PRESS"   # SW1 – Mitte / OK
-    LEFT         = "LEFT"    # SW5
-    RIGHT        = "RIGHT"   # SW3
-    UP           = "UP"      # SW4
-    DOWN         = "DOWN"    # SW2
+    PRESS = "PRESS"  # SW1 – Mitte / OK
+    LEFT = "LEFT"  # SW5
+    RIGHT = "RIGHT"  # SW3
+    UP = "UP"  # SW4
+    DOWN = "DOWN"  # SW2
 
 
 class NavigationController:
@@ -47,19 +48,23 @@ class NavigationController:
     Fällt bei fehlender Hardware auf Dummy-Modus zurück.
     """
 
-    def __init__(self,
-                 pin_enca: int = 16, pin_encb: int = 20,
-                 pin_sw1:  int = 21, pin_sw2:  int = 12,
-                 pin_sw3:  int = 13, pin_sw4:  int = 19,
-                 pin_sw5:  int = 26):
+    def __init__(
+        self,
+        pin_enca: int = 16,
+        pin_encb: int = 20,
+        pin_sw1: int = 21,
+        pin_sw2: int = 12,
+        pin_sw3: int = 13,
+        pin_sw4: int = 19,
+        pin_sw5: int = 26,
+    ):
         self._hw: dict | None = None
         self._simulated = False
         self._handlers: list[Callable] = []
-        self._running   = False
+        self._running = False
 
         try:
-            self._init_hardware(pin_enca, pin_encb,
-                                pin_sw1, pin_sw2, pin_sw3, pin_sw4, pin_sw5)
+            self._init_hardware(pin_enca, pin_encb, pin_sw1, pin_sw2, pin_sw3, pin_sw4, pin_sw5)
         except Exception as e:
             logger.warning("ANO Encoder GPIO nicht verfügbar: %s – Simulationsmodus.", e)
             self._simulated = True
@@ -68,12 +73,11 @@ class NavigationController:
     # Hardware-Initialisierung
     # ------------------------------------------------------------------
 
-    def _init_hardware(self, enca: int, encb: int,
-                       sw1: int, sw2: int, sw3: int, sw4: int, sw5: int):
+    def _init_hardware(self, enca: int, encb: int, sw1: int, sw2: int, sw3: int, sw4: int, sw5: int):
         from gpiozero import Button, RotaryEncoder  # type: ignore
 
         encoder = RotaryEncoder(a=enca, b=encb, max_steps=None, bounce_time=0.002)
-        encoder.when_rotated_clockwise         = lambda: self._dispatch(NavigationEvent.ROTATE_RIGHT)
+        encoder.when_rotated_clockwise = lambda: self._dispatch(NavigationEvent.ROTATE_RIGHT)
         encoder.when_rotated_counter_clockwise = lambda: self._dispatch(NavigationEvent.ROTATE_LEFT)
 
         pin_event_map = [
@@ -93,7 +97,13 @@ class NavigationController:
         logger.info(
             "ANO Encoder initialisiert – ENCA=GPIO%d ENCB=GPIO%d "
             "SW1=GPIO%d SW2=GPIO%d SW3=GPIO%d SW4=GPIO%d SW5=GPIO%d.",
-            enca, encb, sw1, sw2, sw3, sw4, sw5,
+            enca,
+            encb,
+            sw1,
+            sw2,
+            sw3,
+            sw4,
+            sw5,
         )
 
     # ------------------------------------------------------------------
@@ -148,9 +158,13 @@ class NavigationController:
         Wird von der REST-API genutzt um Hardware zu simulieren.
         """
         valid = {
-            NavigationEvent.ROTATE_LEFT, NavigationEvent.ROTATE_RIGHT,
-            NavigationEvent.PRESS, NavigationEvent.LEFT,
-            NavigationEvent.RIGHT, NavigationEvent.UP, NavigationEvent.DOWN,
+            NavigationEvent.ROTATE_LEFT,
+            NavigationEvent.ROTATE_RIGHT,
+            NavigationEvent.PRESS,
+            NavigationEvent.LEFT,
+            NavigationEvent.RIGHT,
+            NavigationEvent.UP,
+            NavigationEvent.DOWN,
         }
         if event in valid:
             self._dispatch(event)

@@ -87,8 +87,11 @@ _sessions_lock = threading.Lock()
 
 # Kritische Parameter – bei Änderung muss der Lernprozess neu starten
 _LEARNING_SENSITIVE_KEYS = {
-    "dp_limit_bar", "flow_max_l_min",
-    "pressure_range_bar", "temperature_min_c", "temperature_max_c",
+    "dp_limit_bar",
+    "flow_max_l_min",
+    "pressure_range_bar",
+    "temperature_min_c",
+    "temperature_max_c",
 }
 
 
@@ -186,7 +189,6 @@ _state = {
     "sensor_mode": "simulation",
     "sensor_hw_available": _hw_available,  # Hardware beim Start erkannt?
     "running": False,
-
     # Messwerte
     "p1_bar": 0.0,
     "p2_bar": 0.0,
@@ -194,70 +196,62 @@ _state = {
     "flow_l_min": 0.0,
     "temperature_c": 0.0,
     "r_eff": 0.0,
-    "r_rel_factor": None,        # r_eff / r_eff_reference_start, None während Lernphase
+    "r_rel_factor": None,  # r_eff / r_eff_reference_start, None während Lernphase
     "filter_health_percent": 100.0,
     "filter_status": "OK",
     "sensor_error": False,
-
     # HETA-Code
     "heta_code": "",
     "heta_activated": False,
     "heta_number": "",
-
     # Sensorfehler (Hardwaremodus – Messung gestoppt)
     "sensor_fault": False,
     "sensor_fault_channels": [],
     "sensor_fault_message": "",
-
     # Simulations-Szenario-Parameter
     "sim_estimated_cycle_secs": 300.0,
-    "sim_rates_active":        False,
-    "sim_scenario":            "normal",
-    "sim_dirt_rate_pct":       100.0,
-    "sim_p1_trend_pct":        0.0,
-    "sim_flow_drop_pct":       75.0,
-    "sim_temp_trend":          0.0,
-    "sim_dp_deviation_pct":    0.0,
-    "sim_flow_deviation_pct":  0.0,
-    "sim_temp_deviation":      0.0,
-
+    "sim_rates_active": False,
+    "sim_scenario": "normal",
+    "sim_dirt_rate_pct": 100.0,
+    "sim_p1_trend_pct": 0.0,
+    "sim_flow_drop_pct": 75.0,
+    "sim_temp_trend": 0.0,
+    "sim_dp_deviation_pct": 0.0,
+    "sim_flow_deviation_pct": 0.0,
+    "sim_temp_deviation": 0.0,
     # Modusneutrale Prozessanalyse (Sensor- UND Simulationsmodus)
-    "analysis_active":             False,  # True wenn Profil valide + läuft
-    "analysis_ready":              False,  # True wenn Kurvenvergleich verfügbar
-    "analysis_dp_rate_ref":        0.0,
-    "analysis_dp_rate_current":    0.0,
-    "analysis_dp_deviation_pct":   0.0,    # Abweichung in %
-    "analysis_flow_ref":           0.0,    # Referenz-Durchfluss (l/min)
-    "analysis_flow_deviation_pct": 0.0,    # Abweichung in %
-    "analysis_temp_ref":           0.0,    # Referenz-Temperatur (°C)
-    "analysis_temp_deviation":     0.0,    # Abweichung in °C
+    "analysis_active": False,  # True wenn Profil valide + läuft
+    "analysis_ready": False,  # True wenn Kurvenvergleich verfügbar
+    "analysis_dp_rate_ref": 0.0,
+    "analysis_dp_rate_current": 0.0,
+    "analysis_dp_deviation_pct": 0.0,  # Abweichung in %
+    "analysis_flow_ref": 0.0,  # Referenz-Durchfluss (l/min)
+    "analysis_flow_deviation_pct": 0.0,  # Abweichung in %
+    "analysis_temp_ref": 0.0,  # Referenz-Temperatur (°C)
+    "analysis_temp_deviation": 0.0,  # Abweichung in °C
     "analysis_cycle_progress_pct": 0.0,
-    "analysis_dp_ref":             0.0,
-    "analysis_reff_ref":           0.0,
-    "analysis_reff_cur":           0.0,
+    "analysis_dp_ref": 0.0,
+    "analysis_reff_ref": 0.0,
+    "analysis_reff_cur": 0.0,
     "analysis_reff_deviation_pct": 0.0,
-
     # Filterwechsel
     "awaiting_confirmation": False,
     "cycle_active": False,
     "cycle_start_time": None,
     "cycle_dp_reached_time": None,  # Zeitpunkt an dem dp-Limit erreicht wurde
-
     # Zyklusstart-Logik (Durchflusserkennung)
-    "waiting_for_flow": True,        # Wartet auf stabilen Durchfluss vor Zyklusstart
-    "cycle_paused": False,           # Zyklus durch Durchflussausfall pausiert
-    "cycle_active_seconds": 0.0,     # Kumulierte Betriebszeit (ohne Pausen)
+    "waiting_for_flow": True,  # Wartet auf stabilen Durchfluss vor Zyklusstart
+    "cycle_paused": False,  # Zyklus durch Durchflussausfall pausiert
+    "cycle_active_seconds": 0.0,  # Kumulierte Betriebszeit (ohne Pausen)
     "cycle_pause_start_time": None,  # Zeitpunkt des letzten Pausenbeginns
-    "flow_check_q": 0.0,             # Aktueller Q-Wert für Overlay-Anzeige
-    "flow_check_dp": 0.0,            # Aktueller dp-Wert für Overlay-Anzeige
-    "flow_threshold": 0.0,           # Effektiver Schwellwert (für Overlay)
-    "flow_stable_pct": 0,            # Fortschritt Stabilitätsfenster 0–100 %
-
+    "flow_check_q": 0.0,  # Aktueller Q-Wert für Overlay-Anzeige
+    "flow_check_dp": 0.0,  # Aktueller dp-Wert für Overlay-Anzeige
+    "flow_threshold": 0.0,  # Effektiver Schwellwert (für Overlay)
+    "flow_stable_pct": 0,  # Fortschritt Stabilitätsfenster 0–100 %
     # Prognose
     "remaining_display": "Unbekannt",
     "remaining_seconds": None,
     "prediction_mode": "BASIS",
-
     # Lernmodul
     "learned_cycles": 0,
     "required_cycles": settings.get("required_cycles_for_profile", 3),
@@ -269,11 +263,9 @@ _state = {
     "_dev_active": {"dp": False, "flow": False, "reff": False},
     # Beladungsgrad nur anzeigen wenn HETA-Code aktiv
     "show_filter_health": False,
-
     # Servicehinweis
     "service_message": "",
     "service_priority": "NIEDRIG",
-
     "last_update": None,
 }
 
@@ -284,8 +276,7 @@ db = Database(get_abs_path(settings.get("db_path", "data/heta_monitor.db")))
 learning = LearningManager(
     db,
     required_cycles=settings.get("required_cycles_for_profile", 3),
-    tolerance_reff_pct=settings.get("tolerance_reff_pct",
-                                    settings.get("clean_resistance_tolerance", 0.25)),
+    tolerance_reff_pct=settings.get("tolerance_reff_pct", settings.get("clean_resistance_tolerance", 0.25)),
 )
 predictor = PredictionEngine(
     dp_limit=settings.get("dp_limit_bar", 2.5),
@@ -309,6 +300,7 @@ update_simulation_params(
 _mqtt = None
 if settings.get("mqtt_enabled", False):
     from mqtt_client import MQTTClient
+
     _mqtt = MQTTClient(
         broker=settings.get("mqtt_broker", "localhost"),
         port=settings.get("mqtt_port", 1883),
@@ -320,6 +312,7 @@ if settings.get("mqtt_enabled", False):
 _modbus: "ModbusTCPServer | None" = None  # type: ignore[name-defined]
 if settings.get("modbus_enabled", False):
     from modbus_server import ModbusTCPServer
+
     _modbus = ModbusTCPServer(
         host=settings.get("modbus_host", "0.0.0.0"),
         port=settings.get("modbus_port", 502),
@@ -334,6 +327,7 @@ _display = None
 if settings.get("display_enabled", True):
     try:
         from display import OLEDDisplay
+
         _display = OLEDDisplay(
             use_spi=settings.get("display_use_spi", True),
             spi_port=settings.get("display_spi_port", 0),
@@ -350,14 +344,15 @@ _navigation = None
 if settings.get("navigation_enabled", True):
     try:
         from navigation import NavigationController
+
         _navigation = NavigationController(
             pin_enca=settings.get("encoder_pin_enca", 16),
             pin_encb=settings.get("encoder_pin_encb", 20),
-            pin_sw1 =settings.get("encoder_pin_sw1",  21),
-            pin_sw2 =settings.get("encoder_pin_sw2",  12),
-            pin_sw3 =settings.get("encoder_pin_sw3",  13),
-            pin_sw4 =settings.get("encoder_pin_sw4",  19),
-            pin_sw5 =settings.get("encoder_pin_sw5",  26),
+            pin_sw1=settings.get("encoder_pin_sw1", 21),
+            pin_sw2=settings.get("encoder_pin_sw2", 12),
+            pin_sw3=settings.get("encoder_pin_sw3", 13),
+            pin_sw4=settings.get("encoder_pin_sw4", 19),
+            pin_sw5=settings.get("encoder_pin_sw5", 26),
         )
         _navigation.start()
     except Exception as e:
@@ -367,6 +362,7 @@ if settings.get("navigation_enabled", True):
 # ---------------------------------------------------------------------------
 # Display-Controller (verbindet Encoder mit Display)
 # ---------------------------------------------------------------------------
+
 
 class _DisplayController:
     """
@@ -384,10 +380,11 @@ class _DisplayController:
 
     def __init__(self, disp, nav):
         from display import SCREENS
+
         self._display = disp
         self._nav = nav
-        self._screens = SCREENS          # list of screen name constants
-        self._screen_idx = 0             # 0 = Status
+        self._screens = SCREENS  # list of screen name constants
+        self._screen_idx = 0  # 0 = Status
         self._confirm_armed = False
         self._last_status_data: dict = {}
         self._lock = threading.Lock()
@@ -408,6 +405,7 @@ class _DisplayController:
     def navigate_to_filter_change(self):
         """Wechselt automatisch zum Filterwechsel-Bildschirm (bei dp >= limit)."""
         from display import SCREEN_FILTER_CHANGE
+
         with self._lock:
             self._screen_idx = self._screens.index(SCREEN_FILTER_CHANGE)
             self._confirm_armed = False
@@ -444,6 +442,7 @@ class _DisplayController:
 
     def _handle_press(self):
         from display import SCREEN_FILTER_CHANGE
+
         screen = self._screens[self._screen_idx]
 
         if screen != SCREEN_FILTER_CHANGE:
@@ -459,8 +458,10 @@ class _DisplayController:
         if not self._confirm_armed:
             self._confirm_armed = True
             self._display.show_filter_change(
-                dp, settings.get("dp_limit_bar", 2.5),
-                armed=True, awaiting=True,
+                dp,
+                settings.get("dp_limit_bar", 2.5),
+                armed=True,
+                awaiting=True,
             )
         else:
             self._confirm_armed = False
@@ -491,13 +492,14 @@ class _DisplayController:
 
         elif screen == SCREEN_HETA:
             with _state_lock:
-                code           = _state["heta_code"]
-                activated      = _state["heta_activated"]
-                learned        = _state["learned_cycles"]
-                pred_mode      = _state["prediction_mode"]
+                code = _state["heta_code"]
+                activated = _state["heta_activated"]
+                learned = _state["learned_cycles"]
+                pred_mode = _state["prediction_mode"]
             req = settings.get("required_cycles_for_profile", 3)
             self._display.show_heta_code(
-                code, activated,
+                code,
+                activated,
                 learned_cycles=learned,
                 required_cycles=req,
                 prediction_mode=pred_mode,
@@ -508,8 +510,10 @@ class _DisplayController:
                 dp = _state["dp_bar"]
                 awaiting = _state["awaiting_confirmation"]
             self._display.show_filter_change(
-                dp, settings.get("dp_limit_bar", 2.5),
-                armed=self._confirm_armed, awaiting=awaiting,
+                dp,
+                settings.get("dp_limit_bar", 2.5),
+                armed=self._confirm_armed,
+                awaiting=awaiting,
             )
 
         elif screen == SCREEN_SERVICE:
@@ -545,6 +549,7 @@ if _display and _navigation:
 # Messzyklus-Thread
 # ---------------------------------------------------------------------------
 
+
 def _seed_predictor_from_profile(heta_code: str):
     """Setzt Reststandzeit-Startwert aus der Referenzdauer der Lernzyklen."""
     if not heta_code:
@@ -555,6 +560,7 @@ def _seed_predictor_from_profile(heta_code: str):
         if ref_dur > 0:
             predictor.seed(ref_dur)
 
+
 def _get_flow_thresholds() -> tuple:
     """
     Gibt (flow_threshold, stability_secs, pause_tolerance) zurück.
@@ -563,19 +569,19 @@ def _get_flow_thresholds() -> tuple:
     flow_max = settings.get("flow_max_l_min", 150.0)
     # Durchfluss-Startschwellwert
     manual_thr = settings.get("flow_start_threshold_l_min")
-    auto_thr   = settings.get("flow_start_threshold_auto") or 0.0
-    threshold  = float(manual_thr) if manual_thr else (auto_thr if auto_thr > 0 else flow_max * 0.10)
-    threshold  = max(threshold, 0.1)
+    auto_thr = settings.get("flow_start_threshold_auto") or 0.0
+    threshold = float(manual_thr) if manual_thr else (auto_thr if auto_thr > 0 else flow_max * 0.10)
+    threshold = max(threshold, 0.1)
 
     # Stabilitätsfenster
     manual_stab = settings.get("flow_stability_seconds")
-    auto_stab   = settings.get("flow_stability_seconds_auto") or 10
-    stability   = float(manual_stab) if manual_stab else float(auto_stab)
-    stability   = max(stability, 3.0)
+    auto_stab = settings.get("flow_stability_seconds_auto") or 10
+    stability = float(manual_stab) if manual_stab else float(auto_stab)
+    stability = max(stability, 3.0)
 
     # Pause-Toleranz (Batch: 60 s, Kontinuierlich: 30 s)
     manual_pause = settings.get("flow_pause_tolerance_seconds")
-    auto_pause   = settings.get("flow_pause_tolerance_auto") or 0
+    auto_pause = settings.get("flow_pause_tolerance_auto") or 0
     if manual_pause:
         pause_tol = float(manual_pause)
     elif auto_pause > 0:
@@ -598,8 +604,9 @@ def _update_auto_thresholds(active_cycle_samples: list):
 
     dp_clean = settings.get("dp_clean_bar", 0.2)
     # Minimaler Durchfluss in Phasen mit dp > dp_clean (Filter beladen = Anlage läuft)
-    active_flows = [s for s in active_cycle_samples
-                    if s.get("dp_bar", 0) > dp_clean * 0.5 and s.get("flow_l_min", 0) > 0.1]
+    active_flows = [
+        s for s in active_cycle_samples if s.get("dp_bar", 0) > dp_clean * 0.5 and s.get("flow_l_min", 0) > 0.1
+    ]
     if len(active_flows) < 5:
         return
 
@@ -614,7 +621,6 @@ def _update_auto_thresholds(active_cycle_samples: list):
     if changed:
         save_settings(settings)
         logger.info("Auto-Durchflussschwellwert aktualisiert: %.1f l/min", new_threshold)
-
 
 
 _loop_thread: threading.Thread = None
@@ -657,6 +663,7 @@ def _start_measurement_thread():
 # ---------------------------------------------------------------------------
 # REST API Endpunkte
 # ---------------------------------------------------------------------------
+
 
 @app.route("/")
 def index():
@@ -875,8 +882,7 @@ def api_heta_activate():
             _state["heta_code"] = result["heta_code"]
             _state["heta_activated"] = True
             _state["heta_number"] = result["heta_number"]
-        db.insert_service_event("HETA_AKTIVIERT", result["heta_code"],
-                                json.dumps(result, ensure_ascii=False))
+        db.insert_service_event("HETA_AKTIVIERT", result["heta_code"], json.dumps(result, ensure_ascii=False))
         logger.info("HETA-Code %s aktiviert.", result["heta_code"])
     return jsonify(result)
 
@@ -918,44 +924,44 @@ def api_heta_reset_cycles():
 
     # Zustandsvariablen zurücksetzen
     with _state_lock:
-        _state["cycle_active"]          = False
-        _state["cycle_start_time"]      = None
+        _state["cycle_active"] = False
+        _state["cycle_start_time"] = None
         _state["cycle_dp_reached_time"] = None
         _state["awaiting_confirmation"] = False
-        _state["anomaly_active"]        = False
-        _state["_dev_active"]          = {"dp": False, "flow": False, "reff": False}
-        _state["anomaly_percent"]       = 0.0
-        _state["analysis_active"]       = False
-        _state["analysis_ready"]        = False
+        _state["anomaly_active"] = False
+        _state["_dev_active"] = {"dp": False, "flow": False, "reff": False}
+        _state["anomaly_percent"] = 0.0
+        _state["analysis_active"] = False
+        _state["analysis_ready"] = False
 
-    db.insert_service_event("LERNZYKLEN_RESET", heta_code,
-                            json.dumps({"timestamp": time.time()}))
+    db.insert_service_event("LERNZYKLEN_RESET", heta_code, json.dumps({"timestamp": time.time()}))
     logger.info("Lernzyklen für %s zurückgesetzt.", heta_code)
 
-    return jsonify({
-        "success": True,
-        "message": f"Lernzyklen für {heta_code} wurden zurückgesetzt. "
-                   f"Das System startet die Lernphase neu.",
-    })
-
-
+    return jsonify(
+        {
+            "success": True,
+            "message": f"Lernzyklen für {heta_code} wurden zurückgesetzt. Das System startet die Lernphase neu.",
+        }
+    )
 
 
 @app.route("/api/diagnostics", methods=["GET"])
 def api_diagnostics():
     """Selbstcheck aller Komponenten basierend auf tatsächlichem Laufzeitzustand."""
-    return jsonify(_run_diagnostics(
-        state=_state,
-        state_lock=_state_lock,
-        settings=settings,
-        db=db,
-        base_dir=_BASE_DIR,
-        get_local_ip=_get_local_ip,
-        mqtt=_mqtt,
-        modbus=_modbus,
-        display=_display,
-        navigation=_navigation,
-    ))
+    return jsonify(
+        _run_diagnostics(
+            state=_state,
+            state_lock=_state_lock,
+            settings=settings,
+            db=db,
+            base_dir=_BASE_DIR,
+            get_local_ip=_get_local_ip,
+            mqtt=_mqtt,
+            modbus=_modbus,
+            display=_display,
+            navigation=_navigation,
+        )
+    )
 
 
 @app.route("/api/filter/confirm-change", methods=["POST"])
@@ -976,8 +982,7 @@ def api_sensor_recheck():
         sim_mode = _state["simulation_mode"]
 
     if sim_mode:
-        return jsonify({"success": False,
-                        "message": "Sensorprüfung nur im Hardwaremodus verfügbar."})
+        return jsonify({"success": False, "message": "Sensorprüfung nur im Hardwaremodus verfügbar."})
 
     result = check_hardware_sensors()
 
@@ -989,25 +994,27 @@ def api_sensor_recheck():
             _state["sensor_error"] = False
         _start_measurement_thread()
         logger.info("Sensorprüfung erfolgreich – alle Kanäle lesbar, Messung neu gestartet.")
-        return jsonify({"success": True,
-                        "message": "Alle Sensoren erkannt. Messung wird neu gestartet."})
+        return jsonify({"success": True, "message": "Alle Sensoren erkannt. Messung wird neu gestartet."})
 
     msg = f"Sensorfehler: {', '.join(result['failed_names'])} weiterhin nicht lesbar."
     with _state_lock:
         _state["sensor_fault_channels"] = result["failed_channels"]
         _state["sensor_fault_message"] = msg
     logger.error("Sensorprüfung fehlgeschlagen: Kanal(e) %s.", result["failed_channels"])
-    return jsonify({"success": False,
-                    "message": msg,
-                    "failed_channels": result["failed_channels"],
-                    "failed_names": result["failed_names"]})
+    return jsonify(
+        {
+            "success": False,
+            "message": msg,
+            "failed_channels": result["failed_channels"],
+            "failed_names": result["failed_names"],
+        }
+    )
 
 
 @app.route("/api/settings", methods=["GET"])
 def api_settings_get():
     """Liest die Konfiguration (öffentlich, ohne sensible Felder)."""
-    safe = {k: v for k, v in settings.items()
-            if k not in ("settings_password_hash",)}
+    safe = {k: v for k, v in settings.items() if k not in ("settings_password_hash",)}
     return jsonify(safe)
 
 
@@ -1025,10 +1032,7 @@ def api_settings_post():
     data = request.get_json(force=True, silent=True) or {}
 
     # Prüfen welche lernrelevanten Parameter sich ändern
-    learning_reset_needed = any(
-        k in _LEARNING_SENSITIVE_KEYS and data.get(k) != settings.get(k)
-        for k in data
-    )
+    learning_reset_needed = any(k in _LEARNING_SENSITIVE_KEYS and data.get(k) != settings.get(k) for k in data)
 
     # Passwortänderung separat behandeln
     new_password = data.pop("new_password", None)
@@ -1039,16 +1043,26 @@ def api_settings_post():
         settings["settings_password_hash"] = hash_password(new_password)
 
     # Nur bekannte Felder übernehmen, interne Felder schützen
-    protected = {"settings_password_hash", "db_path", "log_path", "export_path",
-                 "webserver_host", "webserver_port", "onboarding_complete"}
+    protected = {
+        "settings_password_hash",
+        "db_path",
+        "log_path",
+        "export_path",
+        "webserver_host",
+        "webserver_port",
+        "onboarding_complete",
+    }
 
     # Simulationsparameter vor der Übernahme merken um Clogging-Reset zu steuern
-    _SIM_PARAMS = {"dp_clean_bar", "dp_limit_bar", "flow_max_l_min",
-                   "sim_p1_base_bar", "sim_q_base_l_min", "sim_t_base_c"}
-    sim_params_changed = any(
-        k in _SIM_PARAMS and data.get(k) != settings.get(k)
-        for k in data
-    )
+    _SIM_PARAMS = {
+        "dp_clean_bar",
+        "dp_limit_bar",
+        "flow_max_l_min",
+        "sim_p1_base_bar",
+        "sim_q_base_l_min",
+        "sim_t_base_c",
+    }
+    sim_params_changed = any(k in _SIM_PARAMS and data.get(k) != settings.get(k) for k in data)
 
     for k, v in data.items():
         if k in settings and k not in protected:
@@ -1084,6 +1098,7 @@ def api_settings_post():
             _mqtt = None
         if settings.get("mqtt_enabled", False):
             from mqtt_client import MQTTClient
+
             _mqtt = MQTTClient(
                 broker=settings.get("mqtt_broker", "localhost"),
                 port=settings.get("mqtt_port", 1883),
@@ -1103,6 +1118,7 @@ def api_settings_post():
             _modbus = None
         if settings.get("modbus_enabled", False):
             from modbus_server import ModbusTCPServer
+
             _modbus = ModbusTCPServer(
                 host=settings.get("modbus_host", "0.0.0.0"),
                 port=settings.get("modbus_port", 502),
@@ -1121,31 +1137,43 @@ def api_settings_post():
         with _state_lock:
             _state["cycle_active"] = False
             _state["cycle_start_time"] = None
-            _state["anomaly_active"]  = False
-            _state["_dev_active"]     = {"dp": False, "flow": False, "reff": False}
+            _state["anomaly_active"] = False
+            _state["_dev_active"] = {"dp": False, "flow": False, "reff": False}
             _state["anomaly_percent"] = 0.0
         db.insert_service_event(
             "LERNDATEN_RESET",
             _state.get("heta_code", ""),
-            json.dumps({"grund": "Konfigurationsänderung", "geaenderte_parameter":
-                        [k for k in data if k in _LEARNING_SENSITIVE_KEYS]}),
+            json.dumps(
+                {
+                    "grund": "Konfigurationsänderung",
+                    "geaenderte_parameter": [k for k in data if k in _LEARNING_SENSITIVE_KEYS],
+                }
+            ),
         )
-        logger.info("Lerndaten zurückgesetzt aufgrund Konfigurationsänderung: %s",
-                    [k for k in data if k in _LEARNING_SENSITIVE_KEYS])
+        logger.info(
+            "Lerndaten zurückgesetzt aufgrund Konfigurationsänderung: %s",
+            [k for k in data if k in _LEARNING_SENSITIVE_KEYS],
+        )
 
     safe = {k: v for k, v in settings.items() if k not in ("settings_password_hash",)}
-    return jsonify({
-        "success": True,
-        "settings": safe,
-        "learning_reset": learning_reset_needed,
-        "message": ("Einstellungen gespeichert. Lernprozess wurde zurückgesetzt und muss neu durchlaufen werden."
-                    if learning_reset_needed else "Einstellungen gespeichert."),
-    })
+    return jsonify(
+        {
+            "success": True,
+            "settings": safe,
+            "learning_reset": learning_reset_needed,
+            "message": (
+                "Einstellungen gespeichert. Lernprozess wurde zurückgesetzt und muss neu durchlaufen werden."
+                if learning_reset_needed
+                else "Einstellungen gespeichert."
+            ),
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
 # Authentifizierung (Einstellungsbereich)
 # ---------------------------------------------------------------------------
+
 
 @app.route("/api/settings/login", methods=["POST"])
 def api_settings_login():
@@ -1160,8 +1188,9 @@ def api_settings_login():
     if verify_password(password, stored_hash):
         token = _create_session()
         logger.info("Einstellungsbereich: Anmeldung erfolgreich.")
-        return jsonify({"success": True, "token": token,
-                        "timeout_minutes": settings.get("session_timeout_minutes", 30)})
+        return jsonify(
+            {"success": True, "token": token, "timeout_minutes": settings.get("session_timeout_minutes", 30)}
+        )
     else:
         logger.warning("Einstellungsbereich: Falsches Passwort.")
         return jsonify({"success": False, "message": "Falsches Passwort."}), 401
@@ -1170,7 +1199,9 @@ def api_settings_login():
 @app.route("/api/settings/logout", methods=["POST"])
 def api_settings_logout():
     """Beendet die Sitzung."""
-    token = request.headers.get("X-Auth-Token", "") or (request.get_json(force=True, silent=True) or {}).get("token", "")
+    token = request.headers.get("X-Auth-Token", "") or (request.get_json(force=True, silent=True) or {}).get(
+        "token", ""
+    )
     _invalidate_session(token)
     return jsonify({"success": True, "message": "Abgemeldet."})
 
@@ -1209,6 +1240,7 @@ def api_factory_reset():
     local_cfg = get_abs_path("config/settings.local.json")
     try:
         import os as _os
+
         _os.remove(local_cfg)
         logger.info("settings.local.json gelöscht.")
     except FileNotFoundError:
@@ -1216,6 +1248,7 @@ def api_factory_reset():
 
     # 3. Laufzeit-Settings auf Defaults zurücksetzen (onboarding_complete=False, kein Passwort)
     from config import load_settings as _load_settings
+
     settings.clear()
     settings.update(_load_settings())
 
@@ -1227,15 +1260,15 @@ def api_factory_reset():
     learning.tolerance_reff_pct = settings.get("tolerance_reff_pct", 0.25)
 
     with _state_lock:
-        _state["heta_code"]        = ""
+        _state["heta_code"] = ""
         _state["activation_status"] = False
-        _state["cycle_active"]     = False
+        _state["cycle_active"] = False
         _state["cycle_start_time"] = None
-        _state["anomaly_active"]        = False
-        _state["_dev_active"]          = {"dp": False, "flow": False, "reff": False}
-        _state["anomaly_percent"]  = 0.0
-        _state["filter_status"]    = "OK"
-        _state["simulation_mode"]  = settings.get("simulation_mode", True)
+        _state["anomaly_active"] = False
+        _state["_dev_active"] = {"dp": False, "flow": False, "reff": False}
+        _state["anomaly_percent"] = 0.0
+        _state["filter_status"] = "OK"
+        _state["simulation_mode"] = settings.get("simulation_mode", True)
 
     # 5. Alle Sessions invalidieren
     with _sessions_lock:
@@ -1248,13 +1281,16 @@ def api_factory_reset():
 # Onboarding
 # ---------------------------------------------------------------------------
 
+
 @app.route("/api/onboarding/status", methods=["GET"])
 def api_onboarding_status():
     """Gibt zurück ob das Onboarding bereits abgeschlossen wurde."""
-    return jsonify({
-        "onboarding_complete": settings.get("onboarding_complete", False),
-        "has_password": bool(settings.get("settings_password_hash", "")),
-    })
+    return jsonify(
+        {
+            "onboarding_complete": settings.get("onboarding_complete", False),
+            "has_password": bool(settings.get("settings_password_hash", "")),
+        }
+    )
 
 
 @app.route("/api/onboarding/complete", methods=["POST"])
@@ -1271,17 +1307,22 @@ def api_onboarding_complete():
     # Passwort ist Pflichtfeld beim Onboarding
     password = data.get("password", "")
     if len(password) < 4:
-        return jsonify({"success": False,
-                        "message": "Passwort muss mindestens 4 Zeichen haben."}), 400
+        return jsonify({"success": False, "message": "Passwort muss mindestens 4 Zeichen haben."}), 400
 
     # Konfigurierbare Felder aus dem Onboarding
     onboarding_fields = {
-        "simulation_mode", "dp_limit_bar", "dp_clean_bar",
-        "flow_max_l_min", "pressure_range_bar",
-        "temperature_min_c", "temperature_max_c",
+        "simulation_mode",
+        "dp_limit_bar",
+        "dp_clean_bar",
+        "flow_max_l_min",
+        "pressure_range_bar",
+        "temperature_min_c",
+        "temperature_max_c",
         "sampling_interval_seconds",
-        "tolerance_dp_pct", "tolerance_reff_pct",
-        "tolerance_flow_pct", "tolerance_temp_c",
+        "tolerance_dp_pct",
+        "tolerance_reff_pct",
+        "tolerance_flow_pct",
+        "tolerance_temp_c",
         "operation_mode",
     }
     for k, v in data.items():
@@ -1307,8 +1348,7 @@ def api_onboarding_complete():
     with _state_lock:
         _state["simulation_mode"] = settings["simulation_mode"]
 
-    db.insert_service_event("ONBOARDING_ABGESCHLOSSEN", "",
-                            json.dumps({"timestamp": time.time()}))
+    db.insert_service_event("ONBOARDING_ABGESCHLOSSEN", "", json.dumps({"timestamp": time.time()}))
     logger.info("Onboarding abgeschlossen.")
 
     # Messzyklus starten
@@ -1332,21 +1372,21 @@ def api_simulation_start():
         # running=True muss VOR _start_measurement_thread gesetzt werden: läuft der alte
         # Thread nach einem Stop noch im sleep(), sieht er running=True und macht weiter
         # statt zu beenden — Race Condition beim schnellen Stop→Start vermieden.
-        _state["running"]               = True
-        _state["simulation_mode"]       = True
-        _state["sensor_fault"]          = False
+        _state["running"] = True
+        _state["simulation_mode"] = True
+        _state["sensor_fault"] = False
         _state["sensor_fault_channels"] = []
-        _state["sensor_fault_message"]  = ""
-        _state["sensor_error"]          = False
-        _state["cycle_active"]           = False
-        _state["cycle_start_time"]       = None
-        _state["cycle_dp_reached_time"]  = None
-        _state["cycle_active_seconds"]   = 0.0
-        _state["awaiting_confirmation"]  = False
-        _state["waiting_for_flow"]       = True
-        _state["anomaly_active"]        = False
-        _state["_dev_active"]          = {"dp": False, "flow": False, "reff": False}
-        _state["anomaly_percent"]        = 0.0
+        _state["sensor_fault_message"] = ""
+        _state["sensor_error"] = False
+        _state["cycle_active"] = False
+        _state["cycle_start_time"] = None
+        _state["cycle_dp_reached_time"] = None
+        _state["cycle_active_seconds"] = 0.0
+        _state["awaiting_confirmation"] = False
+        _state["waiting_for_flow"] = True
+        _state["anomaly_active"] = False
+        _state["_dev_active"] = {"dp": False, "flow": False, "reff": False}
+        _state["anomaly_percent"] = 0.0
     _start_measurement_thread()
     return jsonify({"success": True, "message": "Simulation gestartet."})
 
@@ -1357,15 +1397,15 @@ def api_simulation_stop():
     clear_simulation_rates()
     learning.abort_cycle()
     with _state_lock:
-        _state["running"]                = False
-        _state["sim_rates_active"]       = False
-        _state["cycle_active"]           = False
-        _state["cycle_start_time"]       = None
-        _state["cycle_dp_reached_time"]  = None
-        _state["awaiting_confirmation"]  = False
-        _state["anomaly_active"]        = False
-        _state["_dev_active"]          = {"dp": False, "flow": False, "reff": False}
-        _state["anomaly_percent"]        = 0.0
+        _state["running"] = False
+        _state["sim_rates_active"] = False
+        _state["cycle_active"] = False
+        _state["cycle_start_time"] = None
+        _state["cycle_dp_reached_time"] = None
+        _state["awaiting_confirmation"] = False
+        _state["anomaly_active"] = False
+        _state["_dev_active"] = {"dp": False, "flow": False, "reff": False}
+        _state["anomaly_percent"] = 0.0
     if _loop:
         _loop.mstate.smoothed_health_pct = None
     return jsonify({"success": True, "message": "Simulation gestoppt."})
@@ -1380,16 +1420,16 @@ def api_simulation_reset():
     if _loop:
         _loop.mstate.smoothed_health_pct = None
     with _state_lock:
-        _state["cycle_active"]           = False
-        _state["sim_rates_active"]       = False
-        _state["sim_scenario"]           = "normal"
-        _state["sim_dirt_rate_pct"]      = 100.0
-        _state["sim_p1_trend_pct"]       = 0.0
-        _state["sim_flow_drop_pct"]      = 75.0
-        _state["sim_temp_trend"]         = 0.0
-        _state["sim_dp_deviation_pct"]   = 0.0
+        _state["cycle_active"] = False
+        _state["sim_rates_active"] = False
+        _state["sim_scenario"] = "normal"
+        _state["sim_dirt_rate_pct"] = 100.0
+        _state["sim_p1_trend_pct"] = 0.0
+        _state["sim_flow_drop_pct"] = 75.0
+        _state["sim_temp_trend"] = 0.0
+        _state["sim_dp_deviation_pct"] = 0.0
         _state["sim_flow_deviation_pct"] = 0.0
-        _state["sim_temp_deviation"]     = 0.0
+        _state["sim_temp_deviation"] = 0.0
     return jsonify({"success": True, "message": "System zurückgesetzt."})
 
 
@@ -1408,40 +1448,39 @@ def api_simulation_quick_learn():
     if learning.is_profile_valid(heta_code):
         return jsonify({"success": False, "message": "Profil ist bereits valide – Lernphase abgeschlossen."})
 
-    dp_clean          = settings.get("dp_clean_bar", 0.2)
-    dp_limit          = settings.get("dp_limit_bar", 2.5)
+    dp_clean = settings.get("dp_clean_bar", 0.2)
+    dp_limit = settings.get("dp_limit_bar", 2.5)
     sampling_interval = settings.get("sampling_interval_seconds", 1)
     # Zyklusdauer aus Simulator ableiten (dirt_rate_factor bestimmt die Dauer)
-    sc_params     = get_simulation_scenario_params()
-    cycle_secs    = get_simulation_estimated_cycle_secs()
-    cycle_steps   = max(10, int(cycle_secs / max(sampling_interval, 1)))
+    sc_params = get_simulation_scenario_params()
+    cycle_secs = get_simulation_estimated_cycle_secs()
+    cycle_steps = max(10, int(cycle_secs / max(sampling_interval, 1)))
     required_cycles = settings.get("required_cycles_for_profile", 3)
 
     # Aktuelle Szenario-Parameter für konsistente Simulation
-    sc               = sc_params  # bereits oben abgerufen
-    sim_p1_base      = sc.get("p1_base",              4.0)
-    sim_q_base       = sc.get("q_base",               145.0)
-    sim_t_base       = sc.get("t_base",               25.0)
-    sim_p1_trend     = sc.get("p1_trend_factor",      0.0)
-    sim_flow_drop    = sc.get("flow_drop_factor",     0.75)
-    sim_temp_trend   = sc.get("temp_trend_per_cycle", 0.0)
-    q_min_sim        = max(1.0, sim_q_base * 0.10)
+    sc = sc_params  # bereits oben abgerufen
+    sim_p1_base = sc.get("p1_base", 4.0)
+    sim_q_base = sc.get("q_base", 145.0)
+    sim_t_base = sc.get("t_base", 25.0)
+    sim_p1_trend = sc.get("p1_trend_factor", 0.0)
+    sim_flow_drop = sc.get("flow_drop_factor", 0.75)
+    sim_temp_trend = sc.get("temp_trend_per_cycle", 0.0)
+    q_min_sim = max(1.0, sim_q_base * 0.10)
 
     # ── Physikalische Werte identisch mit FilterSimulator.get_readings() ────
     def _sim_step(s: int) -> dict:
         clogging = min(s / max(cycle_steps, 1), 1.0)
-        p1  = round(sim_p1_base * (1.0 + sim_p1_trend * clogging), 4)
-        p1  = max(0.1, p1)
-        dp  = dp_clean + (dp_limit - dp_clean) * clogging ** 1.8
-        dp  = round(max(dp_clean, min(dp, dp_limit)), 5)
-        p2  = round(max(0.0, p1 - dp), 4)
-        fl  = round(max(q_min_sim, sim_q_base * (1.0 - sim_flow_drop * clogging ** 1.5)), 2)
+        p1 = round(sim_p1_base * (1.0 + sim_p1_trend * clogging), 4)
+        p1 = max(0.1, p1)
+        dp = dp_clean + (dp_limit - dp_clean) * clogging**1.8
+        dp = round(max(dp_clean, min(dp, dp_limit)), 5)
+        p2 = round(max(0.0, p1 - dp), 4)
+        fl = round(max(q_min_sim, sim_q_base * (1.0 - sim_flow_drop * clogging**1.5)), 2)
         tmp = round(sim_t_base + sim_temp_trend * clogging, 1)
-        return {"dp": dp, "p1": p1, "p2": p2, "flow": fl, "temp": tmp,
-                "r_eff": dp / max(fl, 0.1)}
+        return {"dp": dp, "p1": p1, "p2": p2, "flow": fl, "temp": tmp, "r_eff": dp / max(fl, 0.1)}
 
     start_vals = _sim_step(0)
-    end_vals   = _sim_step(cycle_steps)
+    end_vals = _sim_step(cycle_steps)
 
     # Mittelwerte aus tatsächlichen Samples berechnen (nicht analytisch).
     # Wichtig bei hohem flow_drop: analytische Formel ignoriert den q_min-Clamp.
@@ -1455,44 +1494,48 @@ def api_simulation_quick_learn():
     loading_rate = round((end_vals["dp"] - start_vals["dp"]) / max(cycle_secs, 1.0), 6)
 
     existing = db.count_confirmed_cycles(heta_code)
-    needed   = max(0, required_cycles - existing)
-    now      = time.time()
+    needed = max(0, required_cycles - existing)
+    now = time.time()
 
     for i in range(needed):
-        t_start  = now - (needed - i) * (cycle_secs + 60)
-        cycle_id = db.insert_cycle({
-            "heta_code":              heta_code,
-            "start_time":             t_start,
-            "end_time":               t_start + cycle_secs,
-            "duration_seconds":       round(cycle_secs, 1),
-            "start_r_eff":            round(start_vals["r_eff"], 6),
-            "end_r_eff":              round(end_vals["r_eff"],   6),
-            "start_dp":               round(start_vals["dp"], 4),
-            "end_dp":                 round(end_vals["dp"], 3),
-            "average_flow":           avg_flow,
-            "average_temperature":    avg_temp,
-            "loading_rate":           loading_rate,
-            "confirmed_filter_change": 1,
-        })
+        t_start = now - (needed - i) * (cycle_secs + 60)
+        cycle_id = db.insert_cycle(
+            {
+                "heta_code": heta_code,
+                "start_time": t_start,
+                "end_time": t_start + cycle_secs,
+                "duration_seconds": round(cycle_secs, 1),
+                "start_r_eff": round(start_vals["r_eff"], 6),
+                "end_r_eff": round(end_vals["r_eff"], 6),
+                "start_dp": round(start_vals["dp"], 4),
+                "end_dp": round(end_vals["dp"], 3),
+                "average_flow": avg_flow,
+                "average_temperature": avg_temp,
+                "loading_rate": loading_rate,
+                "confirmed_filter_change": 1,
+            }
+        )
 
         # Zeitreihe aus den bereits berechneten Samples übernehmen.
         samples = []
         for s, sv in zip(sample_steps, all_sample_vals):
-            t  = t_start + s * sampling_interval
-            samples.append({
-                "cycle_id":             cycle_id,
-                "heta_code":            heta_code,
-                "timestamp":            t,
-                "cycle_second":         round(s * sampling_interval, 1),
-                "p1_bar":               sv["p1"],
-                "p2_bar":               sv["p2"],
-                "dp_bar":               sv["dp"],
-                "flow_l_min":           round(sv["flow"], 2),
-                "temp_c":               round(sv["temp"], 1),
-                "r_eff":                round(sv["r_eff"], 6),
-                "filter_health_percent": None,
-                "remaining_seconds":    None,
-            })
+            t = t_start + s * sampling_interval
+            samples.append(
+                {
+                    "cycle_id": cycle_id,
+                    "heta_code": heta_code,
+                    "timestamp": t,
+                    "cycle_second": round(s * sampling_interval, 1),
+                    "p1_bar": sv["p1"],
+                    "p2_bar": sv["p2"],
+                    "dp_bar": sv["dp"],
+                    "flow_l_min": round(sv["flow"], 2),
+                    "temp_c": round(sv["temp"], 1),
+                    "r_eff": round(sv["r_eff"], 6),
+                    "filter_health_percent": None,
+                    "remaining_seconds": None,
+                }
+            )
         db.insert_cycle_samples(samples)
 
     learning._update_profile(heta_code)
@@ -1501,8 +1544,8 @@ def api_simulation_quick_learn():
     predictor.seed(remaining_secs)
 
     with _state_lock:
-        _state["learned_cycles"]  = required_cycles
-        _state["profile_status"]  = "VALIDIERT"
+        _state["learned_cycles"] = required_cycles
+        _state["profile_status"] = "VALIDIERT"
         _state["show_filter_health"] = True
 
     # Simulation auf Schritt 0 zurücksetzen damit der nächste Zyklus
@@ -1510,27 +1553,34 @@ def api_simulation_quick_learn():
     if _loop:
         _loop.mstate.smoothed_health_pct = None
     reset_simulation()
-    learning._active_cycle = None   # laufenden Zyklus verwerfen (Daten vor Quick-Learn)
+    learning._active_cycle = None  # laufenden Zyklus verwerfen (Daten vor Quick-Learn)
     with _state_lock:
         # awaiting_confirmation MUSS zurückgesetzt werden: war es True als Quick-Learn
         # aufgerufen wurde, schläft der Messzyklus-Thread sonst dauerhaft und die
         # Prozessanalyse startet nie (analysis_ready bleibt False).
-        _state["awaiting_confirmation"]  = False
-        _state["cycle_active"]           = False
-        _state["cycle_start_time"]       = None
-        _state["cycle_dp_reached_time"]  = None
-        _state["cycle_active_seconds"]   = 0.0
-        _state["waiting_for_flow"]       = True   # Zyklus sauber neu starten
+        _state["awaiting_confirmation"] = False
+        _state["cycle_active"] = False
+        _state["cycle_start_time"] = None
+        _state["cycle_dp_reached_time"] = None
+        _state["cycle_active_seconds"] = 0.0
+        _state["waiting_for_flow"] = True  # Zyklus sauber neu starten
 
-    db.insert_service_event("SIM_SCHNELLLERN", heta_code,
-                            json.dumps({"simulated_cycles": needed, "loading_rate": loading_rate}))
-    logger.info("Schnell-Lernphase: %d Zyklen für %s simuliert (je %d Samples).",
-                needed, heta_code, len(samples) if needed else 0)
-    return jsonify({
-        "success": True,
-        "message": f"{needed} Lernzyklus/-zyklen für «{heta_code}» simuliert. Profil ist jetzt valide.",
-        "loading_rate": loading_rate,
-    })
+    db.insert_service_event(
+        "SIM_SCHNELLLERN", heta_code, json.dumps({"simulated_cycles": needed, "loading_rate": loading_rate})
+    )
+    logger.info(
+        "Schnell-Lernphase: %d Zyklen für %s simuliert (je %d Samples).",
+        needed,
+        heta_code,
+        len(samples) if needed else 0,
+    )
+    return jsonify(
+        {
+            "success": True,
+            "message": f"{needed} Lernzyklus/-zyklen für «{heta_code}» simuliert. Profil ist jetzt valide.",
+            "loading_rate": loading_rate,
+        }
+    )
 
 
 @app.route("/api/simulation/set-rates", methods=["POST"])
@@ -1546,56 +1596,59 @@ def api_simulation_set_rates():
     if not data.get("active", True):
         clear_simulation_rates()
         with _state_lock:
-            _state["sim_rates_active"]       = False
-            _state["sim_scenario"]           = "normal"
-            _state["sim_dirt_rate_pct"]      = 100.0
-            _state["sim_p1_trend_pct"]       = 0.0
-            _state["sim_flow_drop_pct"]      = 75.0
-            _state["sim_temp_trend"]         = 0.0
-            _state["sim_dp_deviation_pct"]   = 0.0
+            _state["sim_rates_active"] = False
+            _state["sim_scenario"] = "normal"
+            _state["sim_dirt_rate_pct"] = 100.0
+            _state["sim_p1_trend_pct"] = 0.0
+            _state["sim_flow_drop_pct"] = 75.0
+            _state["sim_temp_trend"] = 0.0
+            _state["sim_dp_deviation_pct"] = 0.0
             _state["sim_flow_deviation_pct"] = 0.0
-            _state["sim_temp_deviation"]     = 0.0
+            _state["sim_temp_deviation"] = 0.0
         return jsonify({"success": True, "active": False})
 
-    dirt_rate_pct  = max(10.0,  min(float(data.get("dirt_rate_pct",  100.0)), 400.0))
-    p1_trend_pct   = max(-20.0, min(float(data.get("p1_trend_pct",   0.0)),   20.0))
-    flow_drop_pct  = max(10.0,  min(float(data.get("flow_drop_pct",  75.0)),  99.0))
-    temp_trend     = max(-5.0,  min(float(data.get("temp_trend",     0.0)),   5.0))
-    scenario       = str(data.get("scenario", "custom"))
+    dirt_rate_pct = max(10.0, min(float(data.get("dirt_rate_pct", 100.0)), 400.0))
+    p1_trend_pct = max(-20.0, min(float(data.get("p1_trend_pct", 0.0)), 20.0))
+    flow_drop_pct = max(10.0, min(float(data.get("flow_drop_pct", 75.0)), 99.0))
+    temp_trend = max(-5.0, min(float(data.get("temp_trend", 0.0)), 5.0))
+    scenario = str(data.get("scenario", "custom"))
 
     set_simulation_scenario_params(
-        dirt_rate_factor    = dirt_rate_pct / 100.0,
-        p1_trend_factor     = p1_trend_pct  / 100.0,
-        flow_drop_factor    = flow_drop_pct / 100.0,
-        temp_trend_per_cycle = temp_trend,
+        dirt_rate_factor=dirt_rate_pct / 100.0,
+        p1_trend_factor=p1_trend_pct / 100.0,
+        flow_drop_factor=flow_drop_pct / 100.0,
+        temp_trend_per_cycle=temp_trend,
     )
 
     estimated_secs = get_simulation_estimated_cycle_secs()
-    dp_dev_pct   = round(dirt_rate_pct - 100.0, 1)
+    dp_dev_pct = round(dirt_rate_pct - 100.0, 1)
     flow_dev_pct = round((flow_drop_pct / 75.0 - 1.0) * 100.0, 1)
-    temp_dev     = round(temp_trend, 1)
+    temp_dev = round(temp_trend, 1)
 
     with _state_lock:
         _state["sim_estimated_cycle_secs"] = round(estimated_secs, 1)
-        _state["sim_rates_active"]         = True
-        _state["sim_scenario"]             = scenario
-        _state["sim_dirt_rate_pct"]        = round(dirt_rate_pct, 1)
-        _state["sim_p1_trend_pct"]         = round(p1_trend_pct,  1)
-        _state["sim_flow_drop_pct"]        = round(flow_drop_pct, 1)
-        _state["sim_temp_trend"]           = round(temp_trend,     1)
-        _state["sim_dp_deviation_pct"]     = dp_dev_pct
-        _state["sim_flow_deviation_pct"]   = flow_dev_pct
-        _state["sim_temp_deviation"]       = temp_dev
+        _state["sim_rates_active"] = True
+        _state["sim_scenario"] = scenario
+        _state["sim_dirt_rate_pct"] = round(dirt_rate_pct, 1)
+        _state["sim_p1_trend_pct"] = round(p1_trend_pct, 1)
+        _state["sim_flow_drop_pct"] = round(flow_drop_pct, 1)
+        _state["sim_temp_trend"] = round(temp_trend, 1)
+        _state["sim_dp_deviation_pct"] = dp_dev_pct
+        _state["sim_flow_deviation_pct"] = flow_dev_pct
+        _state["sim_temp_deviation"] = temp_dev
 
-    return jsonify({
-        "success": True, "active": True,
-        "scenario": scenario,
-        "dirt_rate_pct": dirt_rate_pct,
-        "p1_trend_pct": p1_trend_pct,
-        "flow_drop_pct": flow_drop_pct,
-        "temp_trend": temp_trend,
-        "estimated_cycle_secs": round(estimated_secs, 1),
-    })
+    return jsonify(
+        {
+            "success": True,
+            "active": True,
+            "scenario": scenario,
+            "dirt_rate_pct": dirt_rate_pct,
+            "p1_trend_pct": p1_trend_pct,
+            "flow_drop_pct": flow_drop_pct,
+            "temp_trend": temp_trend,
+            "estimated_cycle_secs": round(estimated_secs, 1),
+        }
+    )
 
 
 @app.route("/api/service/request", methods=["POST"])
@@ -1620,10 +1673,10 @@ def api_service_request():
     )
 
     pred_status = {
-        "prediction_mode":  current["prediction_mode"],
+        "prediction_mode": current["prediction_mode"],
         "remaining_display": current["remaining_display"],
         "remaining_seconds": current["remaining_seconds"],
-        "learned_cycles":    current["learned_cycles"],
+        "learned_cycles": current["learned_cycles"],
     }
 
     payload = build_service_payload(
@@ -1637,23 +1690,23 @@ def api_service_request():
         anomaly_percent=current["anomaly_percent"],
         action="SERVICE_ANFRAGE",
     )
-    rec = generate_service_recommendation(fs, pred_status,
-                                          health_percent=current["filter_health_percent"])
+    rec = generate_service_recommendation(fs, pred_status, health_percent=current["filter_health_percent"])
     spare = generate_spare_parts_order(current["heta_code"], fs)
     report = generate_service_report(payload, rec, spare)
 
-    db.insert_service_event("SERVICE_ANFRAGE", current["heta_code"],
-                            json.dumps(payload, ensure_ascii=False))
+    db.insert_service_event("SERVICE_ANFRAGE", current["heta_code"], json.dumps(payload, ensure_ascii=False))
 
     if _mqtt and _mqtt.is_connected:
         _mqtt.publish_service(payload)
 
-    return jsonify({
-        "payload": payload,
-        "recommendation": rec,
-        "spare_parts": spare,
-        "report_text": report,
-    })
+    return jsonify(
+        {
+            "payload": payload,
+            "recommendation": rec,
+            "spare_parts": spare,
+            "report_text": report,
+        }
+    )
 
 
 @app.route("/api/export/csv")
@@ -1664,12 +1717,14 @@ def api_export_csv():
     filename = f"heta_export_{int(time.time())}.csv"
     filepath = os.path.join(export_dir, filename)
     count = db.export_measurements_csv(filepath, since_timestamp=since)
-    return jsonify({
-        "success": count > 0,
-        "filename": filename,
-        "rows": count,
-        "path": filepath,
-    })
+    return jsonify(
+        {
+            "success": count > 0,
+            "filename": filename,
+            "rows": count,
+            "path": filepath,
+        }
+    )
 
 
 @app.route("/api/export/csv/download")
@@ -1681,9 +1736,7 @@ def api_export_csv_download():
     filename = f"heta_export_{int(time.time())}.csv"
     filepath = os.path.join(export_dir, filename)
     db.export_measurements_csv(filepath, since_timestamp=since)
-    return send_from_directory(export_dir, filename,
-                               as_attachment=True,
-                               download_name="heta_messwerte.csv")
+    return send_from_directory(export_dir, filename, as_attachment=True, download_name="heta_messwerte.csv")
 
 
 @app.route("/api/cycles")
@@ -1720,19 +1773,21 @@ def api_reference_curve():
             curve = json.loads(curve_json)
         except Exception:
             pass
-    return jsonify({
-        "heta_code":                  heta_code,
-        "curve":                      curve,
-        "reference_duration_seconds": profile.get("reference_duration_seconds", 0),
-        "reference_r_eff_start":      profile.get("reference_r_eff_start") or profile.get("reference_r_eff") or 0.0,
-        "reference_dp_clean":         profile.get("reference_dp_clean") or 0.0,
-        "cycles_count":               profile.get("cycles_count", 0),
-        "profile_valid":              bool(profile.get("profile_valid")),
-        "tolerance_dp_pct":   settings.get("tolerance_dp_pct",   0.25),
-        "tolerance_reff_pct": settings.get("tolerance_reff_pct", 0.25),
-        "tolerance_flow_pct": settings.get("tolerance_flow_pct", 0.25),
-        "tolerance_temp_c":   settings.get("tolerance_temp_c",   10.0),
-    })
+    return jsonify(
+        {
+            "heta_code": heta_code,
+            "curve": curve,
+            "reference_duration_seconds": profile.get("reference_duration_seconds", 0),
+            "reference_r_eff_start": profile.get("reference_r_eff_start") or profile.get("reference_r_eff") or 0.0,
+            "reference_dp_clean": profile.get("reference_dp_clean") or 0.0,
+            "cycles_count": profile.get("cycles_count", 0),
+            "profile_valid": bool(profile.get("profile_valid")),
+            "tolerance_dp_pct": settings.get("tolerance_dp_pct", 0.25),
+            "tolerance_reff_pct": settings.get("tolerance_reff_pct", 0.25),
+            "tolerance_flow_pct": settings.get("tolerance_flow_pct", 0.25),
+            "tolerance_temp_c": settings.get("tolerance_temp_c", 10.0),
+        }
+    )
 
 
 @app.route("/api/cycle-samples/<int:cycle_id>")
@@ -1756,31 +1811,37 @@ def api_active_cycle():
     ref_duration = profile.get("reference_duration_seconds", 0.0)
     n = len(cycle.dp_samples)
     if n == 0:
-        return jsonify({
-            "heta_code": heta_code,
-            "start_time": cycle.start_time,
-            "elapsed_seconds": 0.0,
-            "ref_duration_seconds": ref_duration,
-            "samples": [],
-        })
+        return jsonify(
+            {
+                "heta_code": heta_code,
+                "start_time": cycle.start_time,
+                "elapsed_seconds": 0.0,
+                "ref_duration_seconds": ref_duration,
+                "samples": [],
+            }
+        )
     step = max(1, n // 300)
     samples = []
     for i in range(0, n, step):
         t_off = cycle.timestamps[i] - cycle.start_time
         t_pct = (t_off / ref_duration * 100.0) if ref_duration > 0 else None
-        samples.append({
-            "cycle_second": round(t_off, 1),
-            "t_pct": round(t_pct, 2) if t_pct is not None else None,
-            "dp_bar": round(cycle.dp_samples[i], 4),
-            "r_eff": round(cycle.r_eff_samples[i], 5) if i < len(cycle.r_eff_samples) else None,
-        })
-    return jsonify({
-        "heta_code": heta_code,
-        "start_time": cycle.start_time,
-        "elapsed_seconds": round(time.time() - cycle.start_time, 1),
-        "ref_duration_seconds": ref_duration,
-        "samples": samples,
-    })
+        samples.append(
+            {
+                "cycle_second": round(t_off, 1),
+                "t_pct": round(t_pct, 2) if t_pct is not None else None,
+                "dp_bar": round(cycle.dp_samples[i], 4),
+                "r_eff": round(cycle.r_eff_samples[i], 5) if i < len(cycle.r_eff_samples) else None,
+            }
+        )
+    return jsonify(
+        {
+            "heta_code": heta_code,
+            "start_time": cycle.start_time,
+            "elapsed_seconds": round(time.time() - cycle.start_time, 1),
+            "ref_duration_seconds": ref_duration,
+            "samples": samples,
+        }
+    )
 
 
 @app.route("/api/navigation/event", methods=["POST"])
@@ -1801,17 +1862,18 @@ def api_display_screen():
     """Gibt den aktuell angezeigten Bildschirm zurück."""
     if _display_ctrl:
         screen = _display_ctrl._screens[_display_ctrl._screen_idx]
-        return jsonify({"screen": screen, "screen_index": _display_ctrl._screen_idx,
-                        "confirm_armed": _display_ctrl._confirm_armed})
+        return jsonify(
+            {"screen": screen, "screen_index": _display_ctrl._screen_idx, "confirm_armed": _display_ctrl._confirm_armed}
+        )
     if _display:
-        return jsonify({"screen": _display.current_screen, "screen_index": None,
-                        "confirm_armed": False})
+        return jsonify({"screen": _display.current_screen, "screen_index": None, "confirm_armed": False})
     return jsonify({"screen": None, "screen_index": None, "confirm_armed": False})
 
 
 # ---------------------------------------------------------------------------
 # Software-Update via Git
 # ---------------------------------------------------------------------------
+
 
 @app.route("/api/update/pull", methods=["POST"])
 def api_update_pull():
@@ -1833,19 +1895,32 @@ def api_update_pull():
             timeout=30,
         )
     except subprocess.TimeoutExpired:
-        return jsonify({"success": False, "changed": False, "restarting": False,
-                        "output": "Timeout – git pull hat zu lange gebraucht."})
+        return jsonify(
+            {
+                "success": False,
+                "changed": False,
+                "restarting": False,
+                "output": "Timeout – git pull hat zu lange gebraucht.",
+            }
+        )
     except FileNotFoundError:
-        return jsonify({"success": False, "changed": False, "restarting": False,
-                        "output": "git nicht gefunden. Ist Git installiert?"})
+        return jsonify(
+            {
+                "success": False,
+                "changed": False,
+                "restarting": False,
+                "output": "git nicht gefunden. Ist Git installiert?",
+            }
+        )
 
-    output  = (result.stdout + result.stderr).strip()
+    output = (result.stdout + result.stderr).strip()
     success = result.returncode == 0
     changed = success and "Already up to date." not in result.stdout
 
     logger.info("Git pull: rc=%d changed=%s output=%r", result.returncode, changed, output)
 
     if changed:
+
         def _restart():
             time.sleep(2.0)
             logger.info("Neustart nach Git-Update – versuche systemctl…")
@@ -1854,7 +1929,8 @@ def api_update_pull():
             try:
                 r = subprocess.run(
                     ["sudo", "systemctl", "restart", "heta-monitor"],
-                    timeout=10, capture_output=True,
+                    timeout=10,
+                    capture_output=True,
                 )
                 if r.returncode == 0:
                     logger.info("systemctl restart erfolgreich.")
@@ -1872,15 +1948,9 @@ def api_update_pull():
             # der neue Prozess den offenen Flask-Socket erbt und "Port belegt"
             # meldet.  start_new_session=True schützt vor SIGHUP beim Exit.
             # sleep 3 gibt dem Betriebssystem Zeit, den Port freizugeben.
-            logger.info(
-                "Fallback: Starte neuen Prozess und beende mich – "
-                "Port wird nach ~3 s wieder erreichbar sein."
-            )
+            logger.info("Fallback: Starte neuen Prozess und beende mich – Port wird nach ~3 s wieder erreichbar sein.")
             try:
-                restart_cmd = (
-                    f"sleep 3 && exec {sys.executable} "
-                    f"{os.path.join(_BASE_DIR, 'backend', 'app.py')}"
-                )
+                restart_cmd = f"sleep 3 && exec {sys.executable} {os.path.join(_BASE_DIR, 'backend', 'app.py')}"
                 subprocess.Popen(
                     ["bash", "-c", restart_cmd],
                     cwd=_BASE_DIR,
@@ -1896,12 +1966,14 @@ def api_update_pull():
 
         threading.Thread(target=_restart, daemon=True).start()
 
-    return jsonify({
-        "success":   success,
-        "changed":   changed,
-        "restarting": changed,
-        "output":    output,
-    })
+    return jsonify(
+        {
+            "success": success,
+            "changed": changed,
+            "restarting": changed,
+            "output": output,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1920,8 +1992,9 @@ if __name__ == "__main__":
     elif _hw_available:
         logger.info("Betriebsart : Realbetrieb – AnoPi Shield erkannt")
     else:
-        logger.warning("Betriebsart : Realbetrieb konfiguriert, "
-                       "aber AnoPi Shield NICHT erkannt – Fallback zur Simulation aktiv!")
+        logger.warning(
+            "Betriebsart : Realbetrieb konfiguriert, aber AnoPi Shield NICHT erkannt – Fallback zur Simulation aktiv!"
+        )
     logger.info("Onboarding  : %s", "abgeschlossen" if settings.get("onboarding_complete") else "ausstehend")
     logger.info("=" * 60)
 

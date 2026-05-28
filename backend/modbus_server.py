@@ -26,24 +26,24 @@ import time
 logger = logging.getLogger(__name__)
 
 # Registeradressen
-REG_P1          = 0
-REG_P2          = 1
-REG_DP          = 2
-REG_FLOW        = 3
-REG_TEMP        = 4
-REG_REFF        = 5
-REG_HEALTH      = 6
-REG_REMAINING   = 7
-REG_ALARM       = 8
+REG_P1 = 0
+REG_P2 = 1
+REG_DP = 2
+REG_FLOW = 3
+REG_TEMP = 4
+REG_REFF = 5
+REG_HEALTH = 6
+REG_REMAINING = 7
+REG_ALARM = 8
 REG_CYCLE_COUNT = 9
 REG_STATUS_CODE = 10
-REG_COUNT       = 11
+REG_COUNT = 11
 
 _STATUS_CODES = {
-    "INIT":    0,
+    "INIT": 0,
     "LAUFEND": 1,
     "WECHSEL": 2,
-    "FEHLER":  3,
+    "FEHLER": 3,
 }
 
 _UNKNOWN = 0xFFFF
@@ -100,8 +100,7 @@ class ModbusTCPServer:
             logger.info("Modbus-TCP-Server gestartet auf %s:%d", self._host, self._port)
             return True
         except ImportError:
-            logger.warning("pymodbus nicht installiert – Modbus-TCP deaktiviert. "
-                           "pip install pymodbus")
+            logger.warning("pymodbus nicht installiert – Modbus-TCP deaktiviert. pip install pymodbus")
             return False
         except Exception as e:
             logger.error("Modbus-TCP-Server Startfehler: %s", e)
@@ -140,13 +139,13 @@ class ModbusTCPServer:
         try:
             regs = [0] * REG_COUNT
 
-            regs[REG_P1]    = _encode_float(filter_state.p1_bar,  1000)
-            regs[REG_P2]    = _encode_float(filter_state.p2_bar,  1000)
-            regs[REG_DP]    = _encode_float(filter_state.dp_bar,  10000)
-            regs[REG_FLOW]  = _encode_float(filter_state.flow_l_min, 10)
+            regs[REG_P1] = _encode_float(filter_state.p1_bar, 1000)
+            regs[REG_P2] = _encode_float(filter_state.p2_bar, 1000)
+            regs[REG_DP] = _encode_float(filter_state.dp_bar, 10000)
+            regs[REG_FLOW] = _encode_float(filter_state.flow_l_min, 10)
             # Temperatur: Offset 500 für negative Werte (-50..150 °C)
-            regs[REG_TEMP]  = _encode_float(filter_state.temperature_c, 10, offset=500)
-            regs[REG_REFF]  = _encode_float(filter_state.r_eff,  1000)
+            regs[REG_TEMP] = _encode_float(filter_state.temperature_c, 10, offset=500)
+            regs[REG_REFF] = _encode_float(filter_state.r_eff, 1000)
 
             health = state.get("filter_health_percent")
             regs[REG_HEALTH] = _encode_float(health, 10)
