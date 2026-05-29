@@ -1229,6 +1229,8 @@ main {
 .btn-danger    { background: var(--alert-red);   color: #fff; }
 .btn-warning   { background: var(--warn-yellow); color: #fff; }
 .btn-ghost     { background: transparent; border: 1px solid rgba(255,255,255,0.18); color: var(--text-muted); }
+.btn-danger    { background: transparent; border: 1px solid var(--alert-red); color: var(--alert-red); }
+.btn-danger:hover { background: var(--alert-red); color: #fff; }
 .btn-accent    { background: #1e3a6e; color: #fff; }
 .btn-accent:hover { background: #2a4f8f; }
 .btn-accent:disabled { background: #2a3a52; cursor: not-allowed; opacity: .7; }

@@ -887,6 +887,22 @@ def api_heta_activate():
     return jsonify(result)
 
 
+@app.route("/api/heta/deactivate", methods=["POST"])
+def api_heta_deactivate():
+    """Deaktiviert den aktiven HETA-Code (ohne Lernzyklen zu löschen)."""
+    with _state_lock:
+        heta_code = _state.get("heta_code", "")
+        _state["heta_code"] = ""
+        _state["heta_activated"] = False
+        _state["heta_number"] = ""
+    predictor.reset()
+    _dp_rate_buffer.clear()
+    if heta_code:
+        db.insert_service_event("HETA_DEAKTIVIERT", heta_code, json.dumps({"timestamp": time.time()}))
+        logger.info("HETA-Code %s deaktiviert.", heta_code)
+    return jsonify({"success": True, "message": f"HETA-Code {heta_code} deaktiviert."})
+
+
 @app.route("/api/heta/demo", methods=["GET"])
 def api_heta_demo():
     """Demo: gibt Aktivierungscode für einen HETA-Code zurück (nur für Tests!)."""

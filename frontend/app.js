@@ -594,6 +594,8 @@ function updateDashboard(d) {
   // HETA-Code
   setText("val-heta-code", d.heta_code || "(kein Code)");
   setText("val-heta-status", d.heta_activated ? "Aktiviert" : "nicht aktiviert");
+  const btnDeact = document.getElementById("btn-heta-deactivate");
+  if (btnDeact) btnDeact.classList.toggle("hidden", !d.heta_activated);
   setText("val-service-msg", d.service_message || "–");
   setText("val-service-prio", d.service_priority || "–");
   styleServicePriority(d.service_priority);
@@ -758,6 +760,17 @@ async function activateHetaCode() {
   const result = await apiFetch("/api/heta/activate", "POST", { heta_code: code, pin });
   if (result?.valid) showMsg("heta-msg", `Aktivierung erfolgreich: ${result.heta_code}`, false);
   else showMsg("heta-msg", result?.message ?? "Fehler.", true);
+}
+
+async function deactivateHetaCode() {
+  if (!confirm("HETA-Code wirklich deaktivieren?\nDie Lernzyklen bleiben gespeichert.")) return;
+  const result = await apiFetch("/api/heta/deactivate", "POST");
+  if (result?.success) {
+    showMsg("heta-msg", result.message, false);
+    clearCharts();
+  } else {
+    showMsg("heta-msg", result?.message ?? "Fehler.", true);
+  }
 }
 
 async function showDemo() {
