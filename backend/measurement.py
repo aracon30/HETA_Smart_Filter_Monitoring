@@ -105,7 +105,7 @@ class MeasurementLoop:
             # dp_limit aus Einstellungen; dp_clean aus gemessenem Profil (Ø start_dp
             # der Lernzyklen), Fallback auf Einstellungswert solange kein Profil.
             dp_limit = self._settings.get("dp_limit_bar", 2.5)
-            _loop_profile = self._learning.get_profile(self._state.get("heta_code", ""))
+            _loop_profile = self._learning.get_profile(self._state.get("heta_code", "") or "DEMO")
             dp_clean = (
                 (_loop_profile.get("reference_dp_clean") or 0.0)
                 if _loop_profile and (_loop_profile.get("reference_dp_clean") or 0.0) > 0
@@ -196,9 +196,12 @@ class MeasurementLoop:
             )
 
             # ── Profil laden (einmalig pro Loop-Iteration) ────────────────────
-            profile = self._learning.get_profile(heta_code) if heta_code else None
-            profile_valid = bool(profile and profile.get("profile_valid")) and heta_activated
-            cycles_count = (profile.get("cycles_count", 0) if profile else 0) if heta_code else 0
+            # Ohne HETA-Code wird "DEMO" als Fallback-Profil verwendet,
+            # damit Lernzyklen und Prognosen auch ohne aktivierten Code möglich sind.
+            learning_code = heta_code or "DEMO"
+            profile = self._learning.get_profile(learning_code)
+            profile_valid = bool(profile and profile.get("profile_valid")) and (heta_activated or not heta_code)
+            cycles_count = profile.get("cycles_count", 0) if profile else 0
 
             # ── Beladungsgrad via R_eff ──────────────────────────────────────
             # Bevorzugt R_eff-basiert (reagiert auf Δp UND Durchflussänderungen).
@@ -243,17 +246,16 @@ class MeasurementLoop:
             if sim_mode:
                 if waiting_for_flow:
                     self.mstate.flow_stable_since = None
-                    if heta_code:
-                        self._learning.start_cycle(heta_code, fs.r_eff, fs.dp_bar)
-                        self._seed_predictor(heta_code)
+                    self._learning.start_cycle(learning_code, fs.r_eff, fs.dp_bar)
+                    self._seed_predictor(learning_code)
                     with self._state_lock:
                         self._state["waiting_for_flow"] = False
-                        self._state["cycle_active"] = bool(heta_code)
+                        self._state["cycle_active"] = True
                         self._state["cycle_start_time"] = now_ts
                         self._state["cycle_active_seconds"] = 0.0
                         self._state["cycle_paused"] = False
                     waiting_for_flow = False
-                    cycle_active = bool(heta_code)
+                    cycle_active = True
                     cycle_paused = False
                 elif cycle_paused:
                     with self._state_lock:
@@ -273,15 +275,14 @@ class MeasurementLoop:
                         # Bedingung stabil lang genug → Zyklus starten
                         self.mstate.flow_stable_since = None
                         self.mstate.flow_below_since = None
-                        if heta_code:
-                            self._learning.start_cycle(heta_code, fs.r_eff, fs.dp_bar)
-                            self._seed_predictor(heta_code)
+                        self._learning.start_cycle(learning_code, fs.r_eff, fs.dp_bar)
+                        self._seed_predictor(learning_code)
                         with self._state_lock:
                             self._state["waiting_for_flow"] = False
-                            self._state["cycle_active"] = bool(heta_code)
+                            self._state["cycle_active"] = True
                             self._state["cycle_start_time"] = now_ts
                             self._state["cycle_active_seconds"] = 0.0
-                        cycle_active = bool(heta_code)
+                        cycle_active = True
                         waiting_for_flow = False
                         logger.info(
                             "Durchfluss stabil – Zyklus gestartet (Q=%.1f l/min, dp=%.3f bar).",
@@ -406,7 +407,7 @@ class MeasurementLoop:
                 cycle_active_secs if cycle_active_secs > 0 else ((now_ts - cycle_start_ts) if cycle_start_ts else 0.0)
             )
 
-            an_active = profile_valid and heta_activated and not sensor_error
+            an_active = profile_valid and not sensor_error
             an_ready = False
             analysis = None
             cycle_progress_pct = 0.0
@@ -445,7 +446,7 @@ class MeasurementLoop:
                 try:
                     ch_slopes = self._predictor.get_channel_slopes()
                     analysis = self._learning.get_curve_analysis(
-                        heta_code,
+                        learning_code,
                         elapsed,
                         fs.dp_bar,
                         fs.r_eff,
@@ -491,8 +492,8 @@ class MeasurementLoop:
                 )
 
             # ── Startverhalten prüfen (erste 10 Sekunden) ────────────────────
-            if cycle_active and heta_activated and cycle_start_ts and (time.time() - cycle_start_ts) < 10:
-                anomaly, anom_pct = self._learning.check_start_behavior(heta_code, fs.r_eff)
+            if cycle_active and cycle_start_ts and (time.time() - cycle_start_ts) < 10:
+                anomaly, anom_pct = self._learning.check_start_behavior(learning_code, fs.r_eff)
                 # Atomar lesen + schreiben unter self._state_lock; learning-Calls danach.
                 with self._state_lock:
                     was_anomaly = self._state["anomaly_active"]

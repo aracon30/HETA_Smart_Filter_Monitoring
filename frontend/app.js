@@ -1196,7 +1196,7 @@ function updateSimDemoPanel(d) {
   // Geschätzte Zyklusdauer (read-only, aus Physik berechnet)
   setText("sv-est-cycle-dur", _fmtCycleDur(d.sim_estimated_cycle_secs ?? 300));
 
-  const profileValid = d.profile_status === "VALIDIERT" && d.heta_activated;
+  const profileValid = d.profile_status === "VALIDIERT";
   const learnArea    = document.getElementById("sim-learn-area");
   const analysisArea = document.getElementById("sim-analysis-area");
 
@@ -1529,24 +1529,16 @@ async function resetHetaCycles() {
 async function loadCyclesOverview() {
   const d = window._lastStatus;
   const hetaCode = d?.heta_code;
-  const activated = !!d?.heta_activated;
+  const effectiveCode = hetaCode || "DEMO";
 
   const noCodeEl      = document.getElementById("cycles-no-code");
   const profileContent = document.getElementById("profile-content");
   const tableWrap     = document.getElementById("cycles-table-wrap");
   const emptyEl       = document.getElementById("cycles-empty");
 
-  if (!hetaCode || !activated) {
-    if (noCodeEl)      noCodeEl.classList.remove("hidden");
-    if (profileContent) profileContent.classList.add("hidden");
-    if (tableWrap)     tableWrap.classList.add("hidden");
-    if (emptyEl)       emptyEl.classList.add("hidden");
-    return;
-  }
-
   if (noCodeEl) noCodeEl.classList.add("hidden");
 
-  const encoded = encodeURIComponent(hetaCode);
+  const encoded = encodeURIComponent(effectiveCode);
   const [cycles, profile] = await Promise.all([
     apiFetch(`/api/cycles?heta_code=${encoded}`),
     apiFetch(`/api/profile?heta_code=${encoded}`),

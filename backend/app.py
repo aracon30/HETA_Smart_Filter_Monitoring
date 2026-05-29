@@ -1455,13 +1455,11 @@ def api_simulation_quick_learn():
     with _state_lock:
         sim_mode = _state["simulation_mode"]
         heta_code = _state["heta_code"]
-        heta_activated = _state["heta_activated"]
 
     if not sim_mode:
         return jsonify({"success": False, "message": "Nur im Simulationsmodus verfügbar."})
-    if not heta_code or not heta_activated:
-        return jsonify({"success": False, "message": "Kein aktiver HETA-Code. Bitte zuerst HETA-Code aktivieren."})
-    if learning.is_profile_valid(heta_code):
+    effective_code = heta_code or "DEMO"
+    if learning.is_profile_valid(effective_code):
         return jsonify({"success": False, "message": "Profil ist bereits valide – Lernphase abgeschlossen."})
 
     dp_clean = settings.get("dp_clean_bar", 0.2)
@@ -1509,7 +1507,7 @@ def api_simulation_quick_learn():
     # Beladungsrate: (dp_ende - dp_start) / Zyklusdauer [bar/s]
     loading_rate = round((end_vals["dp"] - start_vals["dp"]) / max(cycle_secs, 1.0), 6)
 
-    existing = db.count_confirmed_cycles(heta_code)
+    existing = db.count_confirmed_cycles(effective_code)
     needed = max(0, required_cycles - existing)
     now = time.time()
 
@@ -1517,7 +1515,7 @@ def api_simulation_quick_learn():
         t_start = now - (needed - i) * (cycle_secs + 60)
         cycle_id = db.insert_cycle(
             {
-                "heta_code": heta_code,
+                "heta_code": effective_code,
                 "start_time": t_start,
                 "end_time": t_start + cycle_secs,
                 "duration_seconds": round(cycle_secs, 1),
@@ -1539,7 +1537,7 @@ def api_simulation_quick_learn():
             samples.append(
                 {
                     "cycle_id": cycle_id,
-                    "heta_code": heta_code,
+                    "heta_code": effective_code,
                     "timestamp": t,
                     "cycle_second": round(s * sampling_interval, 1),
                     "p1_bar": sv["p1"],
@@ -1554,7 +1552,7 @@ def api_simulation_quick_learn():
             )
         db.insert_cycle_samples(samples)
 
-    learning._update_profile(heta_code)
+    learning._update_profile(effective_code)
     remaining_secs = (dp_limit - dp_clean) / max(loading_rate, 1e-9)
     predictor.update_limits(dp_limit, dp_clean)
     predictor.seed(remaining_secs)
@@ -1582,18 +1580,18 @@ def api_simulation_quick_learn():
         _state["waiting_for_flow"] = True  # Zyklus sauber neu starten
 
     db.insert_service_event(
-        "SIM_SCHNELLLERN", heta_code, json.dumps({"simulated_cycles": needed, "loading_rate": loading_rate})
+        "SIM_SCHNELLLERN", effective_code, json.dumps({"simulated_cycles": needed, "loading_rate": loading_rate})
     )
     logger.info(
         "Schnell-Lernphase: %d Zyklen für %s simuliert (je %d Samples).",
         needed,
-        heta_code,
+        effective_code,
         len(samples) if needed else 0,
     )
     return jsonify(
         {
             "success": True,
-            "message": f"{needed} Lernzyklus/-zyklen für «{heta_code}» simuliert. Profil ist jetzt valide.",
+            "message": f"{needed} Lernzyklus/-zyklen für «{effective_code}» simuliert. Profil ist jetzt valide.",
             "loading_rate": loading_rate,
         }
     )
