@@ -75,14 +75,14 @@
 
       <div class="wizard-step" data-step="1">
         <h2>Willkommen</h2>
-        <p>Dieser Assistent richtet das HETA Smart Filter Monitoring für Ihren Einsatz ein. Bitte folgen Sie den Schritten.</p>
+        <p>Mit diesem Assistenten richten Sie das HETA Smart Filter Monitoring in wenigen Schritten ein.</p>
         <ul class="wizard-checklist">
           <li>HETA-Code &amp; PIN eingeben</li>
-          <li>Filterparameter konfigurieren</li>
           <li>Betriebsart wählen</li>
-          <li>Zugriffspasswort festlegen</li>
+          <li>Filterparameter festlegen</li>
+          <li>Zugriffspasswort vergeben</li>
         </ul>
-        <p class="wizard-note">Die Konfiguration kann später im passwortgeschützten Einstellungsbereich angepasst werden. Bei Änderung relevanter Parameter wird der Lernprozess automatisch neu gestartet.</p>
+        <p class="wizard-note">Alle Einstellungen können Sie später jederzeit im passwortgeschützten Bereich anpassen.</p>
       </div>
 
       <div class="wizard-step hidden" data-step="2">
@@ -116,32 +116,32 @@
           <label class="mode-card" id="mode-hw">
             <input type="radio" name="op-mode" value="hardware" checked />
             <strong>Hardwaremodus</strong>
-            <span>Echte 4–20 mA Signale vom AnoPi Shield (Raspberry Pi 5). Empfohlen für Realbetrieb.</span>
+            <span>Echte Sensoren sind angeschlossen. Empfohlen für den produktiven Betrieb an der Anlage.</span>
           </label>
           <label class="mode-card" id="mode-sim">
             <input type="radio" name="op-mode" value="simulation" />
             <strong>Simulationsmodus</strong>
-            <span>Ohne echte Sensoren – nur für Entwicklung und Test.</span>
+            <span>Kein Sensor erforderlich – ideal zum Ausprobieren und für Vorführungen.</span>
           </label>
         </div>
       </div>
 
       <div class="wizard-step hidden" data-step="4">
         <h2>Betriebsweise des Filterkreislaufs</h2>
-        <p>Wie wird Ihre Anlage betrieben? Die Auswahl bestimmt, wann das System einen Messzyklus startet und wie es mit Pausen ohne Durchfluss umgeht.</p>
+        <p>Wie wird Ihre Anlage betrieben? Das beeinflusst die Berechnung der Reststandzeit und den Umgang mit Betriebspausen.</p>
         <div class="mode-cards">
           <label class="mode-card" id="mode-continuous">
             <input type="radio" name="cycle-mode" value="continuous" checked />
-            <strong>Dauerbetrieb (kontinuierlich)</strong>
-            <span>Der Filter läuft dauerhaft. Unterbrechungen ohne Durchfluss sind Ausnahmen. Zykluszeit = Wanduhrzeit.</span>
+            <strong>Dauerbetrieb</strong>
+            <span>Der Filter läuft durchgehend. Kurze Unterbrechungen werden toleriert. Die gesamte Laufzeit zählt.</span>
           </label>
           <label class="mode-card" id="mode-batch">
             <input type="radio" name="cycle-mode" value="batch" />
-            <strong>Intervallbetrieb (Batch)</strong>
-            <span>Die Anlage schaltet regelmäßig ab und wieder an (z. B. Schichtbetrieb). Zykluszeit = kumulierte Betriebszeit ohne Pausen.</span>
+            <strong>Intervallbetrieb</strong>
+            <span>Die Anlage schaltet regelmäßig ab und wieder an (z. B. Schichtbetrieb). Nur die tatsächliche Betriebszeit zählt.</span>
           </label>
         </div>
-        <p class="wizard-note">In beiden Betriebsweisen startet der Messzyklus automatisch, sobald stabiler Durchfluss erkannt wird. Die Durchflussschwellwerte werden automatisch aus den ersten Betriebsdaten berechnet.</p>
+        <p class="wizard-note">Die Messung startet automatisch, sobald ein gleichmäßiger Durchfluss erkannt wird. Der Mindestwert wird automatisch aus den ersten Betriebsdaten ermittelt.</p>
       </div>
 
       <div class="wizard-step hidden" data-step="5">
@@ -153,7 +153,7 @@
               <input type="number" id="ob-dp-limit" value="2.5" min="0.1" max="20" step="0.1" />
               <span class="unit-label">bar</span>
             </div>
-            <small>Filterwechsel wird ausgelöst wenn der Differenzdruck diesen Wert überschreitet.</small>
+            <small>Das System empfiehlt einen Filterwechsel, sobald dieser Wert überschritten wird.</small>
           </label>
           <label style="color:var(--text-muted)">
             Druckabfall bei sauberem Filterelement
@@ -163,7 +163,7 @@
             <small>Der Ø Druckabfall des frischen Filters wird aus den Start-dp-Werten der 3 Lernzyklen ermittelt.</small>
           </label>
           <label>
-            Maximaler Volumenstrom (Sensorendwert 20 mA)
+            Maximaler Durchfluss (Messbereich des Sensors)
             <div class="input-unit-row">
               <input type="number" id="ob-flow-max" value="150" min="1" max="5000" step="1" />
               <span class="unit-label">l/min</span>
@@ -290,7 +290,7 @@
       <div class="status-overlay__progress-bar">
         <div class="status-overlay__progress-fill" id="flow-wait-bar" style="width:0%"></div>
       </div>
-      <p class="status-overlay__hint">Der Messzyklus startet automatisch, sobald der Durchfluss stabil über dem Schwellwert liegt.</p>
+      <p class="status-overlay__hint">Die Messung startet automatisch, sobald ein gleichmäßiger Durchfluss erkannt wird.</p>
       <button class="status-overlay__minimize-btn" onclick="minimizeFlowOverlay()">&#9660; Minimieren</button>
     </div>
   </div>
@@ -346,7 +346,7 @@
       </div>
 
       <div id="settings-login-area">
-        <p>Bitte Passwort eingeben um die Einstellungen zu ändern.</p>
+        <p>Bitte Passwort eingeben, um die Einstellungen zu ändern.</p>
         <div class="form-grid">
           <label>
             Passwort
@@ -380,7 +380,7 @@
                   <input type="number" id="s-dp-limit" min="0.1" max="20" step="0.1" />
                   <span class="unit-label">bar</span>
                 </div>
-                <small>Filterwechsel wird ausgelöst wenn der Differenzdruck diesen Wert überschreitet.</small>
+                <small>Das System empfiehlt einen Filterwechsel, sobald dieser Wert überschritten wird.</small>
               </label>
               <label style="color:var(--text-muted)">
                 Druckabfall bei sauberem Filterelement
@@ -391,7 +391,7 @@
                 <small>Wird automatisch aus den Startwerten der 3 Lernzyklen berechnet.</small>
               </label>
               <label>
-                Maximaler Volumenstrom (Sensorendwert 20&nbsp;mA)
+                Maximaler Durchfluss (Messbereich des Sensors)
                 <div class="input-unit-row">
                   <input type="number" id="s-flow-max" min="1" max="5000" step="1" />
                   <span class="unit-label">l/min</span>
@@ -495,11 +495,10 @@
           </div>
 
           <div id="sim-mode-warning" class="settings-warning sim-mode-warning hidden">
-            <strong>&#9888; Achtung – Simulationsmodus:</strong>
-            Im Simulationsmodus werden <strong>keine echten Sensordaten</strong> erfasst –
-            alle Messwerte sind künstlich erzeugt. Dieser Modus ist ausschließlich für
-            Tests und Entwicklung vorgesehen.<br>
-            <strong>Für den Produktionsbetrieb muss der Hardwaremodus aktiv sein.</strong>
+            <strong>&#9888; Hinweis – Simulationsmodus aktiv:</strong>
+            Es werden <strong>keine echten Sensordaten</strong> erfasst –
+            alle Messwerte sind künstlich erzeugt. Geeignet zum Ausprobieren und für Vorführungen.<br>
+            <strong>Für den Betrieb an der Anlage muss der Hardwaremodus aktiv sein.</strong>
           </div>
 
           <div class="settings-section">
@@ -508,34 +507,34 @@
               <label>
                 Betriebsweise
                 <select id="s-operation-mode">
-                  <option value="continuous">Dauerbetrieb (kontinuierlich)</option>
-                  <option value="batch">Intervallbetrieb (Batch)</option>
+                  <option value="continuous">Dauerbetrieb</option>
+                  <option value="batch">Intervallbetrieb</option>
                 </select>
-                <small>Steuert Pausentoleranz und Ereignis-Beschriftung im Zyklus.</small>
+                <small>Beeinflusst, wie Betriebspausen behandelt werden und wann ein Zyklus endet.</small>
               </label>
               <label>
-                Durchflussschwellwert (Überschreibung)
+                Mindestdurchfluss für Zyklusstart
                 <div class="input-unit-row">
-                  <input type="number" id="s-flow-threshold" min="0" max="5000" step="0.1" placeholder="Auto" />
+                  <input type="number" id="s-flow-threshold" min="0" max="5000" step="0.1" placeholder="Automatisch" />
                   <span class="unit-label">l/min</span>
                 </div>
-                <small>Leer lassen für automatische Berechnung aus Betriebsdaten.</small>
+                <small>Leer lassen – das System berechnet den Wert automatisch aus den Betriebsdaten.</small>
               </label>
               <label>
-                Stabilitätsfenster (Überschreibung)
+                Anlaufzeit bis Zyklusstart
                 <div class="input-unit-row">
-                  <input type="number" id="s-flow-stability" min="1" max="300" step="1" placeholder="Auto (10 s)" />
+                  <input type="number" id="s-flow-stability" min="1" max="300" step="1" placeholder="Automatisch (10 s)" />
                   <span class="unit-label">s</span>
                 </div>
-                <small>Sekunden stabilen Durchflusses bevor Zyklus startet. Leer = auto.</small>
+                <small>Wie lange muss der Durchfluss stabil sein, bevor die Messung startet? Leer = automatisch.</small>
               </label>
               <label>
-                Pausentoleranz (Überschreibung)
+                Maximale Pause ohne Zyklusabbruch
                 <div class="input-unit-row">
-                  <input type="number" id="s-flow-pause-tol" min="10" max="86400" step="10" placeholder="Auto" />
+                  <input type="number" id="s-flow-pause-tol" min="10" max="86400" step="10" placeholder="Automatisch" />
                   <span class="unit-label">s</span>
                 </div>
-                <small>Max. Pause bevor Zyklus abgebrochen wird. Leer = auto (30 s / 60 s).</small>
+                <small>Wie lange darf die Anlage pausieren, ohne dass der Zyklus abbricht? Leer = automatisch.</small>
               </label>
             </div>
           </div>
@@ -624,8 +623,8 @@
           <div class="settings-section update-section">
             <h3>Software-Update</h3>
             <p class="settings-hint">
-              Holt den aktuellen Stand von GitHub (<code>git pull</code>) und startet den Dienst
-              automatisch neu, wenn Änderungen vorhanden sind.
+              Lädt die neueste Softwareversion herunter und startet das System automatisch neu,
+              wenn ein Update verfügbar ist.
             </p>
             <button class="btn btn-secondary" id="btn-git-update" onclick="updateFromGit()">
               &#8595; Update von GitHub holen
@@ -740,7 +739,7 @@
         <span class="banner-icon">&#9888;</span>
         <div class="banner-text">
           <strong>FILTERWECHSEL ERFORDERLICH</strong>
-          <span>Bitte Filter tauschen und anschließend bestätigen.</span>
+          <span>Bitte den Filter wechseln und danach hier bestätigen.</span>
         </div>
         <button class="btn btn-danger" onclick="confirmFilterChange()">
           Filterwechsel bestätigen
