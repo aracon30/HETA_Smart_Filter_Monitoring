@@ -248,6 +248,7 @@ _state = {
     "flow_check_dp": 0.0,  # Aktueller dp-Wert für Overlay-Anzeige
     "flow_threshold": 0.0,  # Effektiver Schwellwert (für Overlay)
     "flow_stable_pct": 0,  # Fortschritt Stabilitätsfenster 0–100 %
+    "flow_check_sensor_error": False,  # True wenn Sensoren beim Durchfluss-Check fehlen
     # Prognose
     "remaining_display": "Unbekannt",
     "remaining_seconds": None,

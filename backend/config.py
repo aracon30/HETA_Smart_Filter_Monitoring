@@ -56,7 +56,6 @@ _DEFAULTS = {
     "min_slope": 0.001,
     # Zyklusstart-Verhalten (Durchflusserkennung)
     "operation_mode": "continuous",  # "continuous" | "batch"
-    "flow_check_enabled": True,  # False = Durchflussprüfung deaktiviert (kein Durchflusssensor)
     "flow_start_threshold_l_min": None,  # None = automatisch berechnet
     "flow_stability_seconds": None,  # None = automatisch (Standard: 10 s)
     "flow_pause_tolerance_seconds": None,  # None = automatisch (30/60 s)

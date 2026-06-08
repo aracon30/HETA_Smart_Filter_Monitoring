@@ -265,9 +265,29 @@ class MeasurementLoop:
                     cycle_paused = False
 
             elif waiting_for_flow and not awaiting:
-                # Bypass: sofortiger Zyklusstart ohne Durchflussbedingung
-                # (entweder manuell angefordert oder Durchflussprüfung in Settings deaktiviert)
-                if self._bypass_flow_check or not self._settings.get("flow_check_enabled", True):
+                # Sensor-Vorprüfung: Im Hardware-Modus müssen alle Sensoren angeschlossen sein,
+                # bevor die Durchflussprüfung beginnt. Fehlt ein Sensor, wird sofort ein klarer
+                # Fehlerzustand gesetzt statt lautlos zu warten.
+                if not sim_mode and sensor_error:
+                    with self._state_lock:
+                        self._state["sensor_error"] = True
+                        self._state["filter_status"] = STATUS_FEHLER
+                        self._state["flow_check_sensor_error"] = True
+                        self._state["flow_check_q"] = 0.0
+                        self._state["flow_stable_pct"] = 0
+                        self._state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    if self._display:
+                        self._display.show_message("SENSORFEHLER", "Sensoren pruefen!")
+                    logger.warning("Durchflussprüfung blockiert: Sensorfehler – nicht alle Sensoren verfügbar.")
+                    time.sleep(interval)
+                    continue
+
+                # Sensoren jetzt verfügbar → Sensor-Fehlermarkierung zurücksetzen
+                with self._state_lock:
+                    self._state["flow_check_sensor_error"] = False
+
+                # Bypass: sofortiger Zyklusstart (manuell angefordert)
+                if self._bypass_flow_check:
                     self._bypass_flow_check = False
                     self.mstate.flow_stable_since = None
                     self.mstate.flow_below_since = None

@@ -273,24 +273,32 @@
        DURCHFLUSSERKENNUNG – OVERLAY
        ================================================================ -->
   <div id="flow-wait-overlay" class="status-overlay status-overlay--amber hidden">
-    <div class="status-overlay__icon">&#9685;</div>
-    <div class="status-overlay__title">Durchflusserkennung aktiv</div>
+    <div class="status-overlay__icon" id="flow-wait-icon">&#9685;</div>
+    <div class="status-overlay__title" id="flow-wait-title">Durchflusserkennung aktiv</div>
     <div class="status-overlay__body">
-      <div class="status-overlay__row">
-        <span>Durchfluss Q</span>
-        <span id="flow-wait-q">– l/min</span>
+      <!-- Sensor-Fehler-Banner (nur sichtbar wenn Sensoren fehlen) -->
+      <div id="flow-wait-sensor-error" class="flow-wait-sensor-error hidden">
+        &#9888; Nicht alle Sensoren angeschlossen.<br>
+        Bitte alle Sensoren prüfen und anschließen.
       </div>
-      <div class="status-overlay__row">
-        <span>Schwellwert</span>
-        <span id="flow-wait-thr">– l/min</span>
+      <!-- Normale Durchfluss-Anzeige -->
+      <div id="flow-wait-normal">
+        <div class="status-overlay__row">
+          <span>Durchfluss Q</span>
+          <span id="flow-wait-q">– l/min</span>
+        </div>
+        <div class="status-overlay__row">
+          <span>Schwellwert</span>
+          <span id="flow-wait-thr">– l/min</span>
+        </div>
+        <div class="status-overlay__progress-label">
+          Stabilität: <span id="flow-wait-pct">0</span>%
+        </div>
+        <div class="status-overlay__progress-bar">
+          <div class="status-overlay__progress-fill" id="flow-wait-bar" style="width:0%"></div>
+        </div>
+        <p class="status-overlay__hint">Die Messung startet automatisch, sobald ein gleichmäßiger Durchfluss erkannt wird.</p>
       </div>
-      <div class="status-overlay__progress-label">
-        Stabilität: <span id="flow-wait-pct">0</span>%
-      </div>
-      <div class="status-overlay__progress-bar">
-        <div class="status-overlay__progress-fill" id="flow-wait-bar" style="width:0%"></div>
-      </div>
-      <p class="status-overlay__hint">Die Messung startet automatisch, sobald ein gleichmäßiger Durchfluss erkannt wird.</p>
       <button class="status-overlay__minimize-btn" onclick="minimizeFlowOverlay()">&#9660; Minimieren</button>
     </div>
   </div>
@@ -503,15 +511,6 @@
 
           <div class="settings-section">
             <h3>Betriebsweise &amp; Durchflusserkennung</h3>
-            <label class="checkbox-label">
-              <input type="checkbox" id="s-flow-check-enabled" onchange="onFlowCheckToggle(this)" />
-              Durchflussprüfung beim Zyklusstart aktivieren
-            </label>
-            <p class="settings-hint" id="s-flow-check-hint" style="margin-top:.4rem">
-              Wenn deaktiviert, startet die Messung sofort ohne Durchfluss-Schwellwert zu prüfen.
-              Sinnvoll wenn kein Durchflusssensor angeschlossen ist.
-            </p>
-            <div id="s-flow-check-fields">
             <div class="form-grid">
               <label>
                 Betriebsweise
@@ -546,7 +545,6 @@
                 <small>Wie lange darf die Anlage pausieren, ohne dass der Zyklus abbricht? Leer = automatisch.</small>
               </label>
             </div>
-            </div><!-- /s-flow-check-fields -->
           </div>
         </div><!-- /st-betrieb -->
 
