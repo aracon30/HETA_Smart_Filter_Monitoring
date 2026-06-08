@@ -453,6 +453,7 @@ class _DisplayController:
     def _retry_sensor_check(self):
         """Sofortige Sensor-Prüfung per OK-Taste im Sensor-Fault-Zustand."""
         import threading
+
         from sensors import check_hardware_sensors
 
         def _check():
