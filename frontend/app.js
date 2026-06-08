@@ -643,6 +643,30 @@ function minimizeFlowOverlay() {
 }
 
 
+async function retryFlowSensorCheck(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Prüfe…"; }
+  // Die Prüfung läuft automatisch im Backend; kurze Pause zur visuellen Bestätigung
+  await new Promise(r => setTimeout(r, 1500));
+  if (btn) { btn.disabled = false; btn.textContent = "↺ Erneut prüfen"; }
+}
+
+async function switchToSimulation() {
+  const btns = document.querySelectorAll(".flow-wait-sensor-error__btns button");
+  btns.forEach(b => { b.disabled = true; });
+  try {
+    const r = await fetch("/api/simulation/start", { method: "POST" });
+    const data = await r.json();
+    if (!data.success) {
+      alert(data.message || "Simulationsmodus konnte nicht gestartet werden.");
+      btns.forEach(b => { b.disabled = false; });
+    }
+    // Bei Erfolg: Overlay verschwindet automatisch durch den nächsten Status-Poll
+  } catch (e) {
+    alert("Server nicht erreichbar.");
+    btns.forEach(b => { b.disabled = false; });
+  }
+}
+
 function expandFlowOverlay() {
   if (!_flowOverlayMinimized || !_flowOverlayActiveType) return;
   _flowOverlayMinimized = false;
@@ -714,6 +738,13 @@ function updateFlowOverlays(d) {
     }
     if (titleEl) titleEl.textContent = sensorErr ? "Sensorfehler" : "Durchflusserkennung aktiv";
     if (iconEl)  iconEl.textContent  = sensorErr ? "⚠" : "◵";
+
+    // Bei Sensorfehler: Overlay immer aufgeklappt halten
+    if (sensorErr && _flowOverlayMinimized) {
+      _flowOverlayMinimized = false;
+      waitEl.classList.remove("hidden");
+      _applyFlowCardIndicator();
+    }
 
     document.getElementById("flow-wait-q").textContent   = `${q.toFixed(1)} l/min`;
     document.getElementById("flow-wait-thr").textContent = `${thr.toFixed(1)} l/min`;

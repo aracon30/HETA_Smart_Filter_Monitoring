@@ -1487,6 +1487,32 @@ footer {
   line-height: 1.5;
   text-align: center;
 }
+.flow-wait-sensor-error__msg {
+  margin-bottom: .6rem;
+}
+.flow-wait-sensor-error__btns {
+  display: flex;
+  gap: .5rem;
+}
+.flow-wait-sensor-error__btns button {
+  flex: 1;
+  padding: .4rem .6rem;
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: .8rem;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+}
+.flow-wait-sensor-error__btns button:hover {
+  background: rgba(255,255,255,.13);
+  color: var(--text-main);
+}
+.flow-wait-sensor-error__btns button:disabled {
+  opacity: .5;
+  cursor: default;
+}
 
 /* ================================================================
    DURCHFLUSS-KACHEL KOMPAKTANZEIGE (minimiertes Overlay)
