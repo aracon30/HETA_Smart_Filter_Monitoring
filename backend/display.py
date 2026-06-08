@@ -23,6 +23,7 @@ Bei fehlender Hardware wird die Ausgabe simuliert (Textlog).
 """
 
 import logging
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +141,61 @@ class OLEDDisplay:
             self._device.clear()
         except Exception as exc:
             logger.debug("Display clear: %s", exc)
+
+    def show_boot_animation(self, duration: float = 2.5):
+        """
+        Startanimation beim Hochfahren:
+          1. Logo + Produktname erscheinen (Wipe-Effekt, Zeile für Zeile)
+          2. Ladebalken füllt sich bis 100 %
+        """
+        if self._simulated:
+            logger.info("OLED Boot-Animation (Simulation).")
+            return
+
+        try:
+            from luma.core.render import canvas  # type: ignore
+        except ImportError:
+            return
+
+        LOGO_LINES = ["  HETA  ", "Smart Filter", "Monitor"]
+        TOTAL_FRAMES = 30
+        frame_delay = duration / TOTAL_FRAMES
+
+        for frame in range(TOTAL_FRAMES + 1):
+            ratio = frame / TOTAL_FRAMES
+            try:
+                with canvas(self._device) as draw:
+                    # ── Logo (Wipe: Zeilen erscheinen nacheinander) ──────────────
+                    y_offsets = [10, 27, 40]
+                    for i, (line, y) in enumerate(zip(LOGO_LINES, y_offsets)):
+                        appear_at = i / len(LOGO_LINES) * 0.6  # erste 60 % der Zeit
+                        if ratio >= appear_at:
+                            # Schrift: erste Zeile mit normalem Font, Rest klein
+                            fnt = self._font if i == 0 else self._font_sm
+                            tw = self._text_w(draw, line, fnt)
+                            x = (DISPLAY_WIDTH - tw) // 2
+                            draw.text((x, y), line, fill="white", font=fnt)
+
+                    # ── Trennlinie ───────────────────────────────────────────────
+                    if ratio >= 0.3:
+                        draw.line([(10, 52), (DISPLAY_WIDTH - 10, 52)], fill="white")
+
+                    # ── Ladebalken (ab 40 % der Animation) ──────────────────────
+                    if ratio >= 0.4:
+                        bar_ratio = (ratio - 0.4) / 0.6  # 0..1
+                        bx, by, bw, bh = 10, 55, DISPLAY_WIDTH - 20, 5
+                        draw.rectangle([(bx, by), (bx + bw - 1, by + bh - 1)], outline="white", fill="black")
+                        fill_w = max(1, int(bar_ratio * (bw - 2)))
+                        draw.rectangle([(bx + 1, by + 1), (bx + fill_w, by + bh - 2)], fill="white")
+
+            except Exception as exc:
+                logger.debug("Boot-Animation Fehler Frame %d: %s", frame, exc)
+                return
+
+            time.sleep(frame_delay)
+
+        # Kurze Pause mit vollem Logo bevor der erste Echtbildschirm kommt
+        time.sleep(0.3)
 
     # ── Bildschirme ────────────────────────────────────────────────────────────
 
