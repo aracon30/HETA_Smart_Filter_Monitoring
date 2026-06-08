@@ -278,8 +278,14 @@
     <div class="status-overlay__body">
       <!-- Sensor-Fehler-Banner (nur sichtbar wenn Sensoren fehlen) -->
       <div id="flow-wait-sensor-error" class="flow-wait-sensor-error hidden">
-        &#9888; Nicht alle Sensoren angeschlossen.<br>
-        Bitte alle Sensoren prüfen und anschließen.
+        <div class="flow-wait-sensor-error__msg">
+          &#9888; Nicht alle Sensoren angeschlossen.<br>
+          Bitte alle Sensoren prüfen und anschließen.
+        </div>
+        <div class="flow-wait-sensor-error__btns">
+          <button onclick="retryFlowSensorCheck(this)">&#8635; Erneut prüfen</button>
+          <button onclick="switchToSimulation()">&#9654; Simulationsmodus</button>
+        </div>
       </div>
       <!-- Normale Durchfluss-Anzeige -->
       <div id="flow-wait-normal">
