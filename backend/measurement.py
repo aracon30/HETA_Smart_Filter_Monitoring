@@ -121,6 +121,7 @@ class MeasurementLoop:
                 cycle_active = self._state["cycle_active"]
                 waiting_for_flow = self._state["waiting_for_flow"]
                 cycle_paused = self._state["cycle_paused"]
+                startup_sensor_check = self._state.get("startup_sensor_check", False)
 
             if awaiting:
                 time.sleep(interval)
@@ -140,6 +141,40 @@ class MeasurementLoop:
             temp = readings["temperature"]
             flow = readings["flow"]
             sensor_mode = readings["mode"]
+
+            # ── Startup-Sensorprüfung (nur Hardware-Modus, vor Durchflussprüfung) ──
+            # Bevor die Durchflussprüfung startet, müssen alle 4 Sensorkanäle
+            # erreichbar sein. Im Simulationsmodus wird diese Phase übersprungen.
+            if startup_sensor_check and not sim_mode:
+                if sensor_mode == "sensor_fault":
+                    failed_ch = readings.get("failed_channels", [])
+                    failed_names = readings.get("failed_names", [])
+                    with self._state_lock:
+                        self._state["sensor_fault"] = True
+                        self._state["sensor_fault_channels"] = failed_ch
+                        self._state["sensor_fault_message"] = (
+                            f"Nicht angeschlossen: {', '.join(failed_names)}"
+                        )
+                        self._state["filter_status"] = STATUS_FEHLER
+                        self._state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    if self._display:
+                        self._display.show_sensor_fault(failed_names)
+                    logger.warning(
+                        "Startup-Sensorprüfung: Kanal(e) %s nicht verfügbar – warte.", failed_ch
+                    )
+                    time.sleep(interval)
+                    continue
+                # Alle Kanäle verfügbar → Startprüfung bestanden
+                with self._state_lock:
+                    self._state["startup_sensor_check"] = False
+                    self._state["sensor_fault"] = False
+                    self._state["sensor_fault_channels"] = []
+                    self._state["sensor_fault_message"] = ""
+                startup_sensor_check = False
+                logger.info(
+                    "Startup-Sensorprüfung bestanden – alle Kanäle verfügbar. Starte Durchflussprüfung."
+                )
+                # Fallthrough → Durchflussprüfung beginnt im selben Loop-Durchlauf
 
             # Sensorfehler im Hardwaremodus
             if sensor_mode == "sensor_fault":
