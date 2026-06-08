@@ -959,9 +959,13 @@ function handleSensorFault(d) {
   // Titel je nach Zustand anpassen
   const titleEl = document.getElementById("sensor-fault-title");
   if (titleEl) {
-    titleEl.textContent = d.waiting_for_flow
-      ? "Sensorfehler – Sensoren prüfen"
-      : "Sensorfehler – Messung gestoppt";
+    if (d.startup_sensor_check) {
+      titleEl.textContent = "Startprüfung – Sensoren nicht angeschlossen";
+    } else if (d.waiting_for_flow) {
+      titleEl.textContent = "Sensorfehler – Sensoren prüfen";
+    } else {
+      titleEl.textContent = "Sensorfehler – Messung gestoppt";
+    }
   }
 
   // Overlay einblenden

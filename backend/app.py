@@ -208,6 +208,8 @@ _state = {
     "sensor_fault": False,
     "sensor_fault_channels": [],
     "sensor_fault_message": "",
+    # Startup-Sensorprüfung: True im Hardware-Modus bis alle Kanäle bestätigt sind
+    "startup_sensor_check": not settings.get("simulation_mode", True),
     # Simulations-Szenario-Parameter
     "sim_estimated_cycle_secs": 300.0,
     "sim_rates_active": False,
@@ -1048,6 +1050,7 @@ def api_sensor_recheck():
             _state["sensor_fault_message"] = ""
             _state["sensor_error"] = False
             _state["flow_check_sensor_error"] = False
+            _state["startup_sensor_check"] = False
         if thread_running:
             # Messzyklus läuft noch (waiting_for_flow) – kein Neustart nötig
             logger.info("Sensorprüfung erfolgreich – Messzyklus läuft weiter.")
@@ -1144,7 +1147,11 @@ def api_settings_post():
     save_settings(settings)
 
     with _state_lock:
+        prev_sim = _state["simulation_mode"]
         _state["simulation_mode"] = settings["simulation_mode"]
+        # Wechsel Simulation → Hardware: Startprüfung aktivieren
+        if prev_sim and not settings["simulation_mode"]:
+            _state["startup_sensor_check"] = True
 
     # MQTT neu starten wenn sich relevante Parameter geändert haben
     _mqtt_keys = {"mqtt_enabled", "mqtt_broker", "mqtt_port", "mqtt_client_id"}
@@ -1407,6 +1414,8 @@ def api_onboarding_complete():
 
     with _state_lock:
         _state["simulation_mode"] = settings["simulation_mode"]
+        # Im Hardware-Modus muss die Startup-Sensorprüfung durchlaufen werden
+        _state["startup_sensor_check"] = not settings["simulation_mode"]
 
     db.insert_service_event("ONBOARDING_ABGESCHLOSSEN", "", json.dumps({"timestamp": time.time()}))
     logger.info("Onboarding abgeschlossen.")
@@ -1438,6 +1447,7 @@ def api_simulation_start():
         _state["sensor_fault_channels"] = []
         _state["sensor_fault_message"] = ""
         _state["sensor_error"] = False
+        _state["startup_sensor_check"] = False
         _state["cycle_active"] = False
         _state["cycle_start_time"] = None
         _state["cycle_dp_reached_time"] = None
