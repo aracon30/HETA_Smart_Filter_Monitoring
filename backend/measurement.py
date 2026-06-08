@@ -141,10 +141,34 @@ class MeasurementLoop:
             flow = readings["flow"]
             sensor_mode = readings["mode"]
 
-            # Sensorfehler im Hardwaremodus: Messung sofort stoppen, Bediener informieren
+            # Sensorfehler im Hardwaremodus
             if sensor_mode == "sensor_fault":
                 failed_ch = readings.get("failed_channels", [])
                 failed_names = readings.get("failed_names", [])
+
+                # Vor Zyklusstart (waiting_for_flow): Loop nicht abbrechen –
+                # stattdessen auf Sensoren warten und Fehlerzustand anzeigen.
+                # So kann der Benutzer Sensoren anschließen oder in den
+                # Simulationsmodus wechseln, ohne den Service neu starten zu müssen.
+                if waiting_for_flow:
+                    with self._state_lock:
+                        self._state["flow_check_sensor_error"] = True
+                        self._state["filter_status"] = STATUS_FEHLER
+                        self._state["sensor_fault"] = True
+                        self._state["sensor_fault_channels"] = failed_ch
+                        self._state["sensor_fault_message"] = (
+                            f"Sensorfehler: {', '.join(failed_names)} – Sensoren anschließen."
+                        )
+                        self._state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+                    if self._display:
+                        self._display.show_sensor_fault(failed_names)
+                    logger.warning(
+                        "Sensorfehler vor Zyklusstart – warte auf Sensoren. Kanäle: %s", failed_ch
+                    )
+                    time.sleep(interval)
+                    continue
+
+                # Sensorfehler während eines laufenden Zyklus → sofort stoppen
                 msg = f"Sensorfehler: {', '.join(failed_names)} – Messung gestoppt."
                 logger.error("Messung gestoppt wegen Sensorfehler auf Kanal(en) %s.", failed_ch)
                 self._learning.abort_cycle()
@@ -153,7 +177,7 @@ class MeasurementLoop:
                     self._state["sensor_fault"] = True
                     self._state["sensor_fault_channels"] = failed_ch
                     self._state["sensor_fault_message"] = msg
-                    self._state["filter_status"] = "FEHLER"
+                    self._state["filter_status"] = STATUS_FEHLER
                     self._state["sensor_error"] = True
                     self._state["cycle_active"] = False
                     self._state["cycle_start_time"] = None
@@ -162,6 +186,14 @@ class MeasurementLoop:
                 break
 
             sensor_error = not (p1.is_valid and p2.is_valid and temp.is_valid and flow.is_valid)
+
+            # Sensoren wieder verfügbar: Sensor-Fault-Markierung zurücksetzen
+            if waiting_for_flow and self._state.get("flow_check_sensor_error"):
+                with self._state_lock:
+                    self._state["flow_check_sensor_error"] = False
+                    self._state["sensor_fault"] = False
+                    self._state["sensor_fault_channels"] = []
+                    self._state["sensor_fault_message"] = ""
 
             # Plausibilitätsprüfung im Realbetrieb: p2 > p1 ist physikalisch nicht möglich
             if (

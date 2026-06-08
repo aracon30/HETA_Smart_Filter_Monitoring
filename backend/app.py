@@ -423,6 +423,14 @@ class _DisplayController:
     def _handle(self, event: str):
         from navigation import NavigationEvent
 
+        # Sensor-Fehler-Modus: normale Navigation sperren, nur OK = Sensor-Check
+        with _state_lock:
+            sensor_fault_waiting = _state.get("flow_check_sensor_error", False)
+        if sensor_fault_waiting:
+            if event == NavigationEvent.PRESS:
+                self._retry_sensor_check()
+            return  # alle anderen Tasten ignorieren
+
         if event in (NavigationEvent.ROTATE_RIGHT, NavigationEvent.RIGHT):
             self._screen_idx = (self._screen_idx + 1) % len(self._screens)
             self._confirm_armed = False
@@ -441,6 +449,33 @@ class _DisplayController:
 
         elif event == NavigationEvent.PRESS:
             self._handle_press()
+
+    def _retry_sensor_check(self):
+        """Sofortige Sensor-Prüfung per OK-Taste im Sensor-Fault-Zustand."""
+        import threading
+        from sensors import check_hardware_sensors
+
+        def _check():
+            self._display.show_sensor_fault([], checking=True)
+            result = check_hardware_sensors()
+            if result["all_ok"]:
+                with _state_lock:
+                    _state["flow_check_sensor_error"] = False
+                    _state["sensor_fault"] = False
+                    _state["sensor_fault_channels"] = []
+                    _state["sensor_fault_message"] = ""
+                    _state["filter_status"] = "OK"
+                logger.info("Sensor-Prüfung erfolgreich – alle Sensoren verfügbar.")
+            else:
+                with _state_lock:
+                    _state["sensor_fault_channels"] = result["failed_channels"]
+                    _state["sensor_fault_message"] = (
+                        f"Sensorfehler: {', '.join(result['failed_names'])} – Sensoren anschließen."
+                    )
+                self._display.show_sensor_fault(result["failed_names"])
+                logger.warning("Sensor-Prüfung: Kanäle %s fehlen.", result["failed_channels"])
+
+        threading.Thread(target=_check, daemon=True, name="sensor-check").start()
 
     def _handle_press(self):
         from display import SCREEN_FILTER_CHANGE
