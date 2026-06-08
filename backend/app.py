@@ -336,6 +336,7 @@ if settings.get("display_enabled", True):
             gpio_rst=settings.get("display_gpio_rst", 27),
             i2c_address=settings.get("display_i2c_address", 60),
         )
+        _display.show_boot_animation()
     except Exception as e:
         logger.warning("Display-Init übersprungen: %s", e)
 
