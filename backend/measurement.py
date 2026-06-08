@@ -162,9 +162,7 @@ class MeasurementLoop:
                         self._state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
                     if self._display:
                         self._display.show_sensor_fault(failed_names)
-                    logger.warning(
-                        "Sensorfehler vor Zyklusstart – warte auf Sensoren. Kanäle: %s", failed_ch
-                    )
+                    logger.warning("Sensorfehler vor Zyklusstart – warte auf Sensoren. Kanäle: %s", failed_ch)
                     time.sleep(interval)
                     continue
 

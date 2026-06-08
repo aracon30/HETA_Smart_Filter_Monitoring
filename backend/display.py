@@ -456,6 +456,7 @@ class OLEDDisplay:
         Sensorfehler-Bildschirm: zeigt fehlende Kanäle und Hinweis zum Prüfen.
         checking=True → zeigt animierten Prüf-Status statt Kanalauflistung.
         """
+
         def draw_fn(d):
             self._draw_header(d, "SENSORFEHLER")
 
