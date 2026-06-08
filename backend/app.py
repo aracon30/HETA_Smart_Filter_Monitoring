@@ -453,6 +453,7 @@ class _DisplayController:
     def _retry_sensor_check(self):
         """Sofortige Sensor-Prüfung per OK-Taste im Sensor-Fault-Zustand."""
         import threading
+
         from sensors import check_hardware_sensors
 
         def _check():
@@ -1041,10 +1042,16 @@ def api_sensor_recheck():
 
     if result["all_ok"]:
         with _state_lock:
+            thread_running = _state.get("running", False)
             _state["sensor_fault"] = False
             _state["sensor_fault_channels"] = []
             _state["sensor_fault_message"] = ""
             _state["sensor_error"] = False
+            _state["flow_check_sensor_error"] = False
+        if thread_running:
+            # Messzyklus läuft noch (waiting_for_flow) – kein Neustart nötig
+            logger.info("Sensorprüfung erfolgreich – Messzyklus läuft weiter.")
+            return jsonify({"success": True, "message": "Alle Sensoren erkannt. Durchflussprüfung läuft."})
         _start_measurement_thread()
         logger.info("Sensorprüfung erfolgreich – alle Kanäle lesbar, Messung neu gestartet.")
         return jsonify({"success": True, "message": "Alle Sensoren erkannt. Messung wird neu gestartet."})

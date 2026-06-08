@@ -643,30 +643,6 @@ function minimizeFlowOverlay() {
 }
 
 
-async function retryFlowSensorCheck(btn) {
-  if (btn) { btn.disabled = true; btn.textContent = "Prüfe…"; }
-  // Die Prüfung läuft automatisch im Backend; kurze Pause zur visuellen Bestätigung
-  await new Promise(r => setTimeout(r, 1500));
-  if (btn) { btn.disabled = false; btn.textContent = "↺ Erneut prüfen"; }
-}
-
-async function switchToSimulation() {
-  const btns = document.querySelectorAll(".flow-wait-sensor-error__btns button");
-  btns.forEach(b => { b.disabled = true; });
-  try {
-    const r = await fetch("/api/simulation/start", { method: "POST" });
-    const data = await r.json();
-    if (!data.success) {
-      alert(data.message || "Simulationsmodus konnte nicht gestartet werden.");
-      btns.forEach(b => { b.disabled = false; });
-    }
-    // Bei Erfolg: Overlay verschwindet automatisch durch den nächsten Status-Poll
-  } catch (e) {
-    alert("Server nicht erreichbar.");
-    btns.forEach(b => { b.disabled = false; });
-  }
-}
-
 function expandFlowOverlay() {
   if (!_flowOverlayMinimized || !_flowOverlayActiveType) return;
   _flowOverlayMinimized = false;
@@ -722,29 +698,9 @@ function updateFlowOverlays(d) {
 
   // Daten aktualisieren
   if (waiting) {
-    const q          = d.flow_check_q          ?? 0;
-    const thr        = d.flow_threshold         ?? 0;
-    const pct        = d.flow_stable_pct        ?? 0;
-    const sensorErr  = !!d.flow_check_sensor_error;
-
-    // Sensor-Fehlerzustand umschalten
-    const sensorErrEl = document.getElementById("flow-wait-sensor-error");
-    const normalEl    = document.getElementById("flow-wait-normal");
-    const titleEl     = document.getElementById("flow-wait-title");
-    const iconEl      = document.getElementById("flow-wait-icon");
-    if (sensorErrEl && normalEl) {
-      sensorErrEl.classList.toggle("hidden", !sensorErr);
-      normalEl.classList.toggle("hidden",    sensorErr);
-    }
-    if (titleEl) titleEl.textContent = sensorErr ? "Sensorfehler" : "Durchflusserkennung aktiv";
-    if (iconEl)  iconEl.textContent  = sensorErr ? "⚠" : "◵";
-
-    // Bei Sensorfehler: Overlay immer aufgeklappt halten
-    if (sensorErr && _flowOverlayMinimized) {
-      _flowOverlayMinimized = false;
-      waitEl.classList.remove("hidden");
-      _applyFlowCardIndicator();
-    }
+    const q   = d.flow_check_q   ?? 0;
+    const thr = d.flow_threshold  ?? 0;
+    const pct = d.flow_stable_pct ?? 0;
 
     document.getElementById("flow-wait-q").textContent   = `${q.toFixed(1)} l/min`;
     document.getElementById("flow-wait-thr").textContent = `${thr.toFixed(1)} l/min`;
@@ -995,6 +951,17 @@ function handleSensorFault(d) {
   if (!d.sensor_fault) {
     overlay.classList.add("hidden");
     return;
+  }
+
+  // Flow-Wait-Overlay verstecken – Sensor-Fault-Overlay hat Vorrang
+  document.getElementById("flow-wait-overlay")?.classList.add("hidden");
+
+  // Titel je nach Zustand anpassen
+  const titleEl = document.getElementById("sensor-fault-title");
+  if (titleEl) {
+    titleEl.textContent = d.waiting_for_flow
+      ? "Sensorfehler – Sensoren prüfen"
+      : "Sensorfehler – Messung gestoppt";
   }
 
   // Overlay einblenden
