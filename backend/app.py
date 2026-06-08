@@ -1885,6 +1885,21 @@ def api_display_screen():
     return jsonify({"screen": None, "screen_index": None, "confirm_armed": False})
 
 
+@app.route("/api/flow-check/bypass", methods=["POST"])
+def api_flow_check_bypass():
+    """
+    Überspringt die laufende Durchflussprüfung und startet den Messzyklus sofort.
+    Nur möglich wenn waiting_for_flow=True.
+    """
+    if not _loop:
+        return jsonify({"success": False, "message": "Messzyklus nicht aktiv."}), 503
+    ok = _loop.bypass_flow_check()
+    if ok:
+        logger.info("Durchflussprüfung per API übersprungen.")
+        return jsonify({"success": True, "message": "Durchflussprüfung übersprungen – Zyklus wird gestartet."})
+    return jsonify({"success": False, "message": "Kein aktiver Wartezustand – Durchflussprüfung ist nicht aktiv."}), 400
+
+
 # ---------------------------------------------------------------------------
 # Software-Update via Git
 # ---------------------------------------------------------------------------

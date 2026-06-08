@@ -92,6 +92,7 @@ class MeasurementLoop:
 
         # Mutable loop state
         self.mstate = MeasurementState()
+        self._bypass_flow_check = False
 
     def run(self):
         """Messzyklus-Thread-Einstiegspunkt (ehemals _measurement_loop in app.py)."""
@@ -264,9 +265,33 @@ class MeasurementLoop:
                     cycle_paused = False
 
             elif waiting_for_flow and not awaiting:
+                # Bypass: sofortiger Zyklusstart ohne Durchflussbedingung
+                if self._bypass_flow_check:
+                    self._bypass_flow_check = False
+                    self.mstate.flow_stable_since = None
+                    self.mstate.flow_below_since = None
+                    self._learning.start_cycle(learning_code, fs.r_eff, fs.dp_bar)
+                    self._seed_predictor(learning_code)
+                    with self._state_lock:
+                        self._state["waiting_for_flow"] = False
+                        self._state["cycle_active"] = True
+                        self._state["cycle_start_time"] = now_ts
+                        self._state["cycle_active_seconds"] = 0.0
+                        self._state["cycle_paused"] = False
+                    waiting_for_flow = False
+                    cycle_active = True
+                    cycle_paused = False
+                    logger.info(
+                        "Durchflussprüfung übersprungen – Zyklus manuell gestartet (Q=%.1f l/min, dp=%.3f bar).",
+                        fs.flow_l_min,
+                        fs.dp_bar,
+                    )
+
                 # Overlay-Werte für Frontend live aktualisieren
                 stable_pct = 0
-                if flow_ok:
+                if flow_ok and not waiting_for_flow:
+                    pass  # Zyklus bereits gestartet (Bypass-Pfad oben)
+                elif flow_ok:
                     if self.mstate.flow_stable_since is None:
                         self.mstate.flow_stable_since = now_ts
                     elapsed_stable = now_ts - self.mstate.flow_stable_since
@@ -690,6 +715,18 @@ class MeasurementLoop:
             time.sleep(sleep_time)
 
         logger.info("Messzyklus beendet.")
+
+    def bypass_flow_check(self):
+        """
+        Überspringt die Durchflussprüfung und startet den Zyklus beim nächsten Loop-Durchlauf.
+        Kann vom API-Endpoint aufgerufen werden, wenn der Benutzer die Prüfung manuell überspringt.
+        """
+        with self._state_lock:
+            if not self._state.get("waiting_for_flow"):
+                return False
+        self._bypass_flow_check = True
+        logger.info("Durchfluss-Bypass angefordert.")
+        return True
 
     def confirm_filter_change(self):
         """Filterwechsel bestätigen (ehemals _do_confirm_filter_change in app.py)."""

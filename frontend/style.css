@@ -1458,10 +1458,14 @@ footer {
   line-height: 1.5;
 }
 
-.status-overlay__minimize-btn {
-  display: block;
-  width: 100%;
+.status-overlay__btn-row {
+  display: flex;
+  gap: .6rem;
   margin-top: .9rem;
+}
+.status-overlay__minimize-btn,
+.status-overlay__skip-btn {
+  flex: 1;
   padding: .45rem .8rem;
   background: rgba(255,255,255,0.07);
   border: 1px solid rgba(255,255,255,0.15);
@@ -1471,9 +1475,22 @@ footer {
   cursor: pointer;
   transition: background .15s, color .15s;
 }
-.status-overlay__minimize-btn:hover {
+.status-overlay__minimize-btn:hover,
+.status-overlay__skip-btn:hover {
   background: rgba(255,255,255,0.13);
   color: var(--text-main);
+}
+.status-overlay__skip-btn {
+  border-color: rgba(245,166,35,.35);
+  color: #f5a623;
+}
+.status-overlay__skip-btn:hover {
+  background: rgba(245,166,35,.12);
+  color: #f5a623;
+}
+.status-overlay__skip-btn:disabled {
+  opacity: .5;
+  cursor: default;
 }
 
 /* ================================================================

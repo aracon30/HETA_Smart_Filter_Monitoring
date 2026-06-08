@@ -642,6 +642,27 @@ function minimizeFlowOverlay() {
   _applyFlowCardIndicator();
 }
 
+async function bypassFlowCheck() {
+  const btn = document.querySelector(".status-overlay__skip-btn");
+  if (btn) { btn.disabled = true; btn.textContent = "Wird gestartet…"; }
+  try {
+    const r = await fetch("/api/flow-check/bypass", { method: "POST" });
+    const data = await r.json();
+    if (data.success) {
+      document.getElementById("flow-wait-overlay").classList.add("hidden");
+      _flowOverlayMinimized = false;
+      _flowOverlayActiveType = null;
+      _applyFlowCardIndicator();
+    } else {
+      alert(data.message || "Fehler beim Überspringen der Durchflussprüfung.");
+      if (btn) { btn.disabled = false; btn.textContent = "▶ Prüfung überspringen"; }
+    }
+  } catch (e) {
+    alert("Server nicht erreichbar.");
+    if (btn) { btn.disabled = false; btn.textContent = "▶ Prüfung überspringen"; }
+  }
+}
+
 function expandFlowOverlay() {
   if (!_flowOverlayMinimized || !_flowOverlayActiveType) return;
   _flowOverlayMinimized = false;

@@ -291,7 +291,10 @@
         <div class="status-overlay__progress-fill" id="flow-wait-bar" style="width:0%"></div>
       </div>
       <p class="status-overlay__hint">Die Messung startet automatisch, sobald ein gleichmäßiger Durchfluss erkannt wird.</p>
-      <button class="status-overlay__minimize-btn" onclick="minimizeFlowOverlay()">&#9660; Minimieren</button>
+      <div class="status-overlay__btn-row">
+        <button class="status-overlay__minimize-btn" onclick="minimizeFlowOverlay()">&#9660; Minimieren</button>
+        <button class="status-overlay__skip-btn" onclick="bypassFlowCheck()">&#9654; Prüfung überspringen</button>
+      </div>
     </div>
   </div>
 
@@ -768,7 +771,7 @@
           <div class="card-sub" id="dp-limit-hint"></div>
         </div>
 
-        <div class="card" id="card-flow" onclick="expandFlowOverlay()" style="cursor:default">
+        <div class="card" id="card-flow" onclick="expandFlowOverlay()">
           <div class="card-label">Durchfluss Q</div>
           <div class="card-value" id="val-flow">–</div>
           <div class="card-unit">l/min</div>
