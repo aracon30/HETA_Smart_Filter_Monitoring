@@ -642,6 +642,7 @@ function minimizeFlowOverlay() {
   _applyFlowCardIndicator();
 }
 
+
 function expandFlowOverlay() {
   if (!_flowOverlayMinimized || !_flowOverlayActiveType) return;
   _flowOverlayMinimized = false;
@@ -697,9 +698,23 @@ function updateFlowOverlays(d) {
 
   // Daten aktualisieren
   if (waiting) {
-    const q   = d.flow_check_q   ?? 0;
-    const thr = d.flow_threshold  ?? 0;
-    const pct = d.flow_stable_pct ?? 0;
+    const q          = d.flow_check_q          ?? 0;
+    const thr        = d.flow_threshold         ?? 0;
+    const pct        = d.flow_stable_pct        ?? 0;
+    const sensorErr  = !!d.flow_check_sensor_error;
+
+    // Sensor-Fehlerzustand umschalten
+    const sensorErrEl = document.getElementById("flow-wait-sensor-error");
+    const normalEl    = document.getElementById("flow-wait-normal");
+    const titleEl     = document.getElementById("flow-wait-title");
+    const iconEl      = document.getElementById("flow-wait-icon");
+    if (sensorErrEl && normalEl) {
+      sensorErrEl.classList.toggle("hidden", !sensorErr);
+      normalEl.classList.toggle("hidden",    sensorErr);
+    }
+    if (titleEl) titleEl.textContent = sensorErr ? "Sensorfehler" : "Durchflusserkennung aktiv";
+    if (iconEl)  iconEl.textContent  = sensorErr ? "⚠" : "◵";
+
     document.getElementById("flow-wait-q").textContent   = `${q.toFixed(1)} l/min`;
     document.getElementById("flow-wait-thr").textContent = `${thr.toFixed(1)} l/min`;
     document.getElementById("flow-wait-pct").textContent = pct;
