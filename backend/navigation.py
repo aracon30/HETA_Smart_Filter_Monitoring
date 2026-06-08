@@ -76,7 +76,7 @@ class NavigationController:
     def _init_hardware(self, enca: int, encb: int, sw1: int, sw2: int, sw3: int, sw4: int, sw5: int):
         from gpiozero import Button, RotaryEncoder  # type: ignore
 
-        encoder = RotaryEncoder(a=enca, b=encb, max_steps=None, bounce_time=0.002)
+        encoder = RotaryEncoder(a=enca, b=encb, max_steps=0, bounce_time=0.002)
         encoder.when_rotated_clockwise = lambda: self._dispatch(NavigationEvent.ROTATE_RIGHT)
         encoder.when_rotated_counter_clockwise = lambda: self._dispatch(NavigationEvent.ROTATE_LEFT)
 
