@@ -451,6 +451,32 @@ class OLEDDisplay:
 
         self._render(draw_fn, f"{title}: {message}")
 
+    def show_sensor_fault(self, failed_names: list, checking: bool = False):
+        """
+        Sensorfehler-Bildschirm: zeigt fehlende Kanäle und Hinweis zum Prüfen.
+        checking=True → zeigt animierten Prüf-Status statt Kanalauflistung.
+        """
+        def draw_fn(d):
+            self._draw_header(d, "SENSORFEHLER")
+
+            if checking:
+                d.text((0, _LINE1), "Pruefe Sensoren ...", fill="white", font=self._font_sm)
+                d.text((0, _LINE2), "Bitte warten.", fill="white", font=self._font_sm)
+            else:
+                d.text((0, _LINE0), "Fehlende Sensoren:", fill="white", font=self._font_sm)
+                y_positions = [_LINE1, _LINE2, _LINE3]
+                for i, name in enumerate(failed_names[:3]):
+                    d.text((2, y_positions[i]), f"• {name[:20]}", fill="white", font=self._font_sm)
+
+            # Trennlinie + Hinweis
+            d.line([(0, _LINE4 - 2), (DISPLAY_WIDTH - 1, _LINE4 - 2)], fill="white")
+            hint = "Pruefen ..." if checking else "OK = Erneut pruefen"
+            tw = self._text_w(d, hint, self._font_sm)
+            d.text(((DISPLAY_WIDTH - tw) // 2, _LINE4), hint, fill="white", font=self._font_sm)
+
+        channels_str = ", ".join(failed_names) if failed_names else "unbekannt"
+        self._render(draw_fn, f"SensorFault checking={checking} channels=[{channels_str}]")
+
     def show_waiting_for_flow(
         self, q_val: float, q_thr: float, dp_val: float, dp_thr: float, stable_pct: int, stab_secs: float
     ):
