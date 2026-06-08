@@ -22,7 +22,7 @@
     <div class="sensor-fault-box">
       <div class="sensor-fault-header">
         <span class="sensor-fault-icon">&#9888;</span>
-        <h2>Sensorfehler – Messung gestoppt</h2>
+        <h2 id="sensor-fault-title">Sensorfehler – Messung gestoppt</h2>
       </div>
       <div class="sensor-fault-body">
         <p id="sensor-fault-message">Ein oder mehrere Sensoren sind nicht erreichbar.</p>
@@ -273,38 +273,24 @@
        DURCHFLUSSERKENNUNG – OVERLAY
        ================================================================ -->
   <div id="flow-wait-overlay" class="status-overlay status-overlay--amber hidden">
-    <div class="status-overlay__icon" id="flow-wait-icon">&#9685;</div>
-    <div class="status-overlay__title" id="flow-wait-title">Durchflusserkennung aktiv</div>
+    <div class="status-overlay__icon">&#9685;</div>
+    <div class="status-overlay__title">Durchflusserkennung aktiv</div>
     <div class="status-overlay__body">
-      <!-- Sensor-Fehler-Banner (nur sichtbar wenn Sensoren fehlen) -->
-      <div id="flow-wait-sensor-error" class="flow-wait-sensor-error hidden">
-        <div class="flow-wait-sensor-error__msg">
-          &#9888; Nicht alle Sensoren angeschlossen.<br>
-          Bitte alle Sensoren prüfen und anschließen.
-        </div>
-        <div class="flow-wait-sensor-error__btns">
-          <button onclick="retryFlowSensorCheck(this)">&#8635; Erneut prüfen</button>
-          <button onclick="switchToSimulation()">&#9654; Simulationsmodus</button>
-        </div>
+      <div class="status-overlay__row">
+        <span>Durchfluss Q</span>
+        <span id="flow-wait-q">– l/min</span>
       </div>
-      <!-- Normale Durchfluss-Anzeige -->
-      <div id="flow-wait-normal">
-        <div class="status-overlay__row">
-          <span>Durchfluss Q</span>
-          <span id="flow-wait-q">– l/min</span>
-        </div>
-        <div class="status-overlay__row">
-          <span>Schwellwert</span>
-          <span id="flow-wait-thr">– l/min</span>
-        </div>
-        <div class="status-overlay__progress-label">
-          Stabilität: <span id="flow-wait-pct">0</span>%
-        </div>
-        <div class="status-overlay__progress-bar">
-          <div class="status-overlay__progress-fill" id="flow-wait-bar" style="width:0%"></div>
-        </div>
-        <p class="status-overlay__hint">Die Messung startet automatisch, sobald ein gleichmäßiger Durchfluss erkannt wird.</p>
+      <div class="status-overlay__row">
+        <span>Schwellwert</span>
+        <span id="flow-wait-thr">– l/min</span>
       </div>
+      <div class="status-overlay__progress-label">
+        Stabilität: <span id="flow-wait-pct">0</span>%
+      </div>
+      <div class="status-overlay__progress-bar">
+        <div class="status-overlay__progress-fill" id="flow-wait-bar" style="width:0%"></div>
+      </div>
+      <p class="status-overlay__hint">Die Messung startet automatisch, sobald ein gleichmäßiger Durchfluss erkannt wird.</p>
       <button class="status-overlay__minimize-btn" onclick="minimizeFlowOverlay()">&#9660; Minimieren</button>
     </div>
   </div>
