@@ -266,7 +266,8 @@ class MeasurementLoop:
 
             elif waiting_for_flow and not awaiting:
                 # Bypass: sofortiger Zyklusstart ohne Durchflussbedingung
-                if self._bypass_flow_check:
+                # (entweder manuell angefordert oder Durchflussprüfung in Settings deaktiviert)
+                if self._bypass_flow_check or not self._settings.get("flow_check_enabled", True):
                     self._bypass_flow_check = False
                     self.mstate.flow_stable_since = None
                     self.mstate.flow_below_since = None

@@ -291,10 +291,7 @@
         <div class="status-overlay__progress-fill" id="flow-wait-bar" style="width:0%"></div>
       </div>
       <p class="status-overlay__hint">Die Messung startet automatisch, sobald ein gleichmäßiger Durchfluss erkannt wird.</p>
-      <div class="status-overlay__btn-row">
-        <button class="status-overlay__minimize-btn" onclick="minimizeFlowOverlay()">&#9660; Minimieren</button>
-        <button class="status-overlay__skip-btn" onclick="bypassFlowCheck()">&#9654; Prüfung überspringen</button>
-      </div>
+      <button class="status-overlay__minimize-btn" onclick="minimizeFlowOverlay()">&#9660; Minimieren</button>
     </div>
   </div>
 
@@ -506,6 +503,15 @@
 
           <div class="settings-section">
             <h3>Betriebsweise &amp; Durchflusserkennung</h3>
+            <label class="checkbox-label">
+              <input type="checkbox" id="s-flow-check-enabled" onchange="onFlowCheckToggle(this)" />
+              Durchflussprüfung beim Zyklusstart aktivieren
+            </label>
+            <p class="settings-hint" id="s-flow-check-hint" style="margin-top:.4rem">
+              Wenn deaktiviert, startet die Messung sofort ohne Durchfluss-Schwellwert zu prüfen.
+              Sinnvoll wenn kein Durchflusssensor angeschlossen ist.
+            </p>
+            <div id="s-flow-check-fields">
             <div class="form-grid">
               <label>
                 Betriebsweise
@@ -540,6 +546,7 @@
                 <small>Wie lange darf die Anlage pausieren, ohne dass der Zyklus abbricht? Leer = automatisch.</small>
               </label>
             </div>
+            </div><!-- /s-flow-check-fields -->
           </div>
         </div><!-- /st-betrieb -->
 

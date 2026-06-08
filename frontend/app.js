@@ -407,6 +407,12 @@ async function loadSettingsIntoForm() {
     // Betriebsweise & Durchflusserkennung
     const opModeEl = document.getElementById("s-operation-mode");
     if (opModeEl) opModeEl.value = s.operation_mode ?? "continuous";
+    const flowCheckCb = document.getElementById("s-flow-check-enabled");
+    if (flowCheckCb) {
+      const enabled = s.flow_check_enabled !== false; // Standard: aktiviert
+      flowCheckCb.checked = enabled;
+      document.getElementById("s-flow-check-fields")?.classList.toggle("hidden", !enabled);
+    }
     const thrEl = document.getElementById("s-flow-threshold");
     if (thrEl) thrEl.value = s.flow_start_threshold_l_min != null ? s.flow_start_threshold_l_min : "";
     const stabEl = document.getElementById("s-flow-stability");
@@ -485,6 +491,7 @@ async function saveSettings() {
     sampling_interval_seconds: parseInt(document.getElementById("s-interval").value, 10),
     simulation_mode:           document.getElementById("s-simulation-mode").checked,
     operation_mode:            document.getElementById("s-operation-mode")?.value ?? "continuous",
+    flow_check_enabled:        document.getElementById("s-flow-check-enabled")?.checked !== false,
     flow_start_threshold_l_min: document.getElementById("s-flow-threshold")?.value !== ""
       ? parseFloat(document.getElementById("s-flow-threshold").value) : null,
     flow_stability_seconds: document.getElementById("s-flow-stability")?.value !== ""
@@ -642,26 +649,6 @@ function minimizeFlowOverlay() {
   _applyFlowCardIndicator();
 }
 
-async function bypassFlowCheck() {
-  const btn = document.querySelector(".status-overlay__skip-btn");
-  if (btn) { btn.disabled = true; btn.textContent = "Wird gestartet…"; }
-  try {
-    const r = await fetch("/api/flow-check/bypass", { method: "POST" });
-    const data = await r.json();
-    if (data.success) {
-      document.getElementById("flow-wait-overlay").classList.add("hidden");
-      _flowOverlayMinimized = false;
-      _flowOverlayActiveType = null;
-      _applyFlowCardIndicator();
-    } else {
-      alert(data.message || "Fehler beim Überspringen der Durchflussprüfung.");
-      if (btn) { btn.disabled = false; btn.textContent = "▶ Prüfung überspringen"; }
-    }
-  } catch (e) {
-    alert("Server nicht erreichbar.");
-    if (btn) { btn.disabled = false; btn.textContent = "▶ Prüfung überspringen"; }
-  }
-}
 
 function expandFlowOverlay() {
   if (!_flowOverlayMinimized || !_flowOverlayActiveType) return;
@@ -1443,6 +1430,10 @@ function onSimModeToggle(checkbox) {
   const warnEl = document.getElementById("sim-mode-warning");
   if (!warnEl) return;
   warnEl.classList.toggle("hidden", !checkbox.checked);
+}
+
+function onFlowCheckToggle(checkbox) {
+  document.getElementById("s-flow-check-fields")?.classList.toggle("hidden", !checkbox.checked);
 }
 
 function onMqttToggle(checkbox) {
