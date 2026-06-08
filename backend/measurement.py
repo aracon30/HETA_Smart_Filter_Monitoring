@@ -152,16 +152,12 @@ class MeasurementLoop:
                     with self._state_lock:
                         self._state["sensor_fault"] = True
                         self._state["sensor_fault_channels"] = failed_ch
-                        self._state["sensor_fault_message"] = (
-                            f"Nicht angeschlossen: {', '.join(failed_names)}"
-                        )
+                        self._state["sensor_fault_message"] = f"Nicht angeschlossen: {', '.join(failed_names)}"
                         self._state["filter_status"] = STATUS_FEHLER
                         self._state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
                     if self._display:
                         self._display.show_sensor_fault(failed_names)
-                    logger.warning(
-                        "Startup-Sensorprüfung: Kanal(e) %s nicht verfügbar – warte.", failed_ch
-                    )
+                    logger.warning("Startup-Sensorprüfung: Kanal(e) %s nicht verfügbar – warte.", failed_ch)
                     time.sleep(interval)
                     continue
                 # Alle Kanäle verfügbar → Startprüfung bestanden
@@ -171,9 +167,7 @@ class MeasurementLoop:
                     self._state["sensor_fault_channels"] = []
                     self._state["sensor_fault_message"] = ""
                 startup_sensor_check = False
-                logger.info(
-                    "Startup-Sensorprüfung bestanden – alle Kanäle verfügbar. Starte Durchflussprüfung."
-                )
+                logger.info("Startup-Sensorprüfung bestanden – alle Kanäle verfügbar. Starte Durchflussprüfung.")
                 # Fallthrough → Durchflussprüfung beginnt im selben Loop-Durchlauf
 
             # Sensorfehler im Hardwaremodus
