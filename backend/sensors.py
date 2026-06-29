@@ -75,30 +75,30 @@ def _scale_flow(ma: float, flow_max: float = 150.0) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Hardware-Lesefunktion (AnoPi Shield via SPI/ADC)
+# Hardware-Lesefunktion (AnoPi Shield via I2C/INA219)
 # ---------------------------------------------------------------------------
+
+# INA219-Adressen je Kanal (1-basiert): Kanal 1→0x40, 2→0x41, 3→0x44, 4→0x45
+_INA219_ADDRESSES = {1: 0x40, 2: 0x41, 3: 0x44, 4: 0x45}
 
 
 def _read_anopi_channel(channel: int) -> float | None:
     """
-    Liest einen analogen Kanal vom AnoPi Shield via SPI-ADC (MCP3208, 12 Bit).
-    Gibt den skalierten mA-Wert (4–20 mA) zurück oder None bei Hardwarefehler.
-
-    Skalierung: ADC 0–4095 → 0–3,3 V → 0–20 mA (Shunt 165 Ω, 3,3 V Referenz).
-    Kanal-Nummerierung: 1-basiert (wird intern auf 0-basiert umgerechnet).
+    Liest einen analogen Kanal vom AnoPi Shield via I2C/INA219.
+    Gibt den mA-Wert zurück oder None bei Hardwarefehler.
+    Kanal-Nummerierung: 1-basiert.
     """
     try:
-        import spidev  # type: ignore
+        import board  # type: ignore
+        import busio  # type: ignore
+        from adafruit_ina219 import INA219  # type: ignore
 
-        spi = spidev.SpiDev()
-        spi.open(0, 0)
-        spi.max_speed_hz = 1_350_000
-        ch0 = channel - 1  # AnoPi-Kanäle sind 0-basiert im SPI-Protokoll
-        adc_val = spi.xfer2([1, (8 + ch0) << 4, 0])
-        spi.close()
-        raw = ((adc_val[1] & 3) << 8) + adc_val[2]
-        voltage = (raw / 4095.0) * 3.3
-        ma = (voltage / 3.3) * 20.0  # 0–3,3 V → 0–20 mA
+        addr = _INA219_ADDRESSES.get(channel)
+        if addr is None:
+            return None
+        i2c = busio.I2C(board.SCL, board.SDA)
+        ina = INA219(i2c, addr=addr)
+        ma = ina.current
         return max(0.0, min(25.0, ma))
     except Exception as e:
         logger.debug("AnoPi Kanal %d Lesefehler: %s", channel, e)
@@ -107,17 +107,18 @@ def _read_anopi_channel(channel: int) -> float | None:
 
 def probe_hardware() -> bool:
     """
-    Prüft beim Programmstart ob das AnoPi Shield (SPI) erreichbar ist.
+    Prüft beim Programmstart ob das AnoPi Shield (I2C/INA219) erreichbar ist.
     Gibt True zurück wenn Hardware erkannt wurde, sonst False.
     Löst keine Exception aus – immer sicher aufrufbar.
     """
     try:
-        import spidev  # type: ignore
+        import board  # type: ignore
+        import busio  # type: ignore
+        from adafruit_ina219 import INA219  # type: ignore
 
-        spi = spidev.SpiDev()
-        spi.open(0, 0)
-        spi.close()
-        logger.info("Hardware-Probe: AnoPi Shield auf SPI(0,0) erkannt – Realbetrieb möglich.")
+        i2c = busio.I2C(board.SCL, board.SDA)
+        INA219(i2c, addr=0x40)
+        logger.info("Hardware-Probe: AnoPi Shield auf I2C/INA219 (0x40) erkannt – Realbetrieb möglich.")
         return True
     except Exception as e:
         logger.info("Hardware-Probe: AnoPi Shield nicht erreichbar (%s) – Simulation verfügbar.", type(e).__name__)
