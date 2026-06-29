@@ -75,30 +75,24 @@ def _scale_flow(ma: float, flow_max: float = 150.0) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Hardware-Lesefunktion (AnoPi Shield via I2C/INA219)
+# Hardware-Lesefunktion (AnoPi Shield via python-anopi Bibliothek)
 # ---------------------------------------------------------------------------
-
-# INA219-Adressen je Kanal (1-basiert): Kanal 1→0x40, 2→0x41, 3→0x44, 4→0x45
-_INA219_ADDRESSES = {1: 0x40, 2: 0x41, 3: 0x44, 4: 0x45}
 
 
 def _read_anopi_channel(channel: int) -> float | None:
     """
-    Liest einen analogen Kanal vom AnoPi Shield via I2C/INA219.
+    Liest einen analogen Kanal vom AnoPi Shield via python-anopi (I2C).
     Gibt den mA-Wert zurück oder None bei Hardwarefehler.
-    Kanal-Nummerierung: 1-basiert.
+    Kanal-Nummerierung: 1-basiert (wird intern auf 0-basiert umgerechnet).
     """
     try:
-        import board  # type: ignore
-        import busio  # type: ignore
-        from adafruit_ina219 import INA219  # type: ignore
+        from python_anopi import AnoPi  # type: ignore
 
-        addr = _INA219_ADDRESSES.get(channel)
-        if addr is None:
+        a = AnoPi()
+        ma, err = a.ai_mA(channel - 1)
+        if err is not None:
+            logger.debug("AnoPi Kanal %d Fehler: %s", channel, err)
             return None
-        i2c = busio.I2C(board.SCL, board.SDA)
-        ina = INA219(i2c, addr=addr)
-        ma = ina.current
         return max(0.0, min(25.0, ma))
     except Exception as e:
         logger.debug("AnoPi Kanal %d Lesefehler: %s", channel, e)
@@ -107,18 +101,18 @@ def _read_anopi_channel(channel: int) -> float | None:
 
 def probe_hardware() -> bool:
     """
-    Prüft beim Programmstart ob das AnoPi Shield (I2C/INA219) erreichbar ist.
+    Prüft beim Programmstart ob das AnoPi Shield erreichbar ist.
     Gibt True zurück wenn Hardware erkannt wurde, sonst False.
     Löst keine Exception aus – immer sicher aufrufbar.
     """
     try:
-        import board  # type: ignore
-        import busio  # type: ignore
-        from adafruit_ina219 import INA219  # type: ignore
+        from python_anopi import AnoPi  # type: ignore
 
-        i2c = busio.I2C(board.SCL, board.SDA)
-        INA219(i2c, addr=0x40)
-        logger.info("Hardware-Probe: AnoPi Shield auf I2C/INA219 (0x40) erkannt – Realbetrieb möglich.")
+        a = AnoPi()
+        _, err = a.ai_mA(0)
+        if err is not None:
+            raise RuntimeError(err)
+        logger.info("Hardware-Probe: AnoPi Shield erkannt – Realbetrieb möglich.")
         return True
     except Exception as e:
         logger.info("Hardware-Probe: AnoPi Shield nicht erreichbar (%s) – Simulation verfügbar.", type(e).__name__)
