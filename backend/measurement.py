@@ -6,8 +6,11 @@ Kapselt den Mess-Loop und die zugehörigen Zustandsvariablen.
 
 import json
 import logging
+import os
 import time
 from dataclasses import dataclass
+
+DEV_MODE = os.environ.get("HETA_DEV", "0") == "1"
 
 from calculations import (
     STATUS_FEHLER,
@@ -789,6 +792,17 @@ class MeasurementLoop:
                         "operation_mode": self._settings.get("operation_mode", "continuous"),
                     }
                 )
+                if DEV_MODE and not sim_mode:
+                    self._state["dev_raw"] = {
+                        "p1_ma":   round(p1.raw_ma, 4),
+                        "p2_ma":   round(p2.raw_ma, 4),
+                        "temp_ma": round(temp.raw_ma, 4),
+                        "flow_ma": round(flow.raw_ma, 4),
+                        "p1_status":   p1.status,
+                        "p2_status":   p2.status,
+                        "temp_status": temp.status,
+                        "flow_status": flow.status,
+                    }
 
             loop_elapsed = time.time() - t_start
             sleep_time = max(0.0, interval - loop_elapsed)
