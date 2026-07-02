@@ -1952,3 +1952,43 @@ footer {
 .dev-raw-table tr:hover td { background: #fef9ee; }
 .dev-status-ok     { color: #16a34a; font-weight: 600; }
 .dev-status-error  { color: #dc2626; font-weight: 600; }
+
+/* Sensor-Diagnose-Tabelle im Startprüfungs-Overlay */
+.sf-diag-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .87rem;
+  font-family: monospace;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+.sf-diag-table th {
+  background: var(--card-bg);
+  color: var(--text-muted);
+  padding: .4rem .7rem;
+  text-align: left;
+  font-size: .78rem;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.sf-diag-table td {
+  padding: .5rem .7rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-main);
+  font-family: monospace;
+}
+.sf-diag-table td:first-child,
+.sf-diag-table td:nth-child(2) { font-family: var(--font-sans, sans-serif); }
+.sf-row-ok  td { background: rgba(34,197,94,0.07); }
+.sf-row-err td { background: rgba(239,68,68,0.07); }
+.sf-dot {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+.sf-dot-ok      { background: #22c55e; box-shadow: 0 0 5px #22c55e88; }
+.sf-dot-err     { background: #ef4444; box-shadow: 0 0 5px #ef444488; }
+.sf-dot-unknown { background: #94a3b8; }

@@ -22,22 +22,60 @@
     <div class="sensor-fault-box">
       <div class="sensor-fault-header">
         <span class="sensor-fault-icon">&#9888;</span>
-        <h2 id="sensor-fault-title">Sensorfehler – Messung gestoppt</h2>
+        <h2 id="sensor-fault-title">Startprüfung – Sensoren</h2>
       </div>
       <div class="sensor-fault-body">
-        <p id="sensor-fault-message">Ein oder mehrere Sensoren sind nicht erreichbar.</p>
-        <div id="sensor-fault-channels" class="sensor-fault-list"></div>
+        <p id="sensor-fault-message">Sensorkanäle werden geprüft. Bitte alle 4 Sensoren anschließen.</p>
+
+        <!-- Sensor-Diagnose-Tabelle -->
+        <table class="sf-diag-table">
+          <thead>
+            <tr>
+              <th>Kanal</th>
+              <th>Sensor</th>
+              <th>mA</th>
+              <th>Wert</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr id="sf-row-1">
+              <td>AI0</td><td>p1 – Eintrittsdruck</td>
+              <td id="sf-ma-1">–</td>
+              <td id="sf-val-1">–</td>
+              <td id="sf-status-1"><span class="sf-dot sf-dot-unknown"></span></td>
+            </tr>
+            <tr id="sf-row-2">
+              <td>AI1</td><td>p2 – Austrittsdruck</td>
+              <td id="sf-ma-2">–</td>
+              <td id="sf-val-2">–</td>
+              <td id="sf-status-2"><span class="sf-dot sf-dot-unknown"></span></td>
+            </tr>
+            <tr id="sf-row-3">
+              <td>AI2</td><td>T – Temperatur</td>
+              <td id="sf-ma-3">–</td>
+              <td id="sf-val-3">–</td>
+              <td id="sf-status-3"><span class="sf-dot sf-dot-unknown"></span></td>
+            </tr>
+            <tr id="sf-row-4">
+              <td>AI3</td><td>Q – Durchfluss</td>
+              <td id="sf-ma-4">–</td>
+              <td id="sf-val-4">–</td>
+              <td id="sf-status-4"><span class="sf-dot sf-dot-unknown"></span></td>
+            </tr>
+          </tbody>
+        </table>
+
         <p class="sensor-fault-hint">
-          Bitte prüfen Sie die Verkabelung aller Sensoren und bestätigen Sie anschließend,
-          dass alle Sensoren korrekt angeschlossen sind. Das System führt dann eine
-          automatische Prüfung durch. Bei anhaltenden Problemen wenden Sie sich an
-          <a href="mailto:service@heta.de">service@heta.de</a>.
+          Alle 4 Kanäle müssen einen gültigen Strom (≥ 4 mA) liefern bevor die Messung starten kann.
+          Bei Problemen Verkabelung prüfen oder
+          <a href="mailto:service@heta.de">service@heta.de</a> kontaktieren.
         </p>
         <div id="sensor-fault-result" class="sensor-fault-result hidden"></div>
       </div>
       <div class="sensor-fault-footer">
-        <button class="btn btn-primary" id="btn-sensor-recheck" onclick="recheckSensors()">
-          Alle Sensoren angeschlossen – System prüfen
+        <button class="btn btn-primary" id="btn-sensor-recheck" onclick="startMeasurementFromCheck()" disabled>
+          Messung starten
         </button>
       </div>
       <div class="sensor-fault-sim-section">
