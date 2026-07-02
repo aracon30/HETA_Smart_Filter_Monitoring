@@ -52,6 +52,49 @@ Webseite im lokalen Netzwerk bereit.
 Das **`?`-Symbol** im oberen rechten Bereich des Dashboards öffnet dieses Benutzerhandbuch
 direkt im Browser – ohne separaten Download oder Dateiöffnung.
 
+### Zugriff aus einer virtuellen Maschine (VirtualBox) auf Windows
+
+Läuft die HETA-Software (z. B. im Simulationsmodus) in einer VirtualBox-VM und möchten
+Sie über den **Windows-Host** per Browser auf `http://<IP>:8080` zugreifen, muss die VM
+so konfiguriert werden, dass ihre IP-Adresse im Netzwerk des Windows-Rechners erreichbar
+ist. VirtualBox stellt die VM standardmäßig hinter NAT bereit – von außen (auch vom
+eigenen Host aus) ist sie dann **nicht** erreichbar, ohne dies extra einzurichten.
+
+**Option A – Bridged-Adapter (empfohlen, VM bekommt eigene IP im LAN):**
+
+1. VM ausschalten.
+2. VirtualBox-Manager → VM auswählen → **Einstellungen → Netzwerk**.
+3. **Adapter 1** → *Angeschlossen an:* **Bridged Adapter** (Netzwerkbrücke) → den
+   physischen Netzwerkadapter Ihres Windows-PCs auswählen (WLAN- oder LAN-Karte).
+4. VM starten. Innerhalb der VM die IP ermitteln: `hostname -I` bzw. `ip a`.
+5. Im Browser auf Windows: `http://<VM-IP>:8080` öffnen (dieselbe IP wie im OLED-Bildschirm 6
+   „Netzwerk" bzw. auf der Konsole ermittelt).
+
+Mit Bridged Adapter verhält sich die VM wie ein eigenes Gerät im selben Netzwerk wie der
+Windows-PC – genau wie ein echter Raspberry Pi im LAN.
+
+**Option B – NAT mit Portweiterleitung (falls Bridged nicht möglich ist, z. B. im
+Firmennetzwerk ohne Bridging-Erlaubnis):**
+
+1. VM ausschalten.
+2. **Einstellungen → Netzwerk → Adapter 1** bleibt auf **NAT**.
+3. **Erweitert → Portweiterleitung** öffnen → neue Regel anlegen:
+
+   | Name | Protokoll | Host-IP | Host-Port | Gast-IP | Gast-Port |
+   |------|-----------|---------|-----------|---------|-----------|
+   | HETA-Web | TCP | (leer) | `8080` | (leer) | `8080` |
+
+4. VM starten. Im Browser auf Windows: `http://localhost:8080` (oder `http://127.0.0.1:8080`).
+
+**Firewall prüfen:**
+
+- In der VM (Linux): `sudo ufw allow 8080/tcp` (falls `ufw` aktiv ist).
+- Auf Windows: Falls der Zugriff weiterhin blockiert wird, in der
+  **Windows Defender Firewall** eine eingehende Regel für Port 8080/TCP freigeben.
+
+> **Hinweis:** Nach einem Wechsel des Netzwerkmodus (NAT ↔ Bridged) ändert sich meist
+> auch die IP-Adresse der VM. Prüfen Sie die aktuelle IP mit `hostname -I` erneut.
+
 ---
 
 ## 2. Ersteinrichtung (Onboarding)
