@@ -975,23 +975,27 @@ async function runDiagnostics() {
 // Sensorfehler-Behandlung
 // ============================================================
 
+// Polling-Handle für Sensor-Diagnose
+let _sfPollTimer = null;
+
 function handleSensorFault(d) {
   const overlay = document.getElementById("sensor-fault-overlay");
   if (!overlay) return;
 
   if (!d.sensor_fault) {
     overlay.classList.add("hidden");
+    _stopSfPoll();
     return;
   }
 
   // Flow-Wait-Overlay verstecken – Sensor-Fault-Overlay hat Vorrang
   document.getElementById("flow-wait-overlay")?.classList.add("hidden");
 
-  // Titel je nach Zustand anpassen
+  // Titel je nach Zustand
   const titleEl = document.getElementById("sensor-fault-title");
   if (titleEl) {
     if (d.startup_sensor_check) {
-      titleEl.textContent = "Startprüfung – Sensoren nicht angeschlossen";
+      titleEl.textContent = "Startprüfung – Sensoren";
     } else if (d.waiting_for_flow) {
       titleEl.textContent = "Sensorfehler – Sensoren prüfen";
     } else {
@@ -999,19 +1003,62 @@ function handleSensorFault(d) {
     }
   }
 
-  // Overlay einblenden
+  setText("sensor-fault-message", "Sensorkanäle werden geprüft. Bitte alle 4 Sensoren anschließen.");
   overlay.classList.remove("hidden");
-  setText("sensor-fault-message", d.sensor_fault_message || "Ein oder mehrere Sensoren sind nicht erreichbar.");
 
-  // Ausgefallene Kanäle auflisten
-  const listEl = document.getElementById("sensor-fault-channels");
-  if (listEl) {
-    const channels = d.sensor_fault_channels || [];
-    const nameMap = {1: "Kanal 1 – p1 (Eintrittsdruck)", 2: "Kanal 2 – p2 (Austrittsdruck)",
-                     3: "Kanal 3 – T (Temperatur)",       4: "Kanal 4 – Q (Durchfluss)"};
-    listEl.innerHTML = channels.map(ch =>
-      `<div class="sensor-fault-channel">⚠ ${nameMap[ch] || "Kanal " + ch}</div>`
-    ).join("");
+  // Diagnose-Polling starten (nur wenn noch nicht aktiv)
+  _startSfPoll();
+}
+
+function _startSfPoll() {
+  if (_sfPollTimer) return;
+  _sfPollRound();
+}
+
+function _stopSfPoll() {
+  if (_sfPollTimer) { clearTimeout(_sfPollTimer); _sfPollTimer = null; }
+}
+
+async function _sfPollRound() {
+  const overlay = document.getElementById("sensor-fault-overlay");
+  if (!overlay || overlay.classList.contains("hidden")) { _sfPollTimer = null; return; }
+
+  try {
+    const data = await apiFetch("/api/sensor/rawcheck");
+    if (data) _updateSfDiagTable(data);
+  } catch (_) {}
+
+  _sfPollTimer = setTimeout(_sfPollRound, 1000);
+}
+
+function _updateSfDiagTable(data) {
+  const channels = data.channels || [];
+  const units    = ["bar", "bar", "°C", "l/min"];
+  let allOk = true;
+
+  channels.forEach(ch => {
+    const i = ch.channel;
+    const ok = ch.status === "OK";
+    if (!ok) allOk = false;
+
+    const maEl     = document.getElementById(`sf-ma-${i}`);
+    const valEl    = document.getElementById(`sf-val-${i}`);
+    const statusEl = document.getElementById(`sf-status-${i}`);
+    const rowEl    = document.getElementById(`sf-row-${i}`);
+
+    if (maEl)     maEl.textContent  = ch.ma != null ? ch.ma.toFixed(3) + " mA" : "–";
+    if (valEl)    valEl.textContent = ch.value != null ? ch.value + " " + ch.unit : "–";
+    if (statusEl) statusEl.innerHTML = ok
+      ? `<span class="sf-dot sf-dot-ok"></span> OK`
+      : `<span class="sf-dot sf-dot-err"></span> ${ch.status}`;
+    if (rowEl) rowEl.className = ok ? "sf-row-ok" : "sf-row-err";
+  });
+
+  // "Messung starten"-Button nur freischalten wenn alle 4 OK
+  const btn = document.getElementById("btn-sensor-recheck");
+  if (btn) {
+    btn.disabled = !allOk;
+    btn.title = allOk ? "" : "Warte auf alle 4 Sensoren…";
   }
 }
 
@@ -1060,28 +1107,30 @@ async function activateSimMode() {
   // Overlay schließt sich beim nächsten Poll-Zyklus automatisch
 }
 
-async function recheckSensors() {
+async function startMeasurementFromCheck() {
   const btn    = document.getElementById("btn-sensor-recheck");
   const result = document.getElementById("sensor-fault-result");
 
   btn.disabled = true;
-  btn.textContent = "Prüfung läuft…";
-  if (result) { result.classList.remove("hidden"); result.className = "sensor-fault-result checking"; result.textContent = "Sensorkanäle werden geprüft…"; }
+  btn.textContent = "Starte…";
+  if (result) { result.classList.remove("hidden"); result.className = "sensor-fault-result checking"; result.textContent = "Messung wird gestartet…"; }
 
   const data = await apiFetch("/api/sensor/recheck", "POST");
 
-  btn.disabled = false;
-  btn.textContent = "Alle Sensoren angeschlossen – System prüfen";
+  btn.textContent = "Messung starten";
 
   if (!data) {
+    btn.disabled = false;
     if (result) { result.className = "sensor-fault-result error"; result.textContent = "Verbindungsfehler – Bitte erneut versuchen."; }
     return;
   }
 
   if (data.success) {
-    // Overlay wird beim nächsten Poll-Zyklus automatisch ausgeblendet (sensor_fault = false)
+    _stopSfPoll();
     if (result) { result.className = "sensor-fault-result ok"; result.textContent = data.message; }
+    // Overlay schließt sich beim nächsten Poll-Zyklus automatisch (sensor_fault = false)
   } else {
+    btn.disabled = false;
     if (result) { result.className = "sensor-fault-result error"; result.textContent = data.message; }
   }
 }

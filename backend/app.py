@@ -1074,6 +1074,50 @@ def api_sensor_recheck():
     )
 
 
+@app.route("/api/sensor/rawcheck", methods=["GET"])
+def api_sensor_rawcheck():
+    """
+    Liest alle 4 Sensorkanäle direkt und gibt Raw-mA sowie skalierten Wert zurück.
+    Für die Startprüfungs-Diagnoseansicht im Frontend (sekündliches Polling).
+    """
+    from sensors import (
+        _check_status,
+        _read_anopi_channel,
+        _scale_flow,
+        _scale_pressure,
+        _scale_temperature,
+    )
+
+    pressure_range = settings.get("pressure_range_bar", 10.0)
+    temp_min = settings.get("temperature_min_c", -50.0)
+    temp_max = settings.get("temperature_max_c", 150.0)
+    flow_max = settings.get("flow_max_l_min", 150.0)
+
+    channels = []
+    all_ok = True
+    for ch in range(1, 5):
+        ma = _read_anopi_channel(ch)
+        if ma is None:
+            channels.append({"channel": ch, "ma": None, "value": None, "unit": "–", "status": "FEHLER"})
+            all_ok = False
+            continue
+        status = _check_status(ma)
+        if status != "OK":
+            all_ok = False
+        if ch in (1, 2):
+            val = round(_scale_pressure(ma, pressure_range), 3) if status == "OK" else None
+            unit = "bar"
+        elif ch == 3:
+            val = round(_scale_temperature(ma, temp_min, temp_max), 1) if status == "OK" else None
+            unit = "°C"
+        else:
+            val = round(_scale_flow(ma, flow_max), 1) if status == "OK" else None
+            unit = "l/min"
+        channels.append({"channel": ch, "ma": round(ma, 4), "value": val, "unit": unit, "status": status})
+
+    return jsonify({"channels": channels, "all_ok": all_ok})
+
+
 @app.route("/api/settings", methods=["GET"])
 def api_settings_get():
     """Liest die Konfiguration (öffentlich, ohne sensible Felder)."""
