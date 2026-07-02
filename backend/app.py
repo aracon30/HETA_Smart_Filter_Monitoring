@@ -1149,9 +1149,32 @@ def api_settings_post():
     with _state_lock:
         prev_sim = _state["simulation_mode"]
         _state["simulation_mode"] = settings["simulation_mode"]
-        # Wechsel Simulation → Hardware: Startprüfung aktivieren
-        if prev_sim and not settings["simulation_mode"]:
-            _state["startup_sensor_check"] = True
+        mode_changed = prev_sim != settings["simulation_mode"]
+        if mode_changed:
+            # Zustand für Moduswechsel zurücksetzen
+            _state["sensor_fault"] = False
+            _state["sensor_fault_channels"] = []
+            _state["sensor_fault_message"] = ""
+            _state["sensor_error"] = False
+            _state["cycle_active"] = False
+            _state["cycle_start_time"] = None
+            _state["cycle_dp_reached_time"] = None
+            _state["awaiting_confirmation"] = False
+            _state["waiting_for_flow"] = True
+            _state["anomaly_active"] = False
+            _state["anomaly_percent"] = 0.0
+            _state["_dev_active"] = {"dp": False, "flow": False, "reff": False}
+            # Wechsel Simulation → Hardware: Startprüfung aktivieren
+            _state["startup_sensor_check"] = not settings["simulation_mode"]
+            _state["running"] = True
+
+    # Messzyklus neu starten wenn Modus gewechselt wurde
+    if mode_changed:
+        reset_simulation()
+        predictor.reset()
+        if _loop:
+            _loop.mstate.smoothed_health_pct = None
+        _start_measurement_thread()
 
     # MQTT neu starten wenn sich relevante Parameter geändert haben
     _mqtt_keys = {"mqtt_enabled", "mqtt_broker", "mqtt_port", "mqtt_client_id"}
