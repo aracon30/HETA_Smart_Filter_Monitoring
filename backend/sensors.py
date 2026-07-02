@@ -75,30 +75,24 @@ def _scale_flow(ma: float, flow_max: float = 150.0) -> float:
 
 
 # ---------------------------------------------------------------------------
-# Hardware-Lesefunktion (AnoPi Shield via SPI/ADC)
+# Hardware-Lesefunktion (AnoPi Shield via python-anopi Bibliothek)
 # ---------------------------------------------------------------------------
 
 
 def _read_anopi_channel(channel: int) -> float | None:
     """
-    Liest einen analogen Kanal vom AnoPi Shield via SPI-ADC (MCP3208, 12 Bit).
-    Gibt den skalierten mA-Wert (4–20 mA) zurück oder None bei Hardwarefehler.
-
-    Skalierung: ADC 0–4095 → 0–3,3 V → 0–20 mA (Shunt 165 Ω, 3,3 V Referenz).
+    Liest einen analogen Kanal vom AnoPi Shield via python-anopi (I2C).
+    Gibt den mA-Wert zurück oder None bei Hardwarefehler.
     Kanal-Nummerierung: 1-basiert (wird intern auf 0-basiert umgerechnet).
     """
     try:
-        import spidev  # type: ignore
+        from python_anopi import AnoPi  # type: ignore
 
-        spi = spidev.SpiDev()
-        spi.open(0, 0)
-        spi.max_speed_hz = 1_350_000
-        ch0 = channel - 1  # AnoPi-Kanäle sind 0-basiert im SPI-Protokoll
-        adc_val = spi.xfer2([1, (8 + ch0) << 4, 0])
-        spi.close()
-        raw = ((adc_val[1] & 3) << 8) + adc_val[2]
-        voltage = (raw / 4095.0) * 3.3
-        ma = (voltage / 3.3) * 20.0  # 0–3,3 V → 0–20 mA
+        a = AnoPi()
+        ma, err = a.ai_mA(channel - 1)
+        if err is not None:
+            logger.debug("AnoPi Kanal %d Fehler: %s", channel, err)
+            return None
         return max(0.0, min(25.0, ma))
     except Exception as e:
         logger.debug("AnoPi Kanal %d Lesefehler: %s", channel, e)
@@ -107,17 +101,18 @@ def _read_anopi_channel(channel: int) -> float | None:
 
 def probe_hardware() -> bool:
     """
-    Prüft beim Programmstart ob das AnoPi Shield (SPI) erreichbar ist.
+    Prüft beim Programmstart ob das AnoPi Shield erreichbar ist.
     Gibt True zurück wenn Hardware erkannt wurde, sonst False.
     Löst keine Exception aus – immer sicher aufrufbar.
     """
     try:
-        import spidev  # type: ignore
+        from python_anopi import AnoPi  # type: ignore
 
-        spi = spidev.SpiDev()
-        spi.open(0, 0)
-        spi.close()
-        logger.info("Hardware-Probe: AnoPi Shield auf SPI(0,0) erkannt – Realbetrieb möglich.")
+        a = AnoPi()
+        _, err = a.ai_mA(0)
+        if err is not None:
+            raise RuntimeError(err)
+        logger.info("Hardware-Probe: AnoPi Shield erkannt – Realbetrieb möglich.")
         return True
     except Exception as e:
         logger.info("Hardware-Probe: AnoPi Shield nicht erreichbar (%s) – Simulation verfügbar.", type(e).__name__)

@@ -1221,6 +1221,45 @@
         </div>
       </section>
 
+      <!-- DEV-Panel: nur sichtbar wenn HETA_DEV=1 (Backend setzt dev_raw) -->
+      <section id="dev-raw-panel" class="dev-raw-panel hidden">
+        <div class="dev-raw-header">
+          <span>&#x1F6E0; Entwickler – Rohwerte Hardware</span>
+          <span class="dev-raw-badge">DEV</span>
+        </div>
+        <table class="dev-raw-table">
+          <thead>
+            <tr><th>Kanal</th><th>mA</th><th>Bar / Wert</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>p1 (Eintrittsdruck)</td>
+              <td id="dev-p1-ma">–</td>
+              <td id="dev-p1-bar">–</td>
+              <td id="dev-p1-status">–</td>
+            </tr>
+            <tr>
+              <td>p2 (Austrittsdruck)</td>
+              <td id="dev-p2-ma">–</td>
+              <td id="dev-p2-bar">–</td>
+              <td id="dev-p2-status">–</td>
+            </tr>
+            <tr>
+              <td>T (Temperatur)</td>
+              <td id="dev-temp-ma">–</td>
+              <td id="dev-temp-bar">–</td>
+              <td id="dev-temp-status">–</td>
+            </tr>
+            <tr>
+              <td>Q (Durchfluss)</td>
+              <td id="dev-flow-ma">–</td>
+              <td id="dev-flow-bar">–</td>
+              <td id="dev-flow-status">–</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
     </div><!-- /tab-panel-system -->
 
   </main>

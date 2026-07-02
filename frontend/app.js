@@ -626,6 +626,37 @@ function updateDashboard(d) {
   _prevAwaiting = !!d.awaiting_confirmation;
   updateSimDemoPanel(d);
   updateAnalysisSection(d);
+  updateDevRawPanel(d);
+}
+
+function updateDevRawPanel(d) {
+  const panel = document.getElementById("dev-raw-panel");
+  if (!panel) return;
+  const raw = d.dev_raw;
+  if (!raw) { panel.classList.add("hidden"); return; }
+  panel.classList.remove("hidden");
+
+  const statusClass = s => s === "OK" ? "dev-status-ok" : "dev-status-error";
+
+  setText("dev-p1-ma",      raw.p1_ma.toFixed(4) + " mA");
+  setText("dev-p1-bar",     fmt(d.p1_bar, 3) + " bar");
+  document.getElementById("dev-p1-status").className = statusClass(raw.p1_status);
+  setText("dev-p1-status",  raw.p1_status);
+
+  setText("dev-p2-ma",      raw.p2_ma.toFixed(4) + " mA");
+  setText("dev-p2-bar",     fmt(d.p2_bar, 3) + " bar");
+  document.getElementById("dev-p2-status").className = statusClass(raw.p2_status);
+  setText("dev-p2-status",  raw.p2_status);
+
+  setText("dev-temp-ma",    raw.temp_ma.toFixed(4) + " mA");
+  setText("dev-temp-bar",   fmt(d.temperature_c, 1) + " °C");
+  document.getElementById("dev-temp-status").className = statusClass(raw.temp_status);
+  setText("dev-temp-status", raw.temp_status);
+
+  setText("dev-flow-ma",    raw.flow_ma.toFixed(4) + " mA");
+  setText("dev-flow-bar",   fmt(d.flow_l_min, 1) + " l/min");
+  document.getElementById("dev-flow-status").className = statusClass(raw.flow_status);
+  setText("dev-flow-status", raw.flow_status);
 }
 
 // ============================================================

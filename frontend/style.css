@@ -1902,3 +1902,53 @@ footer {
 @media (max-width: 400px) {
   .cycle-ts { font-size: .74rem; }
 }
+
+/* DEV-Panel Rohwerte */
+.dev-raw-panel {
+  margin: 1.5rem 0 0;
+  border: 2px dashed #f59e0b;
+  border-radius: 8px;
+  background: #fffbeb;
+  overflow: hidden;
+}
+.dev-raw-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .6rem 1rem;
+  background: #fef3c7;
+  font-weight: 600;
+  font-size: .9rem;
+  color: #92400e;
+}
+.dev-raw-badge {
+  background: #f59e0b;
+  color: #fff;
+  font-size: .72rem;
+  font-weight: 700;
+  padding: .15rem .5rem;
+  border-radius: 4px;
+  letter-spacing: .05em;
+}
+.dev-raw-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .85rem;
+  font-family: monospace;
+}
+.dev-raw-table th {
+  background: #fde68a;
+  color: #78350f;
+  padding: .4rem .8rem;
+  text-align: left;
+  font-size: .78rem;
+  font-weight: 600;
+}
+.dev-raw-table td {
+  padding: .45rem .8rem;
+  border-top: 1px solid #fde68a;
+  color: #1c1917;
+}
+.dev-raw-table tr:hover td { background: #fef9ee; }
+.dev-status-ok     { color: #16a34a; font-weight: 600; }
+.dev-status-error  { color: #dc2626; font-weight: 600; }
