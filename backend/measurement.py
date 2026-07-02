@@ -794,12 +794,12 @@ class MeasurementLoop:
                 )
                 if DEV_MODE and not sim_mode:
                     self._state["dev_raw"] = {
-                        "p1_ma":   round(p1.raw_ma, 4),
-                        "p2_ma":   round(p2.raw_ma, 4),
+                        "p1_ma": round(p1.raw_ma, 4),
+                        "p2_ma": round(p2.raw_ma, 4),
                         "temp_ma": round(temp.raw_ma, 4),
                         "flow_ma": round(flow.raw_ma, 4),
-                        "p1_status":   p1.status,
-                        "p2_status":   p2.status,
+                        "p1_status": p1.status,
+                        "p2_status": p2.status,
                         "temp_status": temp.status,
                         "flow_status": flow.status,
                     }
