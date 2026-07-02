@@ -434,18 +434,17 @@ async function loadSettingsIntoForm() {
     setInputVal("s-modbus-port", s.modbus_port ?? 502);
 
     // dp_clean aus Profil laden (wird aus Lernzyklen berechnet)
-    const hetaCode = window._lastStatus?.heta_code;
-    if (hetaCode) {
-      try {
-        const profile = await apiFetch(`/api/profile?heta_code=${encodeURIComponent(hetaCode)}`);
-        const dpCleanEl = document.getElementById("s-dp-clean-display");
-        if (dpCleanEl) {
-          dpCleanEl.textContent = (profile?.reference_dp_clean > 0)
-            ? fmt(profile.reference_dp_clean, 3)
-            : "–";
-        }
-      } catch (_) { /* Profil noch nicht vorhanden */ }
-    }
+    // Kein HETA-Code → Backend liefert DEMO-Profil als Fallback
+    try {
+      const hetaCode = window._lastStatus?.heta_code || "";
+      const profile = await apiFetch(`/api/profile?heta_code=${encodeURIComponent(hetaCode)}`);
+      const dpCleanEl = document.getElementById("s-dp-clean-display");
+      if (dpCleanEl) {
+        dpCleanEl.textContent = (profile?.reference_dp_clean > 0)
+          ? fmt(profile.reference_dp_clean, 3) + " bar"
+          : "–";
+      }
+    } catch (_) { /* Profil noch nicht vorhanden */ }
   } catch (e) { console.warn("Einstellungen konnten nicht geladen werden.", e); }
 }
 

@@ -1886,18 +1886,14 @@ def api_cycles():
 @app.route("/api/profile")
 def api_profile():
     """Gibt das Lernprofil für einen HETA-Code zurück."""
-    heta_code = request.args.get("heta_code", _state.get("heta_code", ""))
-    if not heta_code:
-        return jsonify(None)
+    heta_code = request.args.get("heta_code", _state.get("heta_code", "")) or "DEMO"
     return jsonify(db.get_profile(heta_code))
 
 
 @app.route("/api/reference-curve")
 def api_reference_curve():
     """Gibt die zeitbasierte Referenzkurve für einen HETA-Code zurück."""
-    heta_code = request.args.get("heta_code", _state.get("heta_code", ""))
-    if not heta_code:
-        return jsonify(None)
+    heta_code = request.args.get("heta_code", _state.get("heta_code", "")) or "DEMO"
     profile = learning.get_profile(heta_code)
     if not profile:
         return jsonify(None)
