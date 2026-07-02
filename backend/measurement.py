@@ -10,8 +10,6 @@ import os
 import time
 from dataclasses import dataclass
 
-DEV_MODE = os.environ.get("HETA_DEV", "0") == "1"
-
 from calculations import (
     STATUS_FEHLER,
     STATUS_OK,
@@ -23,6 +21,8 @@ from calculations import (
 )
 
 logger = logging.getLogger(__name__)
+
+DEV_MODE = os.environ.get("HETA_DEV", "0") == "1"
 
 
 @dataclass
