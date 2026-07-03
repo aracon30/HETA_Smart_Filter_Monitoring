@@ -414,7 +414,7 @@ def read_sensors(
     failed_channels = []
     for ch in range(1, 5):
         val = _read_anopi_channel(ch)
-        if val is None:
+        if val is None or _check_status(val) == SENSOR_WIRE_BREAK:
             failed_channels.append(ch)
         else:
             ma_values[ch] = val
