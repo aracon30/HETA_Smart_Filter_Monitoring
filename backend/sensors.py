@@ -135,7 +135,8 @@ def check_hardware_sensors() -> dict:
     """
     failed = []
     for ch in range(1, 5):
-        if _read_anopi_channel(ch) is None:
+        ma = _read_anopi_channel(ch)
+        if ma is None or _check_status(ma) == SENSOR_WIRE_BREAK:
             failed.append(ch)
     return {
         "all_ok": len(failed) == 0,
