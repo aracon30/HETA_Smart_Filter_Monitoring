@@ -1419,6 +1419,7 @@ footer {
   width: 100%;
   max-width: 420px;
   box-shadow: var(--shadow-lg);
+  pointer-events: auto;
 }
 
 .status-overlay__row {
@@ -1470,6 +1471,7 @@ footer {
   font-size: .82rem;
   cursor: pointer;
   transition: background .15s, color .15s;
+  pointer-events: auto;
 }
 .status-overlay__minimize-btn:hover {
   background: rgba(255,255,255,0.13);
