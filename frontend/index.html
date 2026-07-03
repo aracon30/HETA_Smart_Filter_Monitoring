@@ -821,26 +821,40 @@
           <div class="card-unit" id="remaining-mode">BASIS</div>
         </div>
 
-        <div class="card" id="card-heta">
-          <div class="card-label">HETA-Modus</div>
-          <div class="card-value small" id="val-heta-code">–</div>
-          <div class="card-unit" id="val-heta-status">nicht aktiviert</div>
-        </div>
-
-        <div class="card card-service" id="card-service">
-          <div class="card-label">Servicehinweis</div>
-          <div class="card-value small" id="val-service-msg">–</div>
-          <div class="card-unit" id="val-service-prio">–</div>
-          <div class="card-note"><a href="mailto:service@heta.de" style="color:var(--text-muted);">service@heta.de</a></div>
-        </div>
-
       </section>
 
-      <!-- ================================================================
-           DASHBOARD-RASTER: Hauptspalte (Chart, Analyse, Zyklen) + Seitenspalte (Profil, Status, Steuerung)
-           ================================================================ -->
-      <div class="dashboard-grid">
-      <div class="dashboard-main">
+      <!-- Verlaufsdiagramm -->
+      <section class="charts">
+        <div class="section-header">
+          <h2 class="section-title">Live-Verlauf &amp; Referenz</h2>
+          <div class="chart-controls">
+            <span class="chart-hint">Mausrad&nbsp;=&nbsp;Zoom &nbsp;&middot;&nbsp; Ziehen&nbsp;=&nbsp;Verschieben</span>
+            <button class="btn btn-ghost btn-sm" onclick="resetChartZoom()">Zoom zurücksetzen</button>
+          </div>
+        </div>
+        <!-- Live toggles - ABOVE chart -->
+        <div class="chart-toggle-bar">
+          <span class="chart-toggle-label">Messwerte</span>
+          <div id="chart-live-chips" class="chart-toggle-chips"></div>
+        </div>
+        <!-- Chart -->
+        <div class="chart-container">
+          <canvas id="chart-combined"></canvas>
+        </div>
+        <!-- Reference toggles - BELOW chart -->
+        <div class="chart-toggle-bar">
+          <span class="chart-toggle-label">Referenz &amp; Toleranz</span>
+          <div id="chart-ref-chips" class="chart-toggle-chips"></div>
+          <span id="chart-ref-hint" class="chart-hint" style="font-size:.73rem;margin-left:.25rem"></span>
+        </div>
+        <!-- Y-axis assignment panel -->
+        <div class="chart-axis-config">
+          <button class="chart-axis-config-toggle" onclick="toggleAxisPanel()">
+            Achsenzuordnung <span id="chart-axis-chevron">&#9660;</span>
+          </button>
+          <div id="chart-axis-panel" class="hidden chart-axis-panel"></div>
+        </div>
+      </section>
 
       <!-- Prozessanalyse -->
       <section id="analysis-section" class="analysis-section hidden">
@@ -897,77 +911,6 @@
         </div>
       </section>
 
-      <!-- Verlaufsdiagramm -->
-      <section class="charts">
-        <div class="section-header">
-          <h2 class="section-title">Live-Verlauf &amp; Referenz</h2>
-          <div class="chart-controls">
-            <span class="chart-hint">Mausrad&nbsp;=&nbsp;Zoom &nbsp;&middot;&nbsp; Ziehen&nbsp;=&nbsp;Verschieben</span>
-            <button class="btn btn-ghost btn-sm" onclick="resetChartZoom()">Zoom zurücksetzen</button>
-          </div>
-        </div>
-        <!-- Live toggles - ABOVE chart -->
-        <div class="chart-toggle-bar">
-          <span class="chart-toggle-label">Messwerte</span>
-          <div id="chart-live-chips" class="chart-toggle-chips"></div>
-        </div>
-        <!-- Chart -->
-        <div class="chart-container">
-          <canvas id="chart-combined"></canvas>
-        </div>
-        <!-- Reference toggles - BELOW chart -->
-        <div class="chart-toggle-bar">
-          <span class="chart-toggle-label">Referenz &amp; Toleranz</span>
-          <div id="chart-ref-chips" class="chart-toggle-chips"></div>
-          <span id="chart-ref-hint" class="chart-hint" style="font-size:.73rem;margin-left:.25rem"></span>
-        </div>
-        <!-- Y-axis assignment panel -->
-        <div class="chart-axis-config">
-          <button class="chart-axis-config-toggle" onclick="toggleAxisPanel()">
-            Achsenzuordnung <span id="chart-axis-chevron">&#9660;</span>
-          </button>
-          <div id="chart-axis-panel" class="hidden chart-axis-panel"></div>
-        </div>
-      </section>
-
-      <!-- Filterzyklen-Tabelle -->
-      <section class="cycles-section">
-        <div class="section-header">
-          <h2 class="section-title">Filterzyklen</h2>
-          <span id="cycles-count-badge" class="badge badge-observe" style="display:none"></span>
-        </div>
-
-        <div id="cycles-empty" class="empty-state hidden">
-          <svg viewBox="0 0 48 48" fill="none" class="empty-icon">
-            <path d="M8 40V16l16-8 16 8v24" stroke="currentColor" stroke-width="2"/>
-            <rect x="18" y="24" width="12" height="16" stroke="currentColor" stroke-width="2"/>
-            <line x1="24" y1="8" x2="24" y2="40" stroke="currentColor" stroke-width="1" stroke-dasharray="3"/>
-          </svg>
-          <p>Keine Filterzyklen vorhanden.</p>
-          <small>Filterzyklen werden nach dem ersten bestätigten Filterwechsel gespeichert.</small>
-        </div>
-
-        <div id="cycles-table-wrap" class="table-responsive hidden">
-          <table class="cycles-table" id="cycles-table">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Start</th>
-                <th>Ende</th>
-                <th>Dauer</th>
-                <th>Status</th>
-                <th>Diagramm &amp; Probleme</th>
-              </tr>
-            </thead>
-            <tbody id="cycles-tbody"></tbody>
-          </table>
-        </div>
-      </section>
-
-      </div><!-- /dashboard-main -->
-
-      <div class="dashboard-sidebar">
-
       <!-- Lernprofil-Übersicht -->
       <section class="profile-section">
         <div class="section-header">
@@ -1018,80 +961,81 @@
         </div>
       </section>
 
-      <!-- Systemstatus -->
-      <section class="sysinfo">
+      <!-- Filterzyklen-Tabelle -->
+      <section class="cycles-section">
         <div class="section-header">
-          <h2 class="section-title">Systemstatus</h2>
+          <h2 class="section-title">Filterzyklen</h2>
+          <span id="cycles-count-badge" class="badge badge-observe" style="display:none"></span>
         </div>
-        <div class="info-grid">
-          <div class="info-item">
-            <span class="info-label">Sensorquelle</span>
-            <span id="info-sensor-mode" class="info-value">–</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Zyklen gelernt</span>
-            <span id="info-cycles" class="info-value">–</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Profil</span>
-            <span id="info-profile" class="info-value">–</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Anomalie</span>
-            <span id="info-anomaly" class="info-value">–</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Prognose-Modus</span>
-            <span id="info-pred-mode" class="info-value">–</span>
-          </div>
-          <div class="info-item">
-            <span class="info-label">Sensor-Fehler</span>
-            <span id="info-sensor-err" class="info-value">–</span>
-          </div>
+
+        <div id="cycles-empty" class="empty-state hidden">
+          <svg viewBox="0 0 48 48" fill="none" class="empty-icon">
+            <path d="M8 40V16l16-8 16 8v24" stroke="currentColor" stroke-width="2"/>
+            <rect x="18" y="24" width="12" height="16" stroke="currentColor" stroke-width="2"/>
+            <line x1="24" y1="8" x2="24" y2="40" stroke="currentColor" stroke-width="1" stroke-dasharray="3"/>
+          </svg>
+          <p>Keine Filterzyklen vorhanden.</p>
+          <small>Filterzyklen werden nach dem ersten bestätigten Filterwechsel gespeichert.</small>
+        </div>
+
+        <div id="cycles-table-wrap" class="table-responsive hidden">
+          <table class="cycles-table" id="cycles-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Start</th>
+                <th>Ende</th>
+                <th>Dauer</th>
+                <th>Status</th>
+                <th>Diagramm &amp; Probleme</th>
+              </tr>
+            </thead>
+            <tbody id="cycles-tbody"></tbody>
+          </table>
         </div>
       </section>
 
-      <!-- Steuerung -->
-      <section class="controls">
-        <div class="controls-group">
-          <h3>Betrieb</h3>
-          <button class="btn btn-primary" onclick="startSimulation()">Messung starten</button>
-          <button class="btn btn-secondary" onclick="stopSimulation()">Messung stoppen</button>
-          <button class="btn btn-warning" onclick="resetSystem()">Reset</button>
+      <!-- HETA-Code-Aktivierung – prominent, da damit das System praeziser arbeitet -->
+      <section id="heta-activation-section" class="heta-activation-section">
+        <div class="heta-activation-header">
+          <span class="heta-activation-icon">&#128273;</span>
+          <div class="heta-activation-title-group">
+            <h2 class="section-title">HETA-Code aktivieren</h2>
+            <p class="heta-activation-sub">
+              Schaltet ein filtertyp-spezifisches Profil frei &ndash; automatische Referenzwerte
+              und deutlich pr&auml;zisere Reststandzeit-Prognosen.
+            </p>
+          </div>
+          <span id="heta-activation-badge" class="badge badge-warn">nicht aktiviert</span>
         </div>
 
-        <div class="controls-group">
-          <h3>HETA-Code aktivieren</h3>
+        <div id="heta-activation-active" class="heta-activation-active hidden">
+          <span class="heta-activation-current-code" id="heta-activation-current-code">HETA-&ndash;</span>
+          <button class="btn btn-danger hidden" id="btn-heta-deactivate" onclick="deactivateHetaCode()">HETA-Code deaktivieren</button>
+        </div>
+
+        <div id="heta-activation-form" class="heta-activation-form">
           <div class="heta-code-input-wrap">
             <span class="heta-code-prefix">HETA-</span>
             <input type="text" id="input-heta-code" placeholder="12345" maxlength="15"
                    inputmode="numeric" pattern="[0-9]*" />
           </div>
           <input type="text" id="input-pin" placeholder="PIN (6-stellig)" maxlength="6" />
-          <button class="btn btn-primary" onclick="activateHetaCode()">Aktivieren</button>
+          <button class="btn btn-primary btn-lg" onclick="activateHetaCode()">Aktivieren</button>
           <button class="btn btn-ghost" onclick="showDemo()">Demo-PIN anzeigen</button>
-          <button class="btn btn-danger hidden" id="btn-heta-deactivate" onclick="deactivateHetaCode()">HETA-Code deaktivieren</button>
-          <div id="heta-msg" class="msg"></div>
         </div>
+        <div id="heta-msg" class="msg"></div>
+      </section>
 
+      <!-- Betrieb – nur im Simulationsmodus (Realmodus wird ueber den Durchfluss gesteuert) -->
+      <section class="controls hidden" id="betrieb-section">
         <div class="controls-group">
-          <h3>Export &amp; Service</h3>
-          <button class="btn btn-secondary" onclick="exportCSV()">CSV exportieren</button>
-          <button class="btn btn-secondary" onclick="generateServiceReport()">Servicebericht erzeugen</button>
+          <h3>Betrieb (Simulation)</h3>
+          <button class="btn btn-primary" onclick="startSimulation()">Messung starten</button>
+          <button class="btn btn-secondary" onclick="stopSimulation()">Messung stoppen</button>
+          <button class="btn btn-warning" onclick="resetSystem()">Reset</button>
         </div>
       </section>
-
-      <!-- Service-Payload -->
-      <section id="service-section" class="hidden">
-        <div class="section-header">
-          <h2 class="section-title">Servicebericht</h2>
-          <button class="btn btn-ghost btn-sm" onclick="hideService()">Schließen</button>
-        </div>
-        <pre id="service-report-text"></pre>
-      </section>
-
-      </div><!-- /dashboard-sidebar -->
-      </div><!-- /dashboard-grid -->
 
       <!-- Simulations-Demo-Panel -->
       <section id="sim-demo-panel" class="sim-demo-panel hidden">
@@ -1226,6 +1170,52 @@
             <div id="sim-diagnosis" class="sim-diagnosis"></div>
           </div>
         </div>
+      </section>
+
+      <!-- Systemstatus – ganz unten, inkl. Export & Service -->
+      <section class="sysinfo">
+        <div class="section-header">
+          <h2 class="section-title">Systemstatus</h2>
+          <div class="section-header-actions">
+            <button class="btn btn-secondary btn-sm" onclick="exportCSV()">CSV exportieren</button>
+            <button class="btn btn-secondary btn-sm" onclick="generateServiceReport()">Servicebericht erzeugen</button>
+          </div>
+        </div>
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="info-label">Sensorquelle</span>
+            <span id="info-sensor-mode" class="info-value">–</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Zyklen gelernt</span>
+            <span id="info-cycles" class="info-value">–</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Profil</span>
+            <span id="info-profile" class="info-value">–</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Anomalie</span>
+            <span id="info-anomaly" class="info-value">–</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Prognose-Modus</span>
+            <span id="info-pred-mode" class="info-value">–</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">Sensor-Fehler</span>
+            <span id="info-sensor-err" class="info-value">–</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Service-Payload -->
+      <section id="service-section" class="hidden">
+        <div class="section-header">
+          <h2 class="section-title">Servicebericht</h2>
+          <button class="btn btn-ghost btn-sm" onclick="hideService()">Schließen</button>
+        </div>
+        <pre id="service-report-text"></pre>
       </section>
 
       <!-- DEV-Panel: nur sichtbar wenn HETA_DEV=1 (Backend setzt dev_raw) -->

@@ -564,14 +564,11 @@ function updateDashboard(d) {
   setText("val-remaining", d.remaining_display ?? "–");
   updateRemainingMode(d.prediction_mode, d.learned_cycles, d.required_cycles);
 
-  // HETA-Code
-  setText("val-heta-code", d.heta_code || "(kein Code)");
-  setText("val-heta-status", d.heta_activated ? "Aktiviert" : "nicht aktiviert");
-  const btnDeact = document.getElementById("btn-heta-deactivate");
-  if (btnDeact) btnDeact.classList.toggle("hidden", !d.heta_activated);
-  setText("val-service-msg", d.service_message || "–");
-  setText("val-service-prio", d.service_priority || "–");
-  styleServicePriority(d.service_priority);
+  updateHetaActivationSection(d);
+
+  // Betrieb (Start/Stop/Reset) – nur im Simulationsmodus, im Realmodus steuert der Durchfluss
+  const betriebSection = document.getElementById("betrieb-section");
+  if (betriebSection) betriebSection.classList.toggle("hidden", !d.simulation_mode);
 
   const banner = document.getElementById("filter-change-banner");
   if (banner) banner.classList.toggle("hidden", !d.awaiting_confirmation);
@@ -865,11 +862,22 @@ function styleCardByStatus(cardId, status) {
   else el.classList.add("status-ok");
 }
 
-function styleServicePriority(prio) {
-  const el = document.getElementById("val-service-prio");
-  if (!el) return;
-  el.style.color = prio === "HOCH" ? "var(--alert-red)"
-    : prio === "MITTEL" ? "var(--warn-yellow)" : "var(--ok-green)";
+function updateHetaActivationSection(d) {
+  const badge  = document.getElementById("heta-activation-badge");
+  const active = document.getElementById("heta-activation-active");
+  const form   = document.getElementById("heta-activation-form");
+  const code   = document.getElementById("heta-activation-current-code");
+  const btnDeact = document.getElementById("btn-heta-deactivate");
+
+  const activated = !!d.heta_activated;
+  if (badge) {
+    badge.textContent = activated ? "aktiviert" : "nicht aktiviert";
+    badge.className = "badge " + (activated ? "badge-ok" : "badge-warn");
+  }
+  if (active) active.classList.toggle("hidden", !activated);
+  if (form)   form.classList.toggle("hidden", activated);
+  if (code)   code.textContent = d.heta_code || "HETA-–";
+  if (btnDeact) btnDeact.classList.toggle("hidden", !activated);
 }
 
 function updateFilterHealth(healthPct, show) {
