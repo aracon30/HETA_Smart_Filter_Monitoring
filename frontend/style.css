@@ -167,60 +167,6 @@ header {
 }
 
 /* ================================================================
-   TAB NAVIGATION
-   ================================================================ */
-.tab-nav {
-  background: var(--card-bg);
-  border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-  position: sticky;
-  top: 60px;
-  z-index: 90;
-}
-
-.tab-nav-inner {
-  max-width: 1440px;
-  margin: 0 auto;
-  display: flex;
-  padding: 0 1rem;
-  gap: .25rem;
-}
-
-.tab-btn {
-  display: flex;
-  align-items: center;
-  gap: .45rem;
-  padding: .75rem 1.1rem;
-  background: none;
-  border: none;
-  border-bottom: 3px solid transparent;
-  color: var(--text-muted);
-  font-size: .88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color .2s, border-color .2s;
-  white-space: nowrap;
-}
-
-.tab-btn:hover { color: var(--heta-accent); }
-
-.tab-btn.active {
-  color: var(--heta-accent);
-  border-bottom-color: var(--heta-accent);
-}
-
-.tab-icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  opacity: .7;
-  transition: opacity .2s;
-}
-
-.tab-btn.active .tab-icon,
-.tab-btn:hover .tab-icon { opacity: 1; }
-
-/* ================================================================
    MAIN & PANELS
    ================================================================ */
 main {
@@ -231,9 +177,28 @@ main {
   width: 100%;
 }
 
-.tab-panel { display: block; }
-.tab-panel.hidden { display: none !important; }
 .hidden { display: none !important; }
+
+/* ================================================================
+   DASHBOARD-RASTER (Hauptspalte + Seitenspalte, ersetzt die alte Tab-Navigation)
+   ================================================================ */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.dashboard-main,
+.dashboard-sidebar {
+  min-width: 0; /* verhindert Grid-Überlauf durch breite Tabellen/Charts */
+}
+
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* ================================================================
    SECTION HEADERS (shared)
@@ -1897,7 +1862,6 @@ footer {
   .profile-tile { max-width: 100%; }
   .cycles-table { font-size: .78rem; }
   .cycles-table th, .cycles-table td { padding: .45rem .5rem; }
-  .tab-btn { padding: .65rem .7rem; font-size: .82rem; gap: .3rem; }
   .header-meta { display: none; }
 }
 

@@ -19,8 +19,6 @@ let _tolReff = 0.25;
 let _tolFlow = 0.25;
 let _tolTempC = 10.0;
 
-// Tab-Navigation
-let _activeTab = "dashboard";
 let _cyclesPollTick = 0;
 let _prevAwaiting = false;
 
@@ -30,7 +28,6 @@ let _prevAwaiting = false;
 
 document.addEventListener("DOMContentLoaded", async () => {
   initCharts();
-  initTabs();
   const onboardingDone = await checkOnboarding();
   if (onboardingDone) startPolling();
   loadSettingsIntoForm();
@@ -47,25 +44,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   const preselected = document.querySelector(".mode-card input:checked")?.closest(".mode-card");
   if (preselected) preselected.classList.add("selected");
 });
-
-// ============================================================
-// Tab-Navigation
-// ============================================================
-
-function initTabs() {
-  switchTab("dashboard");
-}
-
-function switchTab(tabName) {
-  _activeTab = tabName;
-  document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.tab === tabName);
-  });
-  document.querySelectorAll(".tab-panel").forEach(panel => {
-    panel.classList.toggle("hidden", panel.id !== `tab-panel-${tabName}`);
-  });
-  if (tabName === "cycles") loadCyclesOverview();
-}
 
 // ============================================================
 // Onboarding
@@ -556,13 +534,9 @@ async function fetchStatus() {
 function updateDashboard(d) {
   window._lastStatus = d;
 
-  // Zyklen-Tab alle ~15 s aktualisieren (alle 10 Poll-Zyklen)
-  if (_activeTab === "cycles") {
-    _cyclesPollTick++;
-    if (_cyclesPollTick % 10 === 1) loadCyclesOverview();
-  } else {
-    _cyclesPollTick = 0;
-  }
+  // Zyklen-Bereich alle ~15 s aktualisieren (alle 10 Poll-Zyklen)
+  _cyclesPollTick++;
+  if (_cyclesPollTick % 10 === 1) loadCyclesOverview();
 
   // Sensorfehler-Overlay (Hardwaremodus) hat Vorrang
   handleSensorFault(d);
