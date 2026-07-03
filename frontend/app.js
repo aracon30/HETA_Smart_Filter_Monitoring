@@ -704,6 +704,13 @@ function updateFlowOverlays(d) {
   const pauseEl = document.getElementById("flow-pause-overlay");
   if (!waitEl || !pauseEl) return;
 
+  // Sensor-Fault-Overlay hat Vorrang – Flow-Overlays nicht anzeigen
+  if (d.sensor_fault) {
+    waitEl.classList.add("hidden");
+    pauseEl.classList.add("hidden");
+    return;
+  }
+
   const waiting = !!d.waiting_for_flow;
   const paused  = !!d.cycle_paused;
   const newType = waiting ? "wait" : paused ? "pause" : null;
