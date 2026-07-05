@@ -197,6 +197,11 @@ class FilterSimulator:
             self._clogging = 0.0
             self._last_time = None
 
+    def pause(self):
+        """Friert die Zeitbasis ein (kein Zeitsprung bei Fortsetzung) – Beladungszustand bleibt erhalten."""
+        with self._lock:
+            self._last_time = None
+
     def full_reset(self):
         """Vollständiger Reset inkl. Szenario-Parameter."""
         with self._lock:
@@ -300,6 +305,12 @@ def reset_simulation():
     """Setzt Beladungszustand zurück (Szenario-Parameter bleiben)."""
     _simulator.reset()
     logger.info("Filtersimulation zurückgesetzt.")
+
+
+def pause_simulation():
+    """Pausiert die Simulationszeit ohne den Beladungszustand zu verwerfen (für Play/Pause)."""
+    _simulator.pause()
+    logger.info("Filtersimulation pausiert.")
 
 
 def full_reset_simulation():
