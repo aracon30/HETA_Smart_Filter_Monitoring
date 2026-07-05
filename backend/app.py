@@ -1711,8 +1711,8 @@ def api_simulation_set_rates():
         return jsonify({"success": True, "active": False})
 
     dirt_rate_pct = max(10.0, min(float(data.get("dirt_rate_pct", 100.0)), 400.0))
-    p1_trend_pct = max(-20.0, min(float(data.get("p1_trend_pct", 0.0)), 20.0))
-    p2_trend_pct = max(-20.0, min(float(data.get("p2_trend_pct", 0.0)), 20.0))
+    p1_trend_pct = max(-100.0, min(float(data.get("p1_trend_pct", 0.0)), 100.0))
+    p2_trend_pct = max(-100.0, min(float(data.get("p2_trend_pct", 0.0)), 100.0))
     flow_drop_pct = max(10.0, min(float(data.get("flow_drop_pct", 75.0)), 99.0))
     temp_trend = max(-5.0, min(float(data.get("temp_trend", 0.0)), 5.0))
     scenario = str(data.get("scenario", "custom"))
