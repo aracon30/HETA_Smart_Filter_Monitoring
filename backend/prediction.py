@@ -98,10 +98,12 @@ class PredictionEngine:
         self._dp_history: list[float] = []
         self._history_window: int = 30
 
-        # Multi-Kanal-Verlauf für Q, T, R_eff
+        # Multi-Kanal-Verlauf für Q, T, R_eff, p1, p2
         self._flow_history: list[float] = []
         self._temp_history: list[float] = []
         self._reff_history: list[float] = []
+        self._p1_history: list[float] = []
+        self._p2_history: list[float] = []
 
     def update(self, dp_bar: float) -> float | None:
         """
@@ -254,12 +256,14 @@ class PredictionEngine:
         slope = numerator / denominator
         return max(slope, 0.0) if clamp_positive else slope
 
-    def update_channels(self, flow: float, temp: float, r_eff: float) -> None:
-        """Aktualisiert den Verlaufspuffer für Q, T und R_eff (je 1 Eintrag/s)."""
+    def update_channels(self, flow: float, temp: float, r_eff: float, p1: float, p2: float) -> None:
+        """Aktualisiert den Verlaufspuffer für Q, T, R_eff, p1 und p2 (je 1 Eintrag/s)."""
         for hist, val in (
             (self._flow_history, flow),
             (self._temp_history, temp),
             (self._reff_history, r_eff),
+            (self._p1_history, p1),
+            (self._p2_history, p2),
         ):
             hist.append(val)
             if len(hist) > self._history_window:
@@ -270,11 +274,13 @@ class PredictionEngine:
         return self._calculate_slope()
 
     def get_channel_slopes(self) -> dict:
-        """Gibt Steigungen für Q (l/min/s), T (°C/s) und R_eff (bar·min/l/s) zurück."""
+        """Gibt Steigungen für Q (l/min/s), T (°C/s), R_eff (bar·min/l/s), p1 und p2 (bar/s) zurück."""
         return {
             "flow": self._linear_slope(self._flow_history),
             "temp": self._linear_slope(self._temp_history),
             "r_eff": self._linear_slope(self._reff_history),
+            "p1": self._linear_slope(self._p1_history),
+            "p2": self._linear_slope(self._p2_history),
         }
 
     def reset(self):
@@ -285,6 +291,8 @@ class PredictionEngine:
         self._flow_history.clear()
         self._temp_history.clear()
         self._reff_history.clear()
+        self._p1_history.clear()
+        self._p2_history.clear()
 
     def seed(self, initial_seconds: float):
         """Setzt den Startwert der Reststandzeit aus der Referenzdauer."""

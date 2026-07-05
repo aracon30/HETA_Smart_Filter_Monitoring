@@ -524,11 +524,12 @@ class MeasurementLoop:
             flow_slope_ref = flow_slope_cur = flow_dev = 0.0
             temp_slope_ref = temp_slope_cur = temp_dev = 0.0
             reff_slope_ref = reff_slope_cur = reff_dev = 0.0
+            p1_slope_cur = p2_slope_cur = 0.0
 
             # ── Kanalsteigungen und dp-History aktualisieren (vor Kurvenanalyse) ─
             # Reihenfolge wichtig: erst update → dann get_current_slope(),
             # damit die Analyse den aktuellen Messwert enthält.
-            self._predictor.update_channels(fs.flow_l_min, fs.temperature_c, fs.r_eff)
+            self._predictor.update_channels(fs.flow_l_min, fs.temperature_c, fs.r_eff, fs.p1_bar, fs.p2_bar)
 
             # ── Reststandzeit berechnen ───────────────────────────────────────
             # Bei validiertem Profil: Referenzkurve invertieren → passt sich sofort
@@ -553,6 +554,8 @@ class MeasurementLoop:
             if an_active and cycle_active:
                 try:
                     ch_slopes = self._predictor.get_channel_slopes()
+                    p1_slope_cur = ch_slopes["p1"] or 0.0
+                    p2_slope_cur = ch_slopes["p2"] or 0.0
                     analysis = self._learning.get_curve_analysis(
                         learning_code,
                         elapsed,
@@ -728,6 +731,8 @@ class MeasurementLoop:
                         "analysis_reff_rate_ref": reff_slope_ref,
                         "analysis_reff_rate_current": reff_slope_cur,
                         "analysis_reff_deviation_pct": reff_dev,
+                        "analysis_p1_rate_current": p1_slope_cur,
+                        "analysis_p2_rate_current": p2_slope_cur,
                     }
                 )
 
