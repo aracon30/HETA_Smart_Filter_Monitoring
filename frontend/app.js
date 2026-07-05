@@ -566,9 +566,8 @@ function updateDashboard(d) {
 
   updateHetaActivationSection(d);
 
-  // Betrieb (Start/Stop/Reset) – nur im Simulationsmodus, im Realmodus steuert der Durchfluss
-  const betriebSection = document.getElementById("betrieb-section");
-  if (betriebSection) betriebSection.classList.toggle("hidden", !d.simulation_mode);
+  // Transport-Steuerung (Play/Pause/Reset) – nur im Simulationsmodus, im Realmodus steuert der Durchfluss
+  updateHeaderTransport(d);
 
   const banner = document.getElementById("filter-change-banner");
   if (banner) banner.classList.toggle("hidden", !d.awaiting_confirmation);
@@ -756,6 +755,20 @@ async function resetSystem() {
   await apiFetch("/api/simulation/reset", "POST");
   clearCharts();
   showMsg("heta-msg", "System zurückgesetzt.", false);
+}
+
+function toggleSimulationRun() {
+  const running = !!window._lastStatus?.running;
+  if (running) stopSimulation();
+  else startSimulation();
+}
+
+function updateHeaderTransport(d) {
+  const wrap = document.getElementById("header-transport");
+  if (!wrap) return;
+  wrap.classList.toggle("hidden", !d.simulation_mode);
+  const icon = document.getElementById("btn-transport-play-icon");
+  if (icon) icon.innerHTML = d.running ? "&#9208;" : "&#9654;";
 }
 
 function _getHetaCode() {
