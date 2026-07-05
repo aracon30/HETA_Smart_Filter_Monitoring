@@ -251,8 +251,48 @@ class FilterSimulator:
                 "temp_trend_per_cycle": self._temp_trend_per_cycle,
             }
 
+    @staticmethod
+    def _compute_physics(
+        clogging: float,
+        now: float,
+        p1_base: float,
+        q_base: float,
+        t_base: float,
+        p1_trend_factor: float,
+        flow_drop_factor: float,
+        temp_trend_per_cycle: float,
+        dp_clean: float,
+        dp_limit: float,
+    ) -> dict:
+        """
+        Reine physikalische Berechnung aus Beladungszustand (clogging) und Zeitpunkt
+        (für die Temperatur-Drift). Wird von get_readings() (Echtzeit-Simulation) UND
+        simulate_cycle_samples() (schnell simulierte Referenzzyklen) gemeinsam genutzt,
+        damit gelernte Referenzzyklen und Live-Betrieb exakt dieselbe Physik abbilden.
+        """
+        # p1: Basiswert mit linearern Trend über den Zyklus
+        p1 = round(p1_base * (1.0 + p1_trend_factor * clogging), 4)
+        p1 = max(0.1, p1)
+
+        # Δp: nichtlinearer Anstieg (Exponent 1.8 → exponentiell am Ende)
+        dp = dp_clean + (dp_limit - dp_clean) * clogging**1.8
+        dp = round(max(dp_clean, min(dp, dp_limit)), 4)
+
+        # p2: immer automatisch
+        p2 = round(max(0.0, p1 - dp), 4)
+
+        # Q: sinkt mit Beladung, Minimum 10 % von Q_base
+        q_min = max(1.0, q_base * 0.10)
+        flow = round(max(q_min, q_base * (1.0 - flow_drop_factor * clogging**1.5)), 2)
+
+        # T: Basistemperatur + Trend über Zyklus + langsame Sinusdrift ±0,2 °C
+        drift = 0.2 * math.sin(2.0 * math.pi * now / 600.0)
+        temp = round(t_base + temp_trend_per_cycle * clogging + drift, 2)
+
+        return {"p1": p1, "p2": p2, "dp": dp, "flow": flow, "temp": temp}
+
     def get_readings(self) -> dict:
-        """Berechnet physikalische Werte aus aktuellem clogging-Zustand."""
+        """Berechnet physikalische Werte aus aktuellem clogging-Zustand (Echtzeit-Fortschreibung)."""
         with self._lock:
             now = time.time()
             if self._last_time is None:
@@ -275,26 +315,48 @@ class FilterSimulator:
             dp_clean = self.dp_clean
             dp_limit = self.dp_limit
 
-        # p1: Basiswert mit linearern Trend über den Zyklus
-        p1 = round(p1_base * (1.0 + p1_trend_factor * clogging), 4)
-        p1 = max(0.1, p1)
+        return self._compute_physics(
+            clogging, now, p1_base, q_base, t_base, p1_trend_factor, flow_drop_factor, temp_trend_per_cycle, dp_clean, dp_limit
+        )
 
-        # Δp: nichtlinearer Anstieg (Exponent 1.8 → exponentiell am Ende)
-        dp = dp_clean + (dp_limit - dp_clean) * clogging**1.8
-        dp = round(max(dp_clean, min(dp, dp_limit)), 4)
+    def simulate_cycle_samples(
+        self, steps: list, cycle_steps: int, sampling_interval: float, base_time: float
+    ) -> list:
+        """
+        Erzeugt deterministische physikalische Messwerte an den angegebenen Schritt-Indizes
+        eines hypothetischen Zyklus – identische Physik wie get_readings() (inkl.
+        Temperatur-Drift), ohne den Live-Beladungszustand zu verändern. Für schnell
+        simulierte Referenzzyklen (Quick-Learn).
+        """
+        with self._lock:
+            p1_base = self._p1_base
+            q_base = self._q_base
+            t_base = self._t_base
+            p1_trend_factor = self._p1_trend_factor
+            flow_drop_factor = self._flow_drop_factor
+            temp_trend_per_cycle = self._temp_trend_per_cycle
+            dp_clean = self.dp_clean
+            dp_limit = self.dp_limit
 
-        # p2: immer automatisch
-        p2 = round(max(0.0, p1 - dp), 4)
-
-        # Q: sinkt mit Beladung, Minimum 10 % von Q_base
-        q_min = max(1.0, q_base * 0.10)
-        flow = round(max(q_min, q_base * (1.0 - flow_drop_factor * clogging**1.5)), 2)
-
-        # T: Basistemperatur + Trend über Zyklus + langsame Sinusdrift ±0,2 °C
-        drift = 0.2 * math.sin(2.0 * math.pi * now / 600.0)
-        temp = round(t_base + temp_trend_per_cycle * clogging + drift, 2)
-
-        return {"p1": p1, "p2": p2, "dp": dp, "flow": flow, "temp": temp}
+        result = []
+        for s in steps:
+            clogging = min(s / max(cycle_steps, 1), 1.0)
+            now = base_time + s * sampling_interval
+            result.append(
+                self._compute_physics(
+                    clogging,
+                    now,
+                    p1_base,
+                    q_base,
+                    t_base,
+                    p1_trend_factor,
+                    flow_drop_factor,
+                    temp_trend_per_cycle,
+                    dp_clean,
+                    dp_limit,
+                )
+            )
+        return result
 
 
 # Modulweit geteilte Simulatorinstanz
@@ -363,6 +425,15 @@ def set_simulation_scenario_params(
 def clear_simulation_rates():
     """Setzt Szenario auf Normalbetrieb zurück."""
     _simulator.clear_scenario_params()
+
+
+def simulate_reference_cycle(steps: list, cycle_steps: int, sampling_interval: float, base_time: float) -> list:
+    """
+    Erzeugt deterministische physikalische Messwerte für schnell simulierte Referenzzyklen
+    (Quick-Learn) – identische Physik wie die Echtzeit-Simulation (inkl. Temperatur-Drift),
+    ohne den Live-Beladungszustand zu verändern.
+    """
+    return _simulator.simulate_cycle_samples(steps, cycle_steps, sampling_interval, base_time)
 
 
 def get_simulation_rates_active() -> bool:

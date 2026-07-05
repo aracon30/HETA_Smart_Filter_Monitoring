@@ -45,6 +45,7 @@ from sensors import (
     read_sensors,
     reset_simulation,
     set_simulation_scenario_params,
+    simulate_reference_cycle,
     update_simulation_params,
 )
 from service_logic import (
@@ -1573,53 +1574,41 @@ def api_simulation_quick_learn():
     dp_limit = settings.get("dp_limit_bar", 2.5)
     sampling_interval = settings.get("sampling_interval_seconds", 1)
     # Zyklusdauer aus Simulator ableiten (dirt_rate_factor bestimmt die Dauer)
-    sc_params = get_simulation_scenario_params()
     cycle_secs = get_simulation_estimated_cycle_secs()
     cycle_steps = max(10, int(cycle_secs / max(sampling_interval, 1)))
     required_cycles = settings.get("required_cycles_for_profile", 3)
 
-    # Aktuelle Szenario-Parameter für konsistente Simulation
-    sc = sc_params  # bereits oben abgerufen
-    sim_p1_base = sc.get("p1_base", 4.0)
-    sim_q_base = sc.get("q_base", 145.0)
-    sim_t_base = sc.get("t_base", 25.0)
-    sim_p1_trend = sc.get("p1_trend_factor", 0.0)
-    sim_flow_drop = sc.get("flow_drop_factor", 0.75)
-    sim_temp_trend = sc.get("temp_trend_per_cycle", 0.0)
-    q_min_sim = max(1.0, sim_q_base * 0.10)
-
-    # ── Physikalische Werte identisch mit FilterSimulator.get_readings() ────
-    def _sim_step(s: int) -> dict:
-        clogging = min(s / max(cycle_steps, 1), 1.0)
-        p1 = round(sim_p1_base * (1.0 + sim_p1_trend * clogging), 4)
-        p1 = max(0.1, p1)
-        dp = dp_clean + (dp_limit - dp_clean) * clogging**1.8
-        dp = round(max(dp_clean, min(dp, dp_limit)), 5)
-        p2 = round(max(0.0, p1 - dp), 4)
-        fl = round(max(q_min_sim, sim_q_base * (1.0 - sim_flow_drop * clogging**1.5)), 2)
-        tmp = round(sim_t_base + sim_temp_trend * clogging, 1)
-        return {"dp": dp, "p1": p1, "p2": p2, "flow": fl, "temp": tmp, "r_eff": dp / max(fl, 0.1)}
-
-    start_vals = _sim_step(0)
-    end_vals = _sim_step(cycle_steps)
-
-    # Mittelwerte aus tatsächlichen Samples berechnen (nicht analytisch).
-    # Wichtig bei hohem flow_drop: analytische Formel ignoriert den q_min-Clamp.
-    stride = max(1, cycle_steps // 100)
+    # Sample-Schritte: ~200 Stützpunkte für ausreichende Füllung der 40-Bucket-Referenzkurve.
+    stride = max(1, cycle_steps // 200)
     sample_steps = list(range(0, cycle_steps + 1, stride))
-    all_sample_vals = [_sim_step(s) for s in sample_steps]
-    avg_flow = round(sum(sv["flow"] for sv in all_sample_vals) / len(all_sample_vals), 2)
-    avg_temp = round(sum(sv["temp"] for sv in all_sample_vals) / len(all_sample_vals), 1)
-
-    # Beladungsrate: (dp_ende - dp_start) / Zyklusdauer [bar/s]
-    loading_rate = round((end_vals["dp"] - start_vals["dp"]) / max(cycle_secs, 1.0), 6)
 
     existing = db.count_confirmed_cycles(effective_code)
     needed = max(0, required_cycles - existing)
     now = time.time()
+    loading_rate = 0.0  # Fallback falls needed == 0 (Schleife läuft dann nicht)
 
     for i in range(needed):
         t_start = now - (needed - i) * (cycle_secs + 60)
+
+        # ── Physik identisch mit FilterSimulator.get_readings() (inkl. Temperatur-
+        # Drift) – jeder gelernte Zyklus bekommt seinen eigenen t_start und damit
+        # eine eigene Drift-Phase, genau wie echte, zeitlich versetzte Zyklen. ──
+        boundary_vals = simulate_reference_cycle([0, cycle_steps], cycle_steps, sampling_interval, t_start)
+        start_vals, end_vals = boundary_vals[0], boundary_vals[1]
+        start_vals["r_eff"] = start_vals["dp"] / max(start_vals["flow"], 0.1)
+        end_vals["r_eff"] = end_vals["dp"] / max(end_vals["flow"], 0.1)
+
+        # Mittelwerte aus tatsächlichen Samples berechnen (nicht analytisch).
+        # Wichtig bei hohem flow_drop: analytische Formel ignoriert den q_min-Clamp.
+        sample_vals = simulate_reference_cycle(sample_steps, cycle_steps, sampling_interval, t_start)
+        for sv in sample_vals:
+            sv["r_eff"] = sv["dp"] / max(sv["flow"], 0.1)
+        avg_flow = round(sum(sv["flow"] for sv in sample_vals) / len(sample_vals), 2)
+        avg_temp = round(sum(sv["temp"] for sv in sample_vals) / len(sample_vals), 1)
+
+        # Beladungsrate: (dp_ende - dp_start) / Zyklusdauer [bar/s]
+        loading_rate = round((end_vals["dp"] - start_vals["dp"]) / max(cycle_secs, 1.0), 6)
+
         cycle_id = db.insert_cycle(
             {
                 "heta_code": effective_code,
@@ -1639,7 +1628,7 @@ def api_simulation_quick_learn():
 
         # Zeitreihe aus den bereits berechneten Samples übernehmen.
         samples = []
-        for s, sv in zip(sample_steps, all_sample_vals):
+        for s, sv in zip(sample_steps, sample_vals):
             t = t_start + s * sampling_interval
             samples.append(
                 {

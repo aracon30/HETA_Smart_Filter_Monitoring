@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 logger = logging.getLogger(__name__)
 
-N_CURVE_BUCKETS = 20  # 20 Stützpunkte → je 5 % Zyklusfortschritt
+N_CURVE_BUCKETS = 40  # 40 Stützpunkte → je 2,5 % Zyklusfortschritt (feinere Auflösung für die stark nichtlineare dp-Kurve)
 
 
 @dataclass
