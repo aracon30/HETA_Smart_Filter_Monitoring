@@ -518,104 +518,57 @@ main {
 }
 
 /* ================================================================
-   SIMULATIONS-DEMO-PANEL
+   SIMULATION – Presets-Kachel & Karten-Regler
    ================================================================ */
-.sim-demo-panel {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-top: 3px solid var(--heta-accent);
-  border-radius: var(--radius);
-  padding: .85rem 1.1rem;
-  margin-bottom: 1.5rem;
-  box-shadow: var(--shadow-sm);
-  font-size: .92rem;
-}
-
-.sim-params-header {
-  font-size: .78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  color: var(--text-muted);
-  margin-bottom: .4rem;
+.card-sim-presets {
+  gap: .5rem;
 }
 
 .sim-scenario-buttons {
   display: flex;
-  flex-wrap: wrap;
-  gap: .35rem;
-  margin-bottom: .5rem;
+  flex-direction: column;
+  gap: .3rem;
 }
 .sim-scenario-btn {
-  padding: .28rem .65rem;
-  border-radius: 20px;
+  padding: .4rem .65rem;
+  border-radius: 6px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-muted);
   font-size: .76rem;
   font-weight: 600;
+  text-align: left;
   cursor: pointer;
   transition: background .15s, color .15s, border-color .15s;
 }
 .sim-scenario-btn:hover  { border-color: var(--heta-accent); color: var(--text-main); }
 .sim-scenario-btn.active { background: var(--heta-accent); border-color: var(--heta-accent); color: #fff; }
 
-.sim-demo-badge {
-  font-size: .73rem;
-  background: var(--heta-blue-mid);
-  color: #fff;
-  border-radius: 20px;
-  padding: .2rem .65rem;
-  letter-spacing: .03em;
-}
-
-.sim-demo-hint {
-  font-size: .8rem;
-  color: var(--text-muted);
-  margin: 0 0 .5rem;
-}
-
-.sim-learn-dots {
+.sim-preset-actions {
   display: flex;
-  gap: .4rem;
-  margin-bottom: .6rem;
-}
-.sim-dot {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: var(--border);
-  border: 2px solid rgba(255,255,255,0.2);
-  transition: background .3s;
-}
-.sim-dot.done { background: var(--heta-accent); border-color: var(--heta-accent); }
-
-.sim-sliders { display: flex; flex-direction: column; gap: .4rem; margin-top: .3rem; }
-
-.sim-slider-actions { display: flex; justify-content: flex-end; margin-top: .15rem; }
-
-.sim-info-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: .25rem .1rem;
+  flex-direction: column;
+  gap: .3rem;
+  margin-top: .3rem;
+  padding-top: .4rem;
   border-top: 1px solid var(--border);
-  margin-top: .15rem;
 }
-.sim-info-label { font-size: .78rem; color: var(--text-muted); }
-.sim-info-val   { font-size: .78rem; font-weight: 700; color: var(--text-main); }
 
 .card-sim-slider {
   display: flex;
-  align-items: center;
-  gap: .4rem;
+  flex-direction: column;
+  gap: .2rem;
   margin-top: .4rem;
   padding-top: .4rem;
   border-top: 1px dashed var(--border);
 }
-.card-sim-label { font-size: .68rem; color: var(--text-muted); white-space: nowrap; }
-.card-sim-range { flex: 1; width: 100%; accent-color: var(--heta-accent); cursor: pointer; }
-.card-sim-val   { font-size: .72rem; font-weight: 700; color: var(--heta-accent); text-align: right; white-space: nowrap; min-width: 3.2em; }
+.card-sim-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.card-sim-label { font-size: .68rem; color: var(--text-muted); }
+.card-sim-range { width: 100%; accent-color: var(--heta-accent); cursor: pointer; }
+.card-sim-val   { font-size: .72rem; font-weight: 700; color: var(--heta-accent); white-space: nowrap; }
 
 /* ================================================================
    CYCLES SECTION (inkl. Lernprofil-Status)

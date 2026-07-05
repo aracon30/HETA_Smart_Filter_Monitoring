@@ -226,8 +226,8 @@ class FilterSimulator:
         """Setzt Szenario-Parameter – kein Zyklus-Reset erforderlich."""
         with self._lock:
             self._dirt_rate_factor = max(0.05, dirt_rate_factor)
-            self._p1_trend_factor = max(-0.5, min(0.5, p1_trend_factor))
-            self._p2_trend_factor = max(-0.5, min(0.5, p2_trend_factor))
+            self._p1_trend_factor = max(-1.0, min(1.0, p1_trend_factor))
+            self._p2_trend_factor = max(-1.0, min(1.0, p2_trend_factor))
             self._flow_drop_factor = max(0.10, min(0.99, flow_drop_factor))
             self._temp_trend_per_cycle = max(-20.0, min(20.0, temp_trend_per_cycle))
             self._rates_active = True

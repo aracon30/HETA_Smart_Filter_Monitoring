@@ -1300,77 +1300,41 @@ const SIM_SCENARIOS = {
 
 function toggleCardSimSliders(simMode) {
   document.querySelectorAll(".card-sim-slider").forEach(el => el.classList.toggle("hidden", !simMode));
+  const presetsCard = document.getElementById("card-sim-presets");
+  if (presetsCard) presetsCard.classList.toggle("hidden", !simMode);
 }
 
 function updateSimDemoPanel(d) {
   const simMode = !!d.simulation_mode;
   toggleCardSimSliders(simMode);
-
-  const panel = document.getElementById("sim-demo-panel");
-  if (!panel) return;
-  panel.classList.toggle("hidden", !simMode);
   if (!simMode) return;
 
-  // Geschätzte Zyklusdauer (read-only, aus Physik berechnet)
-  setText("sv-est-cycle-dur", _fmtCycleDur(d.sim_estimated_cycle_secs ?? 300));
-
   const profileValid = d.profile_status === "VALIDIERT";
-  const learnArea    = document.getElementById("sim-learn-area");
-
-  const needed   = Math.max(0, (d.required_cycles ?? 3) - (d.learned_cycles ?? 0));
-  const totalReq = d.required_cycles ?? 3;
-  setText("sim-learn-needed", needed > 0 ? needed : totalReq);
-
-  const dotsEl = document.getElementById("sim-learn-dots");
-  if (dotsEl) {
-    const done = Math.min(d.learned_cycles ?? 0, totalReq);
-    dotsEl.innerHTML = Array.from({length: totalReq}, (_, i) =>
-      `<span class="sim-dot ${i < done ? "done" : ""}"></span>`
-    ).join("");
-  }
-
   const learnBtn = document.getElementById("btn-quick-learn");
   if (learnBtn) learnBtn.disabled = profileValid;
-
-  if (learnArea) learnArea.classList.toggle("hidden", profileValid);
 }
 
 async function quickLearn() {
   const btn = document.getElementById("btn-quick-learn");
   btn.disabled = true;
   btn.textContent = "… Lernzyklen werden simuliert";
-  showMsg("sim-learn-msg", "", false);
 
   const res = await apiFetch("/api/simulation/quick-learn", "POST");
   btn.textContent = "▶ Lernzyklen simulieren";
 
   if (!res) {
-    showMsg("sim-learn-msg", "Verbindungsfehler.", true);
     btn.disabled = false;
     return;
   }
   if (res.success) {
-    showMsg("sim-learn-msg", res.message, false);
     // Cache invalidieren damit die neue Referenzkurve sofort geladen wird
     _refCurveCache = null;
     _refCurveCacheCode = null;
     _knownCycleStart = null;
     _knownLiveCycleStart = null;
   } else {
-    showMsg("sim-learn-msg", res.message, true);
     btn.disabled = false;
   }
-}
-
-function _fmtCycleDur(secs) {
-  const s = Math.round(secs);
-  if (s < 60)  return s + " s";
-  if (s < 3600) {
-    const m = Math.floor(s / 60), r = s % 60;
-    return r ? `${m} min ${r} s` : `${m} min`;
-  }
-  const h = Math.floor(s / 3600), rm = Math.round((s % 3600) / 60);
-  return rm ? `${h} h ${rm} min` : `${h} h`;
 }
 
 function _setSliderValue(id, val) {

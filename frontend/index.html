@@ -761,15 +761,41 @@
       <!-- Messkarten -->
       <section class="cards-grid">
 
+        <div class="card card-sim-presets hidden" id="card-sim-presets">
+          <div class="card-label">Simulationsszenario</div>
+          <div class="sim-scenario-buttons" id="sim-scenario-buttons">
+            <button class="sim-scenario-btn active" data-scenario="normal"
+                    onclick="selectScenario('normal')">Normalbetrieb</button>
+            <button class="sim-scenario-btn" data-scenario="high_dirt"
+                    onclick="selectScenario('high_dirt')">Hohe Verschmutzung</button>
+            <button class="sim-scenario-btn" data-scenario="low_p1"
+                    onclick="selectScenario('low_p1')">Sinkender Druck</button>
+            <button class="sim-scenario-btn" data-scenario="high_flow_drop"
+                    onclick="selectScenario('high_flow_drop')">Starker Q-Abfall</button>
+            <button class="sim-scenario-btn" data-scenario="rising_temp"
+                    onclick="selectScenario('rising_temp')">Steigende Temp.</button>
+            <button class="sim-scenario-btn" data-scenario="atypical"
+                    onclick="selectScenario('atypical')">Untypisch</button>
+          </div>
+          <div class="sim-preset-actions">
+            <button class="btn btn-ghost btn-sm" onclick="resetSliders()">&#8635; Normalbetrieb</button>
+            <button class="btn btn-primary btn-sm" id="btn-quick-learn" onclick="quickLearn()">
+              &#9654; Lernzyklen simulieren
+            </button>
+          </div>
+        </div>
+
         <div class="card" id="card-p1">
           <div class="card-label">Eintrittsdruck p<sub>1</sub></div>
           <div class="card-value" id="val-p1">–</div>
           <div class="card-unit">bar</div>
           <div class="card-sim-slider hidden" id="csl-p1">
-            <span class="card-sim-label">Trend</span>
-            <input type="range" class="card-sim-range" id="sl-card-p1-trend" min="-20" max="20" step="1" value="0"
+            <div class="card-sim-row">
+              <span class="card-sim-label">Trend</span>
+              <span class="card-sim-val" id="sv-card-p1-trend">0 %</span>
+            </div>
+            <input type="range" class="card-sim-range" id="sl-card-p1-trend" min="-100" max="100" step="1" value="0"
                    oninput="onCardSliderInput('p1_trend', this.value)">
-            <span class="card-sim-val" id="sv-card-p1-trend">0 %</span>
           </div>
         </div>
 
@@ -778,10 +804,12 @@
           <div class="card-value" id="val-p2">–</div>
           <div class="card-unit">bar</div>
           <div class="card-sim-slider hidden" id="csl-p2">
-            <span class="card-sim-label">Trend</span>
-            <input type="range" class="card-sim-range" id="sl-card-p2-trend" min="-20" max="20" step="1" value="0"
+            <div class="card-sim-row">
+              <span class="card-sim-label">Trend</span>
+              <span class="card-sim-val" id="sv-card-p2-trend">0 %</span>
+            </div>
+            <input type="range" class="card-sim-range" id="sl-card-p2-trend" min="-100" max="100" step="1" value="0"
                    oninput="onCardSliderInput('p2_trend', this.value)">
-            <span class="card-sim-val" id="sv-card-p2-trend">0 %</span>
           </div>
         </div>
 
@@ -791,10 +819,12 @@
           <div class="card-unit">bar</div>
           <div class="card-sub" id="dp-limit-hint"></div>
           <div class="card-sim-slider hidden" id="csl-dp">
-            <span class="card-sim-label">Verschmutzung</span>
+            <div class="card-sim-row">
+              <span class="card-sim-label">Verschmutzung</span>
+              <span class="card-sim-val" id="sv-card-dp-dirt">100 %</span>
+            </div>
             <input type="range" class="card-sim-range" id="sl-card-dp-dirt" min="10" max="400" step="5" value="100"
                    oninput="onCardSliderInput('dirt_rate', this.value)">
-            <span class="card-sim-val" id="sv-card-dp-dirt">100 %</span>
           </div>
         </div>
 
@@ -818,10 +848,12 @@
             <div class="flow-card-indicator__expand-hint">&#9650; Anzeigen</div>
           </div>
           <div class="card-sim-slider hidden" id="csl-flow" onclick="event.stopPropagation()">
-            <span class="card-sim-label">Verschmutzung</span>
+            <div class="card-sim-row">
+              <span class="card-sim-label">Verschmutzung</span>
+              <span class="card-sim-val" id="sv-card-flow-dirt">100 %</span>
+            </div>
             <input type="range" class="card-sim-range" id="sl-card-flow-dirt" min="10" max="400" step="5" value="100"
                    oninput="onCardSliderInput('dirt_rate', this.value)" onclick="event.stopPropagation()">
-            <span class="card-sim-val" id="sv-card-flow-dirt">100 %</span>
           </div>
         </div>
 
@@ -830,10 +862,12 @@
           <div class="card-value" id="val-temp">–</div>
           <div class="card-unit">°C</div>
           <div class="card-sim-slider hidden" id="csl-temp">
-            <span class="card-sim-label">Trend</span>
+            <div class="card-sim-row">
+              <span class="card-sim-label">Trend</span>
+              <span class="card-sim-val" id="sv-card-temp-trend">0 °C</span>
+            </div>
             <input type="range" class="card-sim-range" id="sl-card-temp-trend" min="-5" max="5" step="0.5" value="0"
                    oninput="onCardSliderInput('temp_trend', this.value)">
-            <span class="card-sim-val" id="sv-card-temp-trend">0 °C</span>
           </div>
         </div>
 
@@ -1022,60 +1056,6 @@
           <button class="btn btn-ghost" onclick="showDemo()">Demo-PIN anzeigen</button>
         </div>
         <div id="heta-msg" class="msg"></div>
-      </section>
-
-      <!-- Simulations-Demo-Panel -->
-      <section id="sim-demo-panel" class="sim-demo-panel hidden">
-        <div class="section-header">
-          <div class="section-title-group">
-            <h2 class="section-title">Simulation</h2>
-            <span class="badge badge-sim">Nur im Simulationsmodus</span>
-          </div>
-        </div>
-
-        <!-- Szenario-Parameter – immer sichtbar im Sim-Modus -->
-        <div id="sim-params-area">
-          <div class="sim-params-header">Prozessszenario</div>
-          <div class="sim-scenario-buttons" id="sim-scenario-buttons">
-            <button class="sim-scenario-btn active" data-scenario="normal"
-                    onclick="selectScenario('normal')">Normalbetrieb</button>
-            <button class="sim-scenario-btn" data-scenario="high_dirt"
-                    onclick="selectScenario('high_dirt')">Hohe Verschmutzung</button>
-            <button class="sim-scenario-btn" data-scenario="low_p1"
-                    onclick="selectScenario('low_p1')">Sinkender Druck</button>
-            <button class="sim-scenario-btn" data-scenario="high_flow_drop"
-                    onclick="selectScenario('high_flow_drop')">Starker Q-Abfall</button>
-            <button class="sim-scenario-btn" data-scenario="rising_temp"
-                    onclick="selectScenario('rising_temp')">Steigende Temp.</button>
-            <button class="sim-scenario-btn" data-scenario="atypical"
-                    onclick="selectScenario('atypical')">Untypisch</button>
-          </div>
-
-          <div class="sim-sliders" id="sim-sliders">
-
-            <div class="sim-info-row">
-              <span class="sim-info-label">Geschätzte Zyklusdauer</span>
-              <span class="sim-info-val" id="sv-est-cycle-dur">– min</span>
-            </div>
-
-            <div class="sim-slider-actions">
-              <button class="btn btn-ghost btn-sm" onclick="resetSliders()">&#8635; Normalbetrieb</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Lernphase – nur sichtbar solange kein valides Profil -->
-        <div id="sim-learn-area">
-          <p class="sim-demo-hint">
-            Simuliert <strong id="sim-learn-needed">3</strong> Lernzyklen,
-            damit das Profil sofort als Referenz verfügbar ist.
-          </p>
-          <div class="sim-learn-dots" id="sim-learn-dots"></div>
-          <button class="btn btn-primary btn-sm" id="btn-quick-learn" onclick="quickLearn()">
-            &#9654; Lernzyklen simulieren
-          </button>
-          <div id="sim-learn-msg" class="msg"></div>
-        </div>
       </section>
 
       <!-- Systemstatus – ganz unten, inkl. Export & Service -->
