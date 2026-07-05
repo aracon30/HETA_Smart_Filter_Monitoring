@@ -590,43 +590,8 @@ main {
 }
 .sim-dot.done { background: var(--heta-accent); border-color: var(--heta-accent); }
 
-.sim-manual-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-weight: 600;
-  font-size: .85rem;
-  color: var(--heta-blue-mid);
-  margin-bottom: .5rem;
-}
-
-.toggle-wrap {
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-  cursor: pointer;
-  font-weight: 400;
-  font-size: .88rem;
-}
-.toggle-wrap input[type="checkbox"] {
-  width: 1.1rem;
-  height: 1.1rem;
-  accent-color: var(--heta-accent);
-  cursor: pointer;
-}
-
 .sim-sliders { display: flex; flex-direction: column; gap: .4rem; margin-top: .3rem; }
 
-.sim-slider-row {
-  display: grid;
-  grid-template-columns: 150px 1fr 70px;
-  align-items: center;
-  gap: .6rem;
-}
-.sim-slider-label { font-size: .78rem; color: var(--text-main); }
-.sim-slider-note  { display: block; font-size: .68rem; color: var(--text-muted); font-weight: 400; }
-.sim-slider       { width: 100%; accent-color: var(--heta-accent); cursor: pointer; }
-.sim-slider-val   { font-size: .78rem; font-weight: 700; color: var(--heta-accent); text-align: right; white-space: nowrap; }
 .sim-slider-actions { display: flex; justify-content: flex-end; margin-top: .15rem; }
 
 .sim-info-row {
@@ -640,32 +605,17 @@ main {
 .sim-info-label { font-size: .78rem; color: var(--text-muted); }
 .sim-info-val   { font-size: .78rem; font-weight: 700; color: var(--text-main); }
 
-.sim-comparison { margin-top: 1.25rem; border-top: 1px solid var(--border); padding-top: 1rem; }
-.sim-cmp-title  { font-weight: 700; font-size: .88rem; color: var(--heta-blue-mid); margin-bottom: .6rem; }
-.sim-cmp-grid   {
-  display: grid;
-  grid-template-columns: 110px 1fr 1fr 90px;
-  gap: .3rem .5rem;
-  font-size: .83rem;
-  margin-bottom: .75rem;
+.card-sim-slider {
+  display: flex;
   align-items: center;
+  gap: .4rem;
+  margin-top: .4rem;
+  padding-top: .4rem;
+  border-top: 1px dashed var(--border);
 }
-.sim-cmp-head {
-  font-weight: 700;
-  font-size: .73rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: .2rem;
-}
-.sim-cmp-label { color: var(--text-main); }
-.sim-cmp-val   { color: var(--text-main); font-variant-numeric: tabular-nums; }
-.sim-cmp-dev   { font-weight: 700; text-align: right; border-radius: 4px; padding: .1rem .35rem; white-space: nowrap; }
-.sim-cmp-dev.dev-ok   { background: rgba(34,197,94,0.15);  color: #22c55e; }
-.sim-cmp-dev.dev-warn { background: rgba(245,158,11,0.15); color: #f59e0b; }
-.sim-cmp-dev.dev-crit { background: rgba(239,68,68,0.15);  color: #ef4444; }
-.sim-diagnosis { background: rgba(56,189,248,0.08); border-left: 3px solid var(--heta-accent); border-radius: 0 6px 6px 0; padding: .6rem .85rem; font-size: .85rem; color: #7dd3fc; line-height: 1.5; }
+.card-sim-label { font-size: .68rem; color: var(--text-muted); white-space: nowrap; }
+.card-sim-range { flex: 1; width: 100%; accent-color: var(--heta-accent); cursor: pointer; }
+.card-sim-val   { font-size: .72rem; font-weight: 700; color: var(--heta-accent); text-align: right; white-space: nowrap; min-width: 3.2em; }
 
 /* ================================================================
    CYCLES SECTION (inkl. Lernprofil-Status)
@@ -1822,16 +1772,10 @@ footer {
   .mode-cards { flex-direction: column; }
   .wizard { max-height: 95vh; overflow-y: auto; }
   .modal  { max-height: 95vh; }
-  .sim-slider-row { grid-template-columns: 1fr; gap: .4rem; }
-  .sim-slider-val { text-align: left; }
   .analysis-grid { grid-template-columns: 120px 1fr; }
   .analysis-head:nth-child(n+3),
   .analysis-val:nth-child(4n),
   .analysis-dev { display: none; }
-  .sim-cmp-grid { grid-template-columns: 1fr 1fr; }
-  .sim-cmp-head:nth-child(n+3),
-  .sim-cmp-val:nth-child(3n),
-  .sim-cmp-dev { display: none; }
   .cycles-table { font-size: .78rem; }
   .cycles-table th, .cycles-table td { padding: .45rem .5rem; }
   .header-meta { display: none; }

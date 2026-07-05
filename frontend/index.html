@@ -765,12 +765,24 @@
           <div class="card-label">Eintrittsdruck p<sub>1</sub></div>
           <div class="card-value" id="val-p1">–</div>
           <div class="card-unit">bar</div>
+          <div class="card-sim-slider hidden" id="csl-p1">
+            <span class="card-sim-label">Trend</span>
+            <input type="range" class="card-sim-range" id="sl-card-p1-trend" min="-20" max="20" step="1" value="0"
+                   oninput="onCardSliderInput('p1_trend', this.value)">
+            <span class="card-sim-val" id="sv-card-p1-trend">0 %</span>
+          </div>
         </div>
 
         <div class="card" id="card-p2">
           <div class="card-label">Austrittsdruck p<sub>2</sub></div>
           <div class="card-value" id="val-p2">–</div>
           <div class="card-unit">bar</div>
+          <div class="card-sim-slider hidden" id="csl-p2">
+            <span class="card-sim-label">Trend</span>
+            <input type="range" class="card-sim-range" id="sl-card-p2-trend" min="-20" max="20" step="1" value="0"
+                   oninput="onCardSliderInput('p2_trend', this.value)">
+            <span class="card-sim-val" id="sv-card-p2-trend">0 %</span>
+          </div>
         </div>
 
         <div class="card card-highlight" id="card-dp">
@@ -778,6 +790,12 @@
           <div class="card-value" id="val-dp">–</div>
           <div class="card-unit">bar</div>
           <div class="card-sub" id="dp-limit-hint"></div>
+          <div class="card-sim-slider hidden" id="csl-dp">
+            <span class="card-sim-label">Verschmutzung</span>
+            <input type="range" class="card-sim-range" id="sl-card-dp-dirt" min="10" max="400" step="5" value="100"
+                   oninput="onCardSliderInput('dirt_rate', this.value)">
+            <span class="card-sim-val" id="sv-card-dp-dirt">100 %</span>
+          </div>
         </div>
 
         <div class="card" id="card-flow" onclick="expandFlowOverlay()">
@@ -799,12 +817,24 @@
             </div>
             <div class="flow-card-indicator__expand-hint">&#9650; Anzeigen</div>
           </div>
+          <div class="card-sim-slider hidden" id="csl-flow" onclick="event.stopPropagation()">
+            <span class="card-sim-label">Verschmutzung</span>
+            <input type="range" class="card-sim-range" id="sl-card-flow-dirt" min="10" max="400" step="5" value="100"
+                   oninput="onCardSliderInput('dirt_rate', this.value)" onclick="event.stopPropagation()">
+            <span class="card-sim-val" id="sv-card-flow-dirt">100 %</span>
+          </div>
         </div>
 
         <div class="card" id="card-temp">
           <div class="card-label">Temperatur T</div>
           <div class="card-value" id="val-temp">–</div>
           <div class="card-unit">°C</div>
+          <div class="card-sim-slider hidden" id="csl-temp">
+            <span class="card-sim-label">Trend</span>
+            <input type="range" class="card-sim-range" id="sl-card-temp-trend" min="-5" max="5" step="0.5" value="0"
+                   oninput="onCardSliderInput('temp_trend', this.value)">
+            <span class="card-sim-val" id="sv-card-temp-trend">0 °C</span>
+          </div>
         </div>
 
         <div class="card" id="card-reff">
@@ -1028,50 +1058,6 @@
               <span class="sim-info-val" id="sv-est-cycle-dur">– min</span>
             </div>
 
-            <div class="sim-slider-row">
-              <label class="sim-slider-label">
-                Beladungsintensität
-                <span class="sim-slider-note">Höher = schnellere Verschmutzung = kürzerer Zyklus</span>
-              </label>
-              <input type="range" id="sl-dirt-rate" class="sim-slider"
-                     min="10" max="400" step="5" value="100"
-                     oninput="onSliderInput('dirt_rate', this.value)">
-              <span class="sim-slider-val" id="sv-dirt-rate">100 %</span>
-            </div>
-
-            <div class="sim-slider-row">
-              <label class="sim-slider-label">
-                Drucktrend p<sub>1</sub>
-                <span class="sim-slider-note">% über Zyklus (0 = stabil)</span>
-              </label>
-              <input type="range" id="sl-p1-trend" class="sim-slider"
-                     min="-20" max="20" step="1" value="0"
-                     oninput="onSliderInput('p1_trend', this.value)">
-              <span class="sim-slider-val" id="sv-p1-trend">0 %</span>
-            </div>
-
-            <div class="sim-slider-row">
-              <label class="sim-slider-label">
-                Durchflussabfall
-                <span class="sim-slider-note">% bei voller Beladung</span>
-              </label>
-              <input type="range" id="sl-flow-drop" class="sim-slider"
-                     min="10" max="99" step="5" value="75"
-                     oninput="onSliderInput('flow_drop', this.value)">
-              <span class="sim-slider-val" id="sv-flow-drop">75 %</span>
-            </div>
-
-            <div class="sim-slider-row">
-              <label class="sim-slider-label">
-                Temperaturtrend
-                <span class="sim-slider-note">°C pro Zyklus</span>
-              </label>
-              <input type="range" id="sl-temp-trend" class="sim-slider"
-                     min="-5" max="5" step="0.5" value="0"
-                     oninput="onSliderInput('temp_trend', this.value)">
-              <span class="sim-slider-val" id="sv-temp-trend">0 °C</span>
-            </div>
-
             <div class="sim-slider-actions">
               <button class="btn btn-ghost btn-sm" onclick="resetSliders()">&#8635; Normalbetrieb</button>
             </div>
@@ -1089,43 +1075,6 @@
             &#9654; Lernzyklen simulieren
           </button>
           <div id="sim-learn-msg" class="msg"></div>
-        </div>
-
-        <!-- Analyse – nur sichtbar nach validem Profil -->
-        <div id="sim-analysis-area" class="hidden">
-          <div class="sim-manual-header">
-            <span>Vergleich mit Referenzprofil</span>
-            <label class="toggle-wrap">
-              <input type="checkbox" id="sim-manual-toggle" onchange="onManualToggle(this)">
-              <span class="toggle-label">Analyse aktiv</span>
-            </label>
-          </div>
-
-          <div id="sim-comparison" class="sim-comparison hidden">
-            <div class="sim-cmp-title">Abweichung vom gelernten Profil</div>
-            <div class="sim-cmp-grid">
-              <div class="sim-cmp-head">Größe</div>
-              <div class="sim-cmp-head">Referenz</div>
-              <div class="sim-cmp-head">Aktuell</div>
-              <div class="sim-cmp-head">Abweichung</div>
-
-              <div class="sim-cmp-label">&#916;p-Rate</div>
-              <div id="cmp-dp-ref" class="sim-cmp-val">–</div>
-              <div id="cmp-dp-cur" class="sim-cmp-val">–</div>
-              <div id="cmp-dp-dev" class="sim-cmp-dev">–</div>
-
-              <div class="sim-cmp-label">Durchfluss</div>
-              <div id="cmp-flow-ref" class="sim-cmp-val">–</div>
-              <div id="cmp-flow-cur" class="sim-cmp-val">–</div>
-              <div id="cmp-flow-dev" class="sim-cmp-dev">–</div>
-
-              <div class="sim-cmp-label">Temperatur</div>
-              <div id="cmp-temp-ref" class="sim-cmp-val">–</div>
-              <div id="cmp-temp-cur" class="sim-cmp-val">–</div>
-              <div id="cmp-temp-dev" class="sim-cmp-dev">–</div>
-            </div>
-            <div id="sim-diagnosis" class="sim-diagnosis"></div>
-          </div>
         </div>
       </section>
 

@@ -1287,22 +1287,27 @@ function buildDiagnosis(dpDevPct, flowDevPct, tempDev, isSlopeBase = false) {
 // ============================================================
 
 let _sliderDebounce = null;
-let _rateValues = { dirt_rate_pct: 100.0, p1_trend_pct: 0.0, flow_drop_pct: 75.0, temp_trend: 0.0 };
+let _rateValues = { dirt_rate_pct: 100.0, p1_trend_pct: 0.0, p2_trend_pct: 0.0, flow_drop_pct: 75.0, temp_trend: 0.0 };
 
 const SIM_SCENARIOS = {
-  normal:         { dirt_rate_pct: 100, p1_trend_pct:   0, flow_drop_pct: 75, temp_trend:  0 },
-  high_dirt:      { dirt_rate_pct: 150, p1_trend_pct:   0, flow_drop_pct: 75, temp_trend:  0 },
-  low_p1:         { dirt_rate_pct: 100, p1_trend_pct:  -5, flow_drop_pct: 75, temp_trend:  0 },
-  high_flow_drop: { dirt_rate_pct: 100, p1_trend_pct:   0, flow_drop_pct: 85, temp_trend:  0 },
-  rising_temp:    { dirt_rate_pct: 100, p1_trend_pct:   0, flow_drop_pct: 75, temp_trend:  3 },
-  atypical:       { dirt_rate_pct: 130, p1_trend_pct:  -5, flow_drop_pct: 85, temp_trend:  2 },
+  normal:         { dirt_rate_pct: 100, p1_trend_pct:   0, p2_trend_pct: 0, flow_drop_pct: 75, temp_trend:  0 },
+  high_dirt:      { dirt_rate_pct: 150, p1_trend_pct:   0, p2_trend_pct: 0, flow_drop_pct: 75, temp_trend:  0 },
+  low_p1:         { dirt_rate_pct: 100, p1_trend_pct:  -5, p2_trend_pct: 0, flow_drop_pct: 75, temp_trend:  0 },
+  high_flow_drop: { dirt_rate_pct: 100, p1_trend_pct:   0, p2_trend_pct: 0, flow_drop_pct: 85, temp_trend:  0 },
+  rising_temp:    { dirt_rate_pct: 100, p1_trend_pct:   0, p2_trend_pct: 0, flow_drop_pct: 75, temp_trend:  3 },
+  atypical:       { dirt_rate_pct: 130, p1_trend_pct:  -5, p2_trend_pct: 0, flow_drop_pct: 85, temp_trend:  2 },
 };
 
+function toggleCardSimSliders(simMode) {
+  document.querySelectorAll(".card-sim-slider").forEach(el => el.classList.toggle("hidden", !simMode));
+}
+
 function updateSimDemoPanel(d) {
+  const simMode = !!d.simulation_mode;
+  toggleCardSimSliders(simMode);
+
   const panel = document.getElementById("sim-demo-panel");
   if (!panel) return;
-
-  const simMode = !!d.simulation_mode;
   panel.classList.toggle("hidden", !simMode);
   if (!simMode) return;
 
@@ -1311,7 +1316,6 @@ function updateSimDemoPanel(d) {
 
   const profileValid = d.profile_status === "VALIDIERT";
   const learnArea    = document.getElementById("sim-learn-area");
-  const analysisArea = document.getElementById("sim-analysis-area");
 
   const needed   = Math.max(0, (d.required_cycles ?? 3) - (d.learned_cycles ?? 0));
   const totalReq = d.required_cycles ?? 3;
@@ -1328,88 +1332,7 @@ function updateSimDemoPanel(d) {
   const learnBtn = document.getElementById("btn-quick-learn");
   if (learnBtn) learnBtn.disabled = profileValid;
 
-  if (profileValid) {
-    if (learnArea)    learnArea.classList.add("hidden");
-    if (analysisArea) analysisArea.classList.remove("hidden");
-    const toggle = document.getElementById("sim-manual-toggle");
-    if (toggle && !toggle.dataset.userSet) toggle.checked = !!d.sim_rates_active;
-    updateComparison(d);
-  } else {
-    if (learnArea)    learnArea.classList.remove("hidden");
-    if (analysisArea) analysisArea.classList.add("hidden");
-  }
-}
-
-function updateComparison(d) {
-  const cmpEl = document.getElementById("sim-comparison");
-  if (!cmpEl) return;
-
-  const active = !!d.sim_rates_active;
-  cmpEl.classList.toggle("hidden", !active);
-  if (!active) return;
-
-  const s        = window._settings || {};
-  const dp_clean = d.reference_dp_clean || s.dp_clean_bar || 0.2;
-  const dp_limit = s.dp_limit_bar ?? 2.5;
-  const cyc_secs = d.sim_estimated_cycle_secs ?? 300;
-  const ref_rate  = (dp_limit - dp_clean) / Math.max(cyc_secs, 1);
-
-  const dirt_pct     = d.sim_dirt_rate_pct      ?? 100.0;
-  const dp_dev       = d.sim_dp_deviation_pct   ?? 0.0;
-  const flow_drop    = d.sim_flow_drop_pct       ?? 75.0;
-  const flow_dev     = d.sim_flow_deviation_pct  ?? 0.0;
-  const temp_trend   = d.sim_temp_trend          ?? 0.0;
-  const temp_dev     = d.sim_temp_deviation      ?? 0.0;
-
-  const q_base   = s.sim_q_base_l_min ?? 145.0;
-  const t_base   = s.sim_t_base_c     ?? 25.0;
-  const ref_flow = d.analysis_ref_flow || (q_base * (1 - 0.4 * 0.75));
-  const ref_temp = d.analysis_ref_temp || t_base;
-
-  setText("cmp-dp-ref",   `${(ref_rate * 1000).toFixed(2)} mbar/s`);
-  setText("cmp-dp-cur",   `${(ref_rate * dirt_pct / 100 * 1000).toFixed(2)} mbar/s`);
-  setDev("cmp-dp-dev",    dp_dev, "%");
-
-  setText("cmp-flow-ref", `${ref_flow.toFixed(1)} l/min`);
-  setText("cmp-flow-cur", `${flow_drop.toFixed(0)} % Abfall`);
-  setDev("cmp-flow-dev",  flow_dev, "%");
-
-  const tSign = temp_trend >= 0 ? "+" : "";
-  setText("cmp-temp-ref", `${ref_temp.toFixed(1)} °C`);
-  setText("cmp-temp-cur", `${tSign}${temp_trend.toFixed(1)} °C/Zyklus`);
-  setDev("cmp-temp-dev",  temp_dev, "°C", true);
-
-  setText("sim-diagnosis", buildSimDiagnosis(dirt_pct / 100.0, flow_drop, temp_trend));
-}
-
-function setDev(id, val, unit, isAbsolute = false) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const sign = val > 0 ? "+" : "";
-  el.textContent = `${sign}${val.toFixed(isAbsolute ? 1 : 0)} ${unit}`;
-  el.className = "sim-cmp-dev " + (
-    Math.abs(val) < (isAbsolute ? 5 : 10)  ? "dev-ok"  :
-    Math.abs(val) < (isAbsolute ? 15 : 30) ? "dev-warn" : "dev-crit"
-  );
-}
-
-function buildSimDiagnosis(dirtF, flowDrop, tempTrend) {
-  const parts = [];
-  if (dirtF > 1.8)
-    parts.push("Sehr hohe Verschmutzungsrate – Filterwechselintervall deutlich verkürzt. Erhöhte Partikelkonzentration oder Filterschaden möglich.");
-  else if (dirtF > 1.2)
-    parts.push("Erhöhte Verschmutzungsrate – Reststandzeit sinkt schneller als Referenz.");
-  else if (dirtF < 0.6)
-    parts.push("Geringe Verschmutzungsrate – verlängertes Filterwechselintervall.");
-  if ((flowDrop ?? 75) > 85)
-    parts.push("Starker Durchflussabfall – mögliche Verstopfung oder erhöhter Gegendruck.");
-  else if ((flowDrop ?? 75) < 40)
-    parts.push("Geringer Durchflussabfall – sehr stabile Prozessbedingungen.");
-  if (Math.abs(tempTrend ?? 0) >= 3)
-    parts.push(`Signifikanter Temperaturtrend (${(tempTrend ?? 0) > 0 ? "+" : ""}${(tempTrend ?? 0).toFixed(1)} °C/Zyklus) – Prozess oder Umgebung verändert sich.`);
-  if (parts.length === 0)
-    return "✔ Prozessparameter im gelernten Normalbereich – kein Handlungsbedarf.";
-  return "💡 " + parts.join(" ");
+  if (learnArea) learnArea.classList.toggle("hidden", profileValid);
 }
 
 async function quickLearn() {
@@ -1450,22 +1373,32 @@ function _fmtCycleDur(secs) {
   return rm ? `${h} h ${rm} min` : `${h} h`;
 }
 
-function onSliderInput(which, rawVal) {
+function _setSliderValue(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.value = val;
+}
+
+function onCardSliderInput(which, rawVal) {
   const v = parseFloat(rawVal);
   if (which === "dirt_rate") {
     _rateValues.dirt_rate_pct = v;
-    setText("sv-dirt-rate", Math.round(v) + " %");
+    const label = Math.round(v) + " %";
+    setText("sv-card-dp-dirt", label);
+    setText("sv-card-flow-dirt", label);
+    _setSliderValue("sl-card-dp-dirt", v);
+    _setSliderValue("sl-card-flow-dirt", v);
   } else if (which === "p1_trend") {
     _rateValues.p1_trend_pct = v;
     const sign = v >= 0 ? "+" : "";
-    setText("sv-p1-trend", sign + Math.round(v) + " %");
-  } else if (which === "flow_drop") {
-    _rateValues.flow_drop_pct = v;
-    setText("sv-flow-drop", Math.round(v) + " %");
+    setText("sv-card-p1-trend", sign + Math.round(v) + " %");
+  } else if (which === "p2_trend") {
+    _rateValues.p2_trend_pct = v;
+    const sign = v >= 0 ? "+" : "";
+    setText("sv-card-p2-trend", sign + Math.round(v) + " %");
   } else if (which === "temp_trend") {
     _rateValues.temp_trend = v;
     const sign = v >= 0 ? "+" : "";
-    setText("sv-temp-trend", sign + v.toFixed(1) + " °C");
+    setText("sv-card-temp-trend", sign + v.toFixed(1) + " °C");
   }
   // Szenario-Buttons: bei manueller Änderung deaktivieren
   document.querySelectorAll(".sim-scenario-btn").forEach(b => b.classList.remove("active"));
@@ -1483,6 +1416,7 @@ async function sendSliderValues(scenario) {
     scenario:       scenario || "custom",
     dirt_rate_pct:  _rateValues.dirt_rate_pct,
     p1_trend_pct:   _rateValues.p1_trend_pct,
+    p2_trend_pct:   _rateValues.p2_trend_pct,
     flow_drop_pct:  _rateValues.flow_drop_pct,
     temp_trend:     _rateValues.temp_trend,
   });
@@ -1493,34 +1427,25 @@ function selectScenario(name) {
   if (!sc) return;
   _rateValues = { ...sc };
 
-  const setSlider = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
-  setSlider("sl-dirt-rate",  sc.dirt_rate_pct);
-  setSlider("sl-p1-trend",   sc.p1_trend_pct);
-  setSlider("sl-flow-drop",  sc.flow_drop_pct);
-  setSlider("sl-temp-trend", sc.temp_trend);
+  _setSliderValue("sl-card-p1-trend",   sc.p1_trend_pct);
+  _setSliderValue("sl-card-p2-trend",   sc.p2_trend_pct);
+  _setSliderValue("sl-card-dp-dirt",    sc.dirt_rate_pct);
+  _setSliderValue("sl-card-flow-dirt",  sc.dirt_rate_pct);
+  _setSliderValue("sl-card-temp-trend", sc.temp_trend);
 
-  setText("sv-dirt-rate",  Math.round(sc.dirt_rate_pct) + " %");
-  const ps = sc.p1_trend_pct >= 0 ? "+" : "";
-  setText("sv-p1-trend",   ps + Math.round(sc.p1_trend_pct) + " %");
-  setText("sv-flow-drop",  Math.round(sc.flow_drop_pct) + " %");
+  const p1s = sc.p1_trend_pct >= 0 ? "+" : "";
+  setText("sv-card-p1-trend", p1s + Math.round(sc.p1_trend_pct) + " %");
+  const p2s = sc.p2_trend_pct >= 0 ? "+" : "";
+  setText("sv-card-p2-trend", p2s + Math.round(sc.p2_trend_pct) + " %");
+  setText("sv-card-dp-dirt",   Math.round(sc.dirt_rate_pct) + " %");
+  setText("sv-card-flow-dirt", Math.round(sc.dirt_rate_pct) + " %");
   const ts = sc.temp_trend >= 0 ? "+" : "";
-  setText("sv-temp-trend", ts + sc.temp_trend.toFixed(1) + " °C");
+  setText("sv-card-temp-trend", ts + sc.temp_trend.toFixed(1) + " °C");
 
   document.querySelectorAll(".sim-scenario-btn").forEach(b => {
     b.classList.toggle("active", b.dataset.scenario === name);
   });
   sendSliderValues(name);
-}
-
-async function onManualToggle(checkbox) {
-  checkbox.dataset.userSet = "1";
-  if (checkbox.checked) {
-    await sendSliderValues("custom");
-  } else {
-    clearTimeout(_sliderDebounce);
-    await apiFetch("/api/simulation/set-rates", "POST", { active: false });
-  }
-  setTimeout(() => { checkbox.dataset.userSet = ""; }, 3000);
 }
 
 function resetSliders() {

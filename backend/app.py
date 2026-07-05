@@ -217,11 +217,9 @@ _state = {
     "sim_scenario": "normal",
     "sim_dirt_rate_pct": 100.0,
     "sim_p1_trend_pct": 0.0,
+    "sim_p2_trend_pct": 0.0,
     "sim_flow_drop_pct": 75.0,
     "sim_temp_trend": 0.0,
-    "sim_dp_deviation_pct": 0.0,
-    "sim_flow_deviation_pct": 0.0,
-    "sim_temp_deviation": 0.0,
     # Modusneutrale Prozessanalyse (Sensor- UND Simulationsmodus)
     "analysis_active": False,  # True wenn Profil valide + läuft
     "analysis_ready": False,  # True wenn Kurvenvergleich verfügbar
@@ -1548,11 +1546,9 @@ def api_simulation_reset():
         _state["sim_scenario"] = "normal"
         _state["sim_dirt_rate_pct"] = 100.0
         _state["sim_p1_trend_pct"] = 0.0
+        _state["sim_p2_trend_pct"] = 0.0
         _state["sim_flow_drop_pct"] = 75.0
         _state["sim_temp_trend"] = 0.0
-        _state["sim_dp_deviation_pct"] = 0.0
-        _state["sim_flow_deviation_pct"] = 0.0
-        _state["sim_temp_deviation"] = 0.0
     return jsonify({"success": True, "message": "System zurückgesetzt."})
 
 
@@ -1709,15 +1705,14 @@ def api_simulation_set_rates():
             _state["sim_scenario"] = "normal"
             _state["sim_dirt_rate_pct"] = 100.0
             _state["sim_p1_trend_pct"] = 0.0
+            _state["sim_p2_trend_pct"] = 0.0
             _state["sim_flow_drop_pct"] = 75.0
             _state["sim_temp_trend"] = 0.0
-            _state["sim_dp_deviation_pct"] = 0.0
-            _state["sim_flow_deviation_pct"] = 0.0
-            _state["sim_temp_deviation"] = 0.0
         return jsonify({"success": True, "active": False})
 
     dirt_rate_pct = max(10.0, min(float(data.get("dirt_rate_pct", 100.0)), 400.0))
     p1_trend_pct = max(-20.0, min(float(data.get("p1_trend_pct", 0.0)), 20.0))
+    p2_trend_pct = max(-20.0, min(float(data.get("p2_trend_pct", 0.0)), 20.0))
     flow_drop_pct = max(10.0, min(float(data.get("flow_drop_pct", 75.0)), 99.0))
     temp_trend = max(-5.0, min(float(data.get("temp_trend", 0.0)), 5.0))
     scenario = str(data.get("scenario", "custom"))
@@ -1727,12 +1722,10 @@ def api_simulation_set_rates():
         p1_trend_factor=p1_trend_pct / 100.0,
         flow_drop_factor=flow_drop_pct / 100.0,
         temp_trend_per_cycle=temp_trend,
+        p2_trend_factor=p2_trend_pct / 100.0,
     )
 
     estimated_secs = get_simulation_estimated_cycle_secs()
-    dp_dev_pct = round(dirt_rate_pct - 100.0, 1)
-    flow_dev_pct = round((flow_drop_pct / 75.0 - 1.0) * 100.0, 1)
-    temp_dev = round(temp_trend, 1)
 
     with _state_lock:
         _state["sim_estimated_cycle_secs"] = round(estimated_secs, 1)
@@ -1740,11 +1733,9 @@ def api_simulation_set_rates():
         _state["sim_scenario"] = scenario
         _state["sim_dirt_rate_pct"] = round(dirt_rate_pct, 1)
         _state["sim_p1_trend_pct"] = round(p1_trend_pct, 1)
+        _state["sim_p2_trend_pct"] = round(p2_trend_pct, 1)
         _state["sim_flow_drop_pct"] = round(flow_drop_pct, 1)
         _state["sim_temp_trend"] = round(temp_trend, 1)
-        _state["sim_dp_deviation_pct"] = dp_dev_pct
-        _state["sim_flow_deviation_pct"] = flow_dev_pct
-        _state["sim_temp_deviation"] = temp_dev
 
     return jsonify(
         {
@@ -1753,6 +1744,7 @@ def api_simulation_set_rates():
             "scenario": scenario,
             "dirt_rate_pct": dirt_rate_pct,
             "p1_trend_pct": p1_trend_pct,
+            "p2_trend_pct": p2_trend_pct,
             "flow_drop_pct": flow_drop_pct,
             "temp_trend": temp_trend,
             "estimated_cycle_secs": round(estimated_secs, 1),

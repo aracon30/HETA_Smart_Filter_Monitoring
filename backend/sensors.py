@@ -178,6 +178,7 @@ class FilterSimulator:
         # Szenario-Parameter (einstellbar)
         self._dirt_rate_factor = 1.0  # 1.0 = Referenzrate
         self._p1_trend_factor = 0.0  # 0.0 = stabil, +0.1 = steigt 10 % über Zyklus
+        self._p2_trend_factor = 0.0  # zusätzlicher, von p1 unabhängiger Trend auf p2 (z.B. Leckage)
         self._flow_drop_factor = 0.75  # 0.75 = normaler Abfall
         self._temp_trend_per_cycle = 0.0  # °C-Änderung über Zyklus
         # Interner Zustand
@@ -209,17 +210,24 @@ class FilterSimulator:
             self._last_time = None
             self._dirt_rate_factor = 1.0
             self._p1_trend_factor = 0.0
+            self._p2_trend_factor = 0.0
             self._flow_drop_factor = 0.75
             self._temp_trend_per_cycle = 0.0
             self._rates_active = False
 
     def set_scenario_params(
-        self, dirt_rate_factor: float, p1_trend_factor: float, flow_drop_factor: float, temp_trend_per_cycle: float
+        self,
+        dirt_rate_factor: float,
+        p1_trend_factor: float,
+        flow_drop_factor: float,
+        temp_trend_per_cycle: float,
+        p2_trend_factor: float = 0.0,
     ):
         """Setzt Szenario-Parameter – kein Zyklus-Reset erforderlich."""
         with self._lock:
             self._dirt_rate_factor = max(0.05, dirt_rate_factor)
             self._p1_trend_factor = max(-0.5, min(0.5, p1_trend_factor))
+            self._p2_trend_factor = max(-0.5, min(0.5, p2_trend_factor))
             self._flow_drop_factor = max(0.10, min(0.99, flow_drop_factor))
             self._temp_trend_per_cycle = max(-20.0, min(20.0, temp_trend_per_cycle))
             self._rates_active = True
@@ -229,6 +237,7 @@ class FilterSimulator:
         with self._lock:
             self._dirt_rate_factor = 1.0
             self._p1_trend_factor = 0.0
+            self._p2_trend_factor = 0.0
             self._flow_drop_factor = 0.75
             self._temp_trend_per_cycle = 0.0
             self._rates_active = False
@@ -247,6 +256,7 @@ class FilterSimulator:
                 "t_base": self._t_base,
                 "dirt_rate_factor": self._dirt_rate_factor,
                 "p1_trend_factor": self._p1_trend_factor,
+                "p2_trend_factor": self._p2_trend_factor,
                 "flow_drop_factor": self._flow_drop_factor,
                 "temp_trend_per_cycle": self._temp_trend_per_cycle,
             }
@@ -263,6 +273,7 @@ class FilterSimulator:
         temp_trend_per_cycle: float,
         dp_clean: float,
         dp_limit: float,
+        p2_trend_factor: float = 0.0,
     ) -> dict:
         """
         Reine physikalische Berechnung aus Beladungszustand (clogging) und Zeitpunkt
@@ -274,12 +285,14 @@ class FilterSimulator:
         p1 = round(p1_base * (1.0 + p1_trend_factor * clogging), 4)
         p1 = max(0.1, p1)
 
-        # Δp: nichtlinearer Anstieg (Exponent 1.8 → exponentiell am Ende)
+        # Δp: nichtlinearer Anstieg (Exponent 1.8 → exponentiell am Ende) – bleibt die
+        # alleinige, autoritative Quelle für den Zyklusfortschritt/-abschluss.
         dp = dp_clean + (dp_limit - dp_clean) * clogging**1.8
         dp = round(max(dp_clean, min(dp, dp_limit)), 4)
 
-        # p2: immer automatisch
-        p2 = round(max(0.0, p1 - dp), 4)
+        # p2: physikalische Basis (p1 - dp) plus optionaler, von p1 unabhängiger
+        # Trend (z.B. simulierte Leckage) – wirkt NICHT auf dp zurück.
+        p2 = round(max(0.0, p1 - dp) * (1.0 + p2_trend_factor * clogging), 4)
 
         # Q: sinkt mit Beladung, Minimum 10 % von Q_base
         q_min = max(1.0, q_base * 0.10)
@@ -310,13 +323,24 @@ class FilterSimulator:
             q_base = self._q_base
             t_base = self._t_base
             p1_trend_factor = self._p1_trend_factor
+            p2_trend_factor = self._p2_trend_factor
             flow_drop_factor = self._flow_drop_factor
             temp_trend_per_cycle = self._temp_trend_per_cycle
             dp_clean = self.dp_clean
             dp_limit = self.dp_limit
 
         return self._compute_physics(
-            clogging, now, p1_base, q_base, t_base, p1_trend_factor, flow_drop_factor, temp_trend_per_cycle, dp_clean, dp_limit
+            clogging,
+            now,
+            p1_base,
+            q_base,
+            t_base,
+            p1_trend_factor,
+            flow_drop_factor,
+            temp_trend_per_cycle,
+            dp_clean,
+            dp_limit,
+            p2_trend_factor,
         )
 
     def simulate_cycle_samples(
@@ -333,6 +357,7 @@ class FilterSimulator:
             q_base = self._q_base
             t_base = self._t_base
             p1_trend_factor = self._p1_trend_factor
+            p2_trend_factor = self._p2_trend_factor
             flow_drop_factor = self._flow_drop_factor
             temp_trend_per_cycle = self._temp_trend_per_cycle
             dp_clean = self.dp_clean
@@ -354,6 +379,7 @@ class FilterSimulator:
                     temp_trend_per_cycle,
                     dp_clean,
                     dp_limit,
+                    p2_trend_factor,
                 )
             )
         return result
@@ -411,7 +437,11 @@ def update_simulation_params(
 
 
 def set_simulation_scenario_params(
-    dirt_rate_factor: float, p1_trend_factor: float, flow_drop_factor: float, temp_trend_per_cycle: float
+    dirt_rate_factor: float,
+    p1_trend_factor: float,
+    flow_drop_factor: float,
+    temp_trend_per_cycle: float,
+    p2_trend_factor: float = 0.0,
 ):
     """Setzt Szenario-Parameter direkt."""
     _simulator.set_scenario_params(
@@ -419,6 +449,7 @@ def set_simulation_scenario_params(
         p1_trend_factor,
         flow_drop_factor,
         temp_trend_per_cycle,
+        p2_trend_factor,
     )
 
 
