@@ -40,6 +40,7 @@ from sensors import (
     get_simulation_estimated_cycle_secs,
     get_simulation_rates_active,
     get_simulation_scenario_params,
+    pause_simulation,
     probe_hardware,
     read_sensors,
     reset_simulation,
@@ -1496,14 +1497,9 @@ def api_onboarding_complete():
 
 @app.route("/api/simulation/start", methods=["POST"])
 def api_simulation_start():
-    """Startet den Simulationsmodus und den Messzyklus. Setzt immer am Zyklusanfang an."""
+    """Startet die Messung (Play) bzw. setzt einen pausierten Zyklus fort – ohne ihn zu verwerfen."""
     if not settings.get("onboarding_complete", False):
         return jsonify({"success": False, "message": "Onboarding nicht abgeschlossen."}), 403
-    learning.abort_cycle()
-    reset_simulation()
-    predictor.reset()
-    if _loop:
-        _loop.mstate.smoothed_health_pct = None
     with _state_lock:
         # running=True muss VOR _start_measurement_thread gesetzt werden: läuft der alte
         # Thread nach einem Stop noch im sleep(), sieht er running=True und macht weiter
@@ -1515,6 +1511,30 @@ def api_simulation_start():
         _state["sensor_fault_message"] = ""
         _state["sensor_error"] = False
         _state["startup_sensor_check"] = False
+    _start_measurement_thread()
+    return jsonify({"success": True, "message": "Simulation gestartet."})
+
+
+@app.route("/api/simulation/stop", methods=["POST"])
+def api_simulation_stop():
+    """Pausiert die Messung (Pause) – der laufende Zyklus und die Szenario-Einstellungen bleiben erhalten."""
+    pause_simulation()
+    with _state_lock:
+        _state["running"] = False
+    return jsonify({"success": True, "message": "Simulation pausiert."})
+
+
+@app.route("/api/simulation/reset", methods=["POST"])
+def api_simulation_reset():
+    """Setzt Simulation, Zyklus und Prognose vollständig zurück. Startet NICHT automatisch neu (Play erforderlich)."""
+    learning.abort_cycle()
+    clear_simulation_rates()
+    full_reset_simulation()
+    predictor.reset()
+    if _loop:
+        _loop.mstate.smoothed_health_pct = None
+    with _state_lock:
+        _state["running"] = False
         _state["cycle_active"] = False
         _state["cycle_start_time"] = None
         _state["cycle_dp_reached_time"] = None
@@ -1524,40 +1544,6 @@ def api_simulation_start():
         _state["anomaly_active"] = False
         _state["_dev_active"] = {"dp": False, "flow": False, "reff": False}
         _state["anomaly_percent"] = 0.0
-    _start_measurement_thread()
-    return jsonify({"success": True, "message": "Simulation gestartet."})
-
-
-@app.route("/api/simulation/stop", methods=["POST"])
-def api_simulation_stop():
-    """Stoppt den Messzyklus und verwirft einen eventuell laufenden Zyklus."""
-    clear_simulation_rates()
-    learning.abort_cycle()
-    with _state_lock:
-        _state["running"] = False
-        _state["sim_rates_active"] = False
-        _state["cycle_active"] = False
-        _state["cycle_start_time"] = None
-        _state["cycle_dp_reached_time"] = None
-        _state["awaiting_confirmation"] = False
-        _state["anomaly_active"] = False
-        _state["_dev_active"] = {"dp": False, "flow": False, "reff": False}
-        _state["anomaly_percent"] = 0.0
-    if _loop:
-        _loop.mstate.smoothed_health_pct = None
-    return jsonify({"success": True, "message": "Simulation gestoppt."})
-
-
-@app.route("/api/simulation/reset", methods=["POST"])
-def api_simulation_reset():
-    """Setzt Simulation und Prognose zurück."""
-    clear_simulation_rates()
-    full_reset_simulation()
-    predictor.reset()
-    if _loop:
-        _loop.mstate.smoothed_health_pct = None
-    with _state_lock:
-        _state["cycle_active"] = False
         _state["sim_rates_active"] = False
         _state["sim_scenario"] = "normal"
         _state["sim_dirt_rate_pct"] = 100.0
