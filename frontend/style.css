@@ -378,6 +378,20 @@ main {
 .banner-text strong { font-size: 1rem; }
 .banner-text span   { font-size: .85rem; opacity: .9; }
 
+/* .btn-danger ist standardmäßig transparent mit rotem Text (schlecht lesbar
+   auf dem roten Banner-Hintergrund) – hier gezielt auf hohen Kontrast setzen. */
+.banner-alert .btn-danger {
+  background: #fff;
+  border-color: #fff;
+  color: var(--alert-red);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.banner-alert .btn-danger:hover {
+  background: rgba(255,255,255,.88);
+  color: var(--alert-red);
+}
+
 /* ================================================================
    PROZESSANALYSE
    ================================================================ */
