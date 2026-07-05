@@ -134,11 +134,42 @@ header {
 }
 @media (min-width: 640px) { .logo-tagline { display: block; } }
 
+.header-transport {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin-left: 1.25rem;
+  padding: .2rem .3rem;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 24px;
+  flex-shrink: 0;
+}
+
+.btn-transport {
+  background: transparent;
+  border: none;
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s;
+}
+.btn-transport:hover { background: rgba(255,255,255,.15); }
+#btn-transport-play { background: var(--heta-accent); }
+#btn-transport-play:hover { background: var(--heta-accent); opacity: .85; }
+
 .header-status {
   display: flex;
   align-items: center;
   gap: .75rem;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 .header-badges {

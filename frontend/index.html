@@ -717,6 +717,14 @@
         <div class="logo-tagline">Smart Filter Monitoring</div>
       </div>
 
+      <!-- Transport-Steuerung (DVD-Player-Stil) – nur im Simulationsmodus -->
+      <div id="header-transport" class="header-transport hidden">
+        <button class="btn-transport" id="btn-transport-play" onclick="toggleSimulationRun()" title="Messung starten/stoppen">
+          <span id="btn-transport-play-icon">&#9654;</span>
+        </button>
+        <button class="btn-transport" onclick="resetSystem()" title="Zurücksetzen">&#9198;</button>
+      </div>
+
       <div class="header-status">
         <div class="header-badges">
           <span id="sensor-mode-badge" class="badge badge-sim">SIM</span>
@@ -1025,16 +1033,6 @@
           <button class="btn btn-ghost" onclick="showDemo()">Demo-PIN anzeigen</button>
         </div>
         <div id="heta-msg" class="msg"></div>
-      </section>
-
-      <!-- Betrieb – nur im Simulationsmodus (Realmodus wird ueber den Durchfluss gesteuert) -->
-      <section class="controls hidden" id="betrieb-section">
-        <div class="controls-group">
-          <h3>Betrieb (Simulation)</h3>
-          <button class="btn btn-primary" onclick="startSimulation()">Messung starten</button>
-          <button class="btn btn-secondary" onclick="stopSimulation()">Messung stoppen</button>
-          <button class="btn btn-warning" onclick="resetSystem()">Reset</button>
-        </div>
       </section>
 
       <!-- Simulations-Demo-Panel -->
