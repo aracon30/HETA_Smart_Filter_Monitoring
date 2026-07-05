@@ -1582,12 +1582,7 @@ async function updateFromGit() {
 
 async function resetHetaCycles() {
   const d = window._lastStatus;
-  const hetaCode = d?.heta_code;
-
-  if (!hetaCode || !d?.heta_activated) {
-    alert("Kein HETA-Code aktiv. Bitte zuerst einen HETA-Code aktivieren.");
-    return;
-  }
+  const hetaCode = d?.heta_code || "DEMO";
 
   const confirmed = confirm(
     `Alle Lernzyklen und das Profil für "${hetaCode}" wirklich zurücksetzen?\n\n` +
@@ -1626,15 +1621,7 @@ async function resetHetaCycles() {
 
 async function loadCyclesOverview() {
   const d = window._lastStatus;
-  const hetaCode = d?.heta_code;
-  const effectiveCode = hetaCode || "DEMO";
-
-  const noCodeEl      = document.getElementById("cycles-no-code");
-  const profileContent = document.getElementById("profile-content");
-  const tableWrap     = document.getElementById("cycles-table-wrap");
-  const emptyEl       = document.getElementById("cycles-empty");
-
-  if (noCodeEl) noCodeEl.classList.add("hidden");
+  const effectiveCode = d?.heta_code || "DEMO";
 
   const encoded = encodeURIComponent(effectiveCode);
   const [cycles, profile] = await Promise.all([
@@ -1642,11 +1629,11 @@ async function loadCyclesOverview() {
     apiFetch(`/api/profile?heta_code=${encoded}`),
   ]);
 
-  renderProfileStats(profile, cycles || []);
+  renderProfileStats(profile);
   renderCyclesTable(cycles || []);
 }
 
-function renderProfileStats(profile, cycles) {
+function renderProfileStats(profile) {
   const badge = document.getElementById("profile-validity-badge");
   if (badge) {
     if (profile?.profile_valid) {
@@ -1661,36 +1648,10 @@ function renderProfileStats(profile, cycles) {
     }
   }
 
-  const profileContent = document.getElementById("profile-content");
-  if (!profile) {
-    if (profileContent) profileContent.classList.add("hidden");
-    return;
-  }
-  if (profileContent) profileContent.classList.remove("hidden");
-
   // dp_clean für Einstellungs-Anzeige
-  const dpClean = profile.reference_dp_clean;
+  const dpClean = profile?.reference_dp_clean;
   const dpCleanDisplay = document.getElementById("s-dp-clean-display");
   if (dpCleanDisplay) dpCleanDisplay.textContent = dpClean > 0 ? fmt(dpClean, 3) : "–";
-
-  // Lernzyklen-Kachel (cap display at 3)
-  const count = profile.cycles_count ?? 0;
-  const req   = Math.min(window._lastStatus?.required_cycles ?? 3, 3);
-  const displayCount = Math.min(count, req);
-  setText("prof-cycles-count",  displayCount);
-  setText("prof-cycles-needed", `von ${req}`);
-
-  const bar = document.getElementById("prof-progress-bar");
-  if (bar) {
-    bar.style.width      = Math.min(100, (displayCount / req) * 100) + "%";
-    bar.style.background = profile.profile_valid ? "var(--ok-green)" : "var(--warn-yellow)";
-  }
-
-  // Messzyklen-Kachel: Zyklen nach der Lernphase (Index > req)
-  const measCount = cycles ? Math.max(0, cycles.length - req) : 0;
-  setText("prof-meas-count", measCount);
-  const measHint = document.getElementById("prof-meas-hint");
-  if (measHint) measHint.textContent = measCount === 1 ? "Zyklus nach der Lernphase" : "Zyklen nach der Lernphase";
 }
 
 function renderCyclesTable(cycles) {

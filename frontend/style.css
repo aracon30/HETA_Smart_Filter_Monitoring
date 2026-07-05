@@ -654,150 +654,14 @@ main {
 .sim-diagnosis { background: rgba(56,189,248,0.08); border-left: 3px solid var(--heta-accent); border-radius: 0 6px 6px 0; padding: .6rem .85rem; font-size: .85rem; color: #7dd3fc; line-height: 1.5; }
 
 /* ================================================================
-   PROFILE SECTION
-   ================================================================ */
-.profile-section {
-  background: var(--card-bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 1.4rem 1.5rem;
-  margin-bottom: 1.5rem;
-  box-shadow: var(--shadow-sm);
-}
-
-.profile-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: .9rem;
-}
-
-.stat-card {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem 1.1rem;
-  display: flex;
-  flex-direction: column;
-  gap: .2rem;
-}
-
-.stat-card-cycles {
-  grid-column: span 2;
-}
-
-.stat-label {
-  font-size: .72rem;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--text-muted);
-  font-weight: 600;
-}
-
-.stat-value {
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: var(--heta-blue-mid);
-  line-height: 1.15;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-unit {
-  font-size: .78rem;
-  color: var(--text-muted);
-}
-
-.stat-value-row {
-  display: flex;
-  align-items: baseline;
-  gap: .5rem;
-}
-
-.stat-cycles-needed {
-  font-size: .82rem;
-  color: var(--text-muted);
-}
-
-.profile-progress-outer {
-  background: var(--border);
-  border-radius: 6px;
-  height: 6px;
-  overflow: hidden;
-  margin-top: .6rem;
-}
-
-.profile-progress-fill {
-  height: 100%;
-  border-radius: 6px;
-  background: var(--warn-yellow);
-  width: 0;
-  transition: width .6s ease, background .4s;
-}
-
-/* ================================================================
-   PROFILE TILES (redesigned)
-   ================================================================ */
-.profile-tiles-row {
-  display: flex;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-top: .25rem;
-}
-
-.profile-tile {
-  background: rgba(255,255,255,0.04);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem 1.25rem 1.1rem;
-  min-width: 160px;
-  flex: 1 1 160px;
-  max-width: 260px;
-  display: flex;
-  flex-direction: column;
-  gap: .2rem;
-}
-
-.profile-tile-label {
-  font-size: .7rem;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  color: var(--text-muted);
-  font-weight: 700;
-}
-
-.profile-tile-value-row {
-  display: flex;
-  align-items: baseline;
-  gap: .4rem;
-  margin-top: .15rem;
-}
-
-.profile-tile-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--heta-blue-mid);
-  line-height: 1.1;
-  font-variant-numeric: tabular-nums;
-}
-
-.profile-tile-sub {
-  font-size: .84rem;
-  color: var(--text-muted);
-}
-
-.profile-tile-hint {
-  font-size: .74rem;
-  color: var(--text-muted);
-  margin-top: .35rem;
-}
-
-/* ================================================================
-   CYCLES SECTION
+   CYCLES SECTION (inkl. Lernprofil-Status)
    ================================================================ */
 .cycles-section {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 1.4rem 1.5rem;
+  margin-bottom: 1.5rem;
   box-shadow: var(--shadow-sm);
 }
 
@@ -1954,8 +1818,6 @@ footer {
   .sim-cmp-head:nth-child(n+3),
   .sim-cmp-val:nth-child(3n),
   .sim-cmp-dev { display: none; }
-  .profile-tiles-row { flex-direction: column; }
-  .profile-tile { max-width: 100%; }
   .cycles-table { font-size: .78rem; }
   .cycles-table th, .cycles-table td { padding: .45rem .5rem; }
   .header-meta { display: none; }
