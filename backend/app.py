@@ -39,7 +39,6 @@ from sensors import (
     full_reset_simulation,
     get_simulation_estimated_cycle_secs,
     get_simulation_rates_active,
-    get_simulation_scenario_params,
     pause_simulation,
     probe_hardware,
     read_sensors,
