@@ -228,6 +228,8 @@ _state = {
     "analysis_dp_rate_ref": 0.0,
     "analysis_dp_rate_current": 0.0,
     "analysis_dp_deviation_pct": 0.0,  # Abweichung in %
+    "analysis_p1_rate_current": 0.0,  # Änderungsrate p1 (bar/s), kein Referenzvergleich
+    "analysis_p2_rate_current": 0.0,  # Änderungsrate p2 (bar/s), kein Referenzvergleich
     "analysis_flow_ref": 0.0,  # Referenz-Durchfluss (l/min)
     "analysis_flow_deviation_pct": 0.0,  # Abweichung in %
     "analysis_temp_ref": 0.0,  # Referenz-Temperatur (°C)
