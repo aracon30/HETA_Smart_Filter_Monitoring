@@ -919,12 +919,13 @@
         </div>
       </section>
 
-      <!-- Lernprofil-Übersicht -->
-      <section class="profile-section">
+      <!-- Filterzyklen (inkl. Lernprofil-Status) -->
+      <section class="cycles-section">
         <div class="section-header">
           <div class="section-title-group">
-            <h2 class="section-title">Lernprofil</h2>
+            <h2 class="section-title">Filterzyklen</h2>
             <span id="profile-validity-badge" class="badge badge-warn">–</span>
+            <span id="cycles-count-badge" class="badge badge-observe" style="display:none"></span>
           </div>
           <div class="section-header-actions">
             <button class="btn btn-ghost btn-sm" onclick="loadCyclesOverview()">&#8635; Aktualisieren</button>
@@ -932,48 +933,6 @@
               &#128465; Lernzyklen zurücksetzen
             </button>
           </div>
-        </div>
-
-        <div id="cycles-no-code" class="empty-state">
-          <svg viewBox="0 0 48 48" fill="none" class="empty-icon">
-            <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="2"/>
-            <path d="M24 14v12M24 32v2" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-          </svg>
-          <p>Lernphase noch nicht gestartet.</p>
-          <small>Starten Sie die Messung – Zyklusdaten werden automatisch erfasst. Mit einem HETA-Code erhalten Sie ein filtertyp-spezifisches Profil.</small>
-        </div>
-
-        <div id="profile-content" class="hidden">
-          <div class="profile-tiles-row">
-            <!-- Lernzyklen-Kachel -->
-            <div class="profile-tile">
-              <div class="profile-tile-label">Lernzyklen</div>
-              <div class="profile-tile-value-row">
-                <span class="profile-tile-value" id="prof-cycles-count">0</span>
-                <span class="profile-tile-sub" id="prof-cycles-needed">von 3</span>
-              </div>
-              <div class="profile-progress-outer">
-                <div class="profile-progress-fill" id="prof-progress-bar"></div>
-              </div>
-              <div class="profile-tile-hint">Lernzyklen bilden die Referenz</div>
-            </div>
-            <!-- Messzyklen-Kachel -->
-            <div class="profile-tile">
-              <div class="profile-tile-label">Messzyklen</div>
-              <div class="profile-tile-value-row">
-                <span class="profile-tile-value" id="prof-meas-count">0</span>
-              </div>
-              <div class="profile-tile-hint" id="prof-meas-hint">Zyklen nach der Lernphase</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Filterzyklen-Tabelle -->
-      <section class="cycles-section">
-        <div class="section-header">
-          <h2 class="section-title">Filterzyklen</h2>
-          <span id="cycles-count-badge" class="badge badge-observe" style="display:none"></span>
         </div>
 
         <div id="cycles-empty" class="empty-state hidden">

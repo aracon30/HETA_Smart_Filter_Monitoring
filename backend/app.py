@@ -954,7 +954,8 @@ def api_heta_demo():
 @app.route("/api/heta/reset-cycles", methods=["POST"])
 def api_heta_reset_cycles():
     """
-    Setzt alle Lernzyklen und das Profil für den aktuell aktiven HETA-Code zurück.
+    Setzt alle Lernzyklen und das Profil zurück – für den aktiven HETA-Code, oder
+    ohne aktiven Code für das DEMO-Profil (Simulationsmodus ohne HETA-Code).
     Erfordert einen gültigen Auth-Token.
     """
     ok, err = _require_auth()
@@ -962,10 +963,7 @@ def api_heta_reset_cycles():
         return err
 
     with _state_lock:
-        heta_code = _state.get("heta_code", "")
-
-    if not heta_code:
-        return jsonify({"success": False, "message": "Kein HETA-Code aktiv."}), 400
+        heta_code = _state.get("heta_code", "") or "DEMO"
 
     # Aktiven Lernzyklus abbrechen (ohne Speichern)
     learning._active_cycle = None
