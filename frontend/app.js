@@ -780,6 +780,21 @@ async function activateHetaCode() {
   const code = _getHetaCode();
   const pin  = document.getElementById("input-pin").value.trim();
   if (!code || !pin) { showMsg("heta-msg", "HETA-Code und PIN eingeben.", true); return; }
+
+  // Ohne HETA-Code gelernte Zyklen (DEMO-Profil) werden beim Aktivieren NICHT
+  // übernommen – der neue HETA-Code startet mit einem eigenen, leeren Profil.
+  const d = window._lastStatus;
+  const hasValidatedDemoProfile = !d?.heta_code && d?.profile_status === "VALIDIERT";
+  if (hasValidatedDemoProfile) {
+    const proceed = confirm(
+      "Es sind bereits 3 Lernzyklen ohne HETA-Code gelernt (DEMO-Profil).\n\n" +
+      "Diese werden bei der Aktivierung NICHT übernommen – für diesen HETA-Code " +
+      "müssen erneut 3 Lernzyklen gefahren werden.\n\n" +
+      "Trotzdem aktivieren?"
+    );
+    if (!proceed) return;
+  }
+
   const result = await apiFetch("/api/heta/activate", "POST", { heta_code: code, pin });
   if (result?.valid) showMsg("heta-msg", `Aktivierung erfolgreich: ${result.heta_code}`, false);
   else showMsg("heta-msg", result?.message ?? "Fehler.", true);
