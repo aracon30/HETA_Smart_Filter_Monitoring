@@ -438,33 +438,61 @@ async function updateReferenceOverlay(status) {
   const rfUpper = [], rfLower = [], rfCenter = [];
 
   const curve = refCurve.curve;
-  for (let i = 0; i < curve.length - 1; i++) {
-    const p0 = curve[i], p1 = curve[i + 1];
-    const dtS = (p1.t_pct - p0.t_pct) / 100 * refDuration; // Zeitdelta in s
-    if (dtS <= 0) continue;
-    const xMid = (p0.t_pct + p1.t_pct) / 2;
 
-    if (p0.dp != null && p1.dp != null) {
-      const r = (p1.dp - p0.dp) / dtS * 1000;          // mbar/s
+  // Wert eines Kurvenfelds an einer beliebigen t_pct-Position interpolieren
+  // (identisch zur Backend-Logik in learning.py::_slope_windowed/interp_val).
+  const interpVal = (t, field) => {
+    if (t <= curve[0].t_pct) return curve[0][field] ?? null;
+    if (t >= curve[curve.length - 1].t_pct) return curve[curve.length - 1][field] ?? null;
+    for (let i = 0; i < curve.length - 1; i++) {
+      const t0 = curve[i].t_pct, t1 = curve[i + 1].t_pct;
+      if (t0 <= t && t <= t1 && (t1 - t0) > 1e-6) {
+        const v0 = curve[i][field], v1 = curve[i + 1][field];
+        if (v0 == null || v1 == null) return null;
+        return v0 + (t - t0) / (t1 - t0) * (v1 - v0);
+      }
+    }
+    return null;
+  };
+
+  // Steigung über ein rückwärtsgerichtetes 30-s-Fenster statt reiner
+  // Nachbarpunkt-Differenz – glättet Rundungs-Quantisierungsrauschen bei
+  // eng benachbarten Kurvenpunkten (siehe Backend-Pendant _slope_windowed).
+  const WINDOW_S = 30;
+  const windowPct = (WINDOW_S / refDuration) * 100;
+
+  for (const point of curve) {
+    const tHi = point.t_pct;
+    const tLo = Math.max(0, tHi - windowPct);
+    const dtS = (tHi - tLo) / 100 * refDuration;
+    if (dtS <= 0) continue;
+    const xMid = tHi;
+
+    const dpLo = interpVal(tLo, "dp"), dpHi = interpVal(tHi, "dp");
+    if (dpLo != null && dpHi != null) {
+      const r = (dpHi - dpLo) / dtS * 1000;            // mbar/s
       dpCenter.push({ x: xMid, y: r });
       dpUpper.push({  x: xMid, y: r * (1 + tolDp) });
       dpLower.push({  x: xMid, y: Math.max(0, r * (1 - tolDp)) });
     }
-    if (p0.flow != null && p1.flow != null) {
-      const r = (p1.flow - p0.flow) / dtS * 60;         // l/min/min
+    const flLo = interpVal(tLo, "flow"), flHi = interpVal(tHi, "flow");
+    if (flLo != null && flHi != null) {
+      const r = (flHi - flLo) / dtS * 60;               // l/min/min
       flCenter.push({ x: xMid, y: r });
       flUpper.push({  x: xMid, y: r * (1 + tolFlow) });
       flLower.push({  x: xMid, y: r - r * tolFlow });
     }
-    if (p0.temp != null && p1.temp != null) {
-      const r = (p1.temp - p0.temp) / dtS * 60;         // °C/min
+    const tpLo = interpVal(tLo, "temp"), tpHi = interpVal(tHi, "temp");
+    if (tpLo != null && tpHi != null) {
+      const r = (tpHi - tpLo) / dtS * 60;               // °C/min
       const tol = tolTempAbs / (refDuration / 60);       // °C/min Toleranzbreite
       tpCenter.push({ x: xMid, y: r });
       tpUpper.push({  x: xMid, y: r + tol });
       tpLower.push({  x: xMid, y: r - tol });
     }
-    if (p0.r_eff != null && p1.r_eff != null) {
-      const r = (p1.r_eff - p0.r_eff) / dtS * 1e6;     // µ(b·min/l)/s
+    const rfLo = interpVal(tLo, "r_eff"), rfHi = interpVal(tHi, "r_eff");
+    if (rfLo != null && rfHi != null) {
+      const r = (rfHi - rfLo) / dtS * 1e6;              // µ(b·min/l)/s
       rfCenter.push({ x: xMid, y: r });
       rfUpper.push({  x: xMid, y: r * (1 + tolReff) });
       rfLower.push({  x: xMid, y: r * (1 - tolReff) });
