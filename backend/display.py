@@ -82,7 +82,7 @@ class OLEDDisplay:
         self,
         use_spi: bool = True,
         spi_port: int = 0,
-        spi_device: int = 0,
+        spi_device: int = 1,
         gpio_dc: int = _SPI_GPIO_DC,
         gpio_rst: int = _SPI_GPIO_RST,
         i2c_address: int = 0x3C,
@@ -106,10 +106,11 @@ class OLEDDisplay:
         from PIL import ImageFont  # type: ignore
 
         if use_spi:
+            import lgpio  # type: ignore
             from luma.core.interface.serial import spi  # type: ignore
             from luma.oled.device import ssd1309  # type: ignore
 
-            serial = spi(port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=gpio_rst)
+            serial = spi(port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=gpio_rst, gpio=lgpio)
         else:
             from luma.core.interface.serial import i2c  # type: ignore
             from luma.oled.device import ssd1309  # type: ignore

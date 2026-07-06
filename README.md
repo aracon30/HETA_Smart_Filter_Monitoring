@@ -1,7 +1,7 @@
 # HETA Smart Filter Monitoring &nbsp;![Version](https://img.shields.io/badge/version-v0.1.2--alpha-blue)
 
-Industrielles Filterüberwachungssystem für den **Raspberry Pi 5**. Erfasst 4–20-mA-Sensordaten
-via AnoPi Shield (SPI-ADC), berechnet den Filterzustand in Echtzeit und stellt bereit:
+Industrielles Filterüberwachungssystem für den **Raspberry Pi** (3B+ / 4 / 5). Erfasst 4–20-mA-Sensordaten
+via AnoPi Shield (I2C/INA219), berechnet den Filterzustand in Echtzeit und stellt bereit:
 
 - **Weboberfläche** (lokal, kein Internet erforderlich) mit Live-Ratendiagrammen (Δp mbar/s, ΔQ, ΔT, ΔR_eff über Zyklusfortschritt) und Reststandzeit
 - **OLED-Display** (Waveshare 2.42") mit Encoder-Navigation für den direkten Einsatz am Gerät
@@ -25,8 +25,8 @@ fordert den Bediener zur Prüfung auf.
 
 | Komponente              | Funktion                                            |
 |-------------------------|-----------------------------------------------------|
-| Raspberry Pi 5          | Zentrale Recheneinheit                              |
-| AnoPi Raspberry Shield  | 4 × 4–20 mA Analogeingänge (SPI-ADC)               |
+| Raspberry Pi 3B+ / 4 / 5 | Zentrale Recheneinheit                            |
+| AnoPi Raspberry Shield  | 4 × 4–20 mA Analogeingänge (I2C, INA219)            |
 | ifm PL5423 (×2)         | Eintrittsdruck p1 und Austrittsdruck p2 (0–10 bar)  |
 | ifm TA2405              | Temperaturmessung (−50–150 °C)                      |
 | Keyence FD-X            | Durchflussmessung Q (0–150 l/min, konfigurierbar)   |
@@ -42,16 +42,19 @@ Vollständige Pinbelegungen, Skalierungsformeln und Anschlussdiagramme:
 
 ## Installation
 
-**Voraussetzungen:** Raspberry Pi 5, Raspberry Pi OS Lite 64-bit (Bookworm), SPI aktiviert
-(`sudo raspi-config` → Interface Options → SPI → Enable)
+**Voraussetzungen:** Raspberry Pi 3B+ / 4 / 5, Raspberry Pi OS Lite (Bookworm), git installiert
 
 ```bash
+sudo apt install -y git
 git clone https://github.com/aracon30/HETA_Smart_Filter_Monitoring.git
 cd HETA_Smart_Filter_Monitoring
+git checkout claude/heta-filter-monitoring
 chmod +x scripts/install.sh && ./scripts/install.sh
 sudo reboot
 sudo systemctl start heta-monitor
 ```
+
+Das Installationsskript aktiviert I2C automatisch und installiert alle Abhängigkeiten inklusive `python-anopi`.
 
 Weboberfläche: `http://<IP-Adresse>:8080`  (IP ermitteln: `hostname -I`)
 
@@ -73,9 +76,9 @@ journalctl -u heta-monitor -f         # Live-Log
 | luma.oled, Pillow | OLED-Display | pip |
 | gpiozero ≥ 2.0 | Encoder-GPIO | pip |
 | lgpio | GPIO-Backend Pi 5 | `sudo apt-get install python3-lgpio` |
+| python-anopi | AnoPi Shield I2C/INA219 | pip |
 | paho-mqtt | MQTT (optional) | pip |
 | pymodbus ≥ 3.6 | Modbus TCP (optional) | pip |
-| spidev | SPI-ADC | pip |
 
 ---
 
@@ -309,6 +312,13 @@ hostname -I                           # IP-Adresse des Pi ermitteln
 sudo systemctl status heta-monitor   # Läuft der Dienst?
 ss -tlnp | grep 8080                  # Port belegt durch anderen Prozess?
 ```
+
+### Sensoren werden nicht erkannt (alle 4 Kanäle KABELBRUCH)
+
+- I2C aktiviert? `ls /dev/i2c-*` muss mindestens `/dev/i2c-1` zeigen
+- Falls nicht: `sudo raspi-config` → Interface Options → I2C → Yes → Neustart
+- GND des 24V-Netzteils mit GND des Raspberry Pi verbinden (gemeinsame Masse)
+- Test: `python3 -c "from python_anopi import AnoPi; a=AnoPi(); print(a.ai_mA(0))"`
 
 ### OLED-Display zeigt nichts
 

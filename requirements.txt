@@ -23,7 +23,7 @@ paho-mqtt>=1.6.1
 # Modbus-TCP-Server (optional – nur aktiv wenn modbus_enabled=true in settings.json)
 pymodbus>=3.6.0
 
-# SPI-ADC (AnoPi Shield) – nur auf Raspberry Pi verfügbar
+# AnoPi Shield – I2C-Stromeingang via INA219 (nur auf Raspberry Pi verfügbar)
 # Auf anderen Systemen schlägt der Import fehl; sensors.py behandelt das
 # als "Hardware nicht erkannt" und gibt einen klaren Hinweis im Log aus.
-spidev
+python-anopi
