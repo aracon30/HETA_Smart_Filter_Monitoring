@@ -1,12 +1,12 @@
 """
 Display-Modul – steuert das 2.42"-OLED-Display (Waveshare SSD1309) über luma.oled.
 
-Hardwareanschluss am Raspberry Pi 5 (BCM-Nummerierung):
-  DIN  → GPIO 10  (SPI0 MOSI)
-  CLK  → GPIO 11  (SPI0 SCLK)
-  CS   → GPIO  8  (SPI0 CE0)
-  DC   → GPIO 25
-  RST  → GPIO 27
+Hardwareanschluss (BCM-Nummerierung, getestet mit AnoPi Shield auf Pi 3B+):
+  DIN  → GPIO 10  (SPI0 MOSI, Pin 19)
+  CLK  → GPIO 11  (SPI0 SCLK, Pin 23)
+  CS   → GPIO  7  (SPI0 CE1, Pin 26)
+  DC   → GPIO 22  (Pin 15)   ← nicht GPIO25 (vom AnoPi Shield belegt)
+  RST  → GPIO 27  (Pin 13)
 
 I2C-Betrieb (optional, Lötbrücke auf Modul umstellen):
   DIN  → GPIO  2  (SDA)
@@ -65,7 +65,8 @@ DISPLAY_WIDTH = 128
 DISPLAY_HEIGHT = 64
 
 # GPIO-Pins (BCM) – Waveshare 2.42" OLED SSD1309
-_SPI_GPIO_DC = 25
+# DC auf GPIO22 (nicht GPIO25, der vom AnoPi Shield belegt wird)
+_SPI_GPIO_DC = 22
 _SPI_GPIO_RST = 27
 
 # Layout-Konstanten
@@ -115,7 +116,7 @@ class OLEDDisplay:
         self,
         use_spi: bool = True,
         spi_port: int = 0,
-        spi_device: int = 1,
+        spi_device: int = 1,  # CE1 = Pin 26
         gpio_dc: int = _SPI_GPIO_DC,
         gpio_rst: int = _SPI_GPIO_RST,
         i2c_address: int = 0x3C,
