@@ -42,36 +42,60 @@ class _LgpioBitbangSSD1309:
 
         self._lgpio = lgpio
         self._gh = lgpio.gpiochip_open(0)
+        self._sclk = sclk
+        self._sda = sda
+        self._ce = ce
         self._dc = dc
         self._width = width
         self._height = height
 
-        # DC-Pin als normalen Output konfigurieren
-        try:
-            lgpio.gpio_free(self._gh, dc)
-        except Exception:
-            pass
-        lgpio.gpio_claim_output(self._gh, dc)
-        lgpio.gpio_write(self._gh, dc, 0)
+        for p in [sclk, sda, ce, dc]:
+            try:
+                lgpio.gpio_free(self._gh, p)
+            except Exception:
+                pass
+            lgpio.gpio_claim_output(self._gh, p)
 
-        # Hardware-SPI via lgpio (spidev0.1 = CE1/GPIO7), 50kHz für AnoPi-Passthrough
-        self._spi_h = lgpio.spi_open(0, 1, 50_000, 0)
-
+        lgpio.gpio_write(self._gh, ce, 1)
+        lgpio.gpio_write(self._gh, sclk, 0)
         time.sleep(0.1)
         self._init()
-        self._last_data: bytes = b""
+        # Seitenweiser Cache (8 Seiten × 128 Bytes) gegen unnötige Redraws
+        self._page_cache: list[bytes] = [b""] * 8
 
     @property
     def size(self):
         return (self._width, self._height)
 
+    def _send_bytes(self, data: bytes, is_data: bool):
+        gh = self._gh
+        lg = self._lgpio
+        lg.gpio_write(gh, self._dc, 1 if is_data else 0)
+        for byte in data:
+            lg.gpio_write(gh, self._ce, 0)
+            lg.gpio_write(gh, self._sda, (byte >> 7) & 1)
+            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+            lg.gpio_write(gh, self._sda, (byte >> 6) & 1)
+            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+            lg.gpio_write(gh, self._sda, (byte >> 5) & 1)
+            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+            lg.gpio_write(gh, self._sda, (byte >> 4) & 1)
+            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+            lg.gpio_write(gh, self._sda, (byte >> 3) & 1)
+            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+            lg.gpio_write(gh, self._sda, (byte >> 2) & 1)
+            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+            lg.gpio_write(gh, self._sda, (byte >> 1) & 1)
+            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+            lg.gpio_write(gh, self._sda, byte & 1)
+            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+            lg.gpio_write(gh, self._ce, 1)
+
     def _write_cmd(self, data: bytes):
-        self._lgpio.gpio_write(self._gh, self._dc, 0)
-        self._lgpio.spi_write(self._spi_h, data)
+        self._send_bytes(data, False)
 
     def _write_dat(self, data: bytes):
-        self._lgpio.gpio_write(self._gh, self._dc, 1)
-        self._lgpio.spi_write(self._spi_h, data)
+        self._send_bytes(data, True)
 
     def _cmd(self, c: int):
         self._write_cmd(bytes([c]))
@@ -100,14 +124,14 @@ class _LgpioBitbangSSD1309:
                         byte |= 1 << bit
                 buf[page * self._width + col] = byte
 
-        data = bytes(buf)
-        if data == self._last_data:
-            return
-        self._last_data = data
-
+        # Nur geänderte Seiten senden
         for page in range(8):
+            page_data = bytes(buf[page * self._width:(page + 1) * self._width])
+            if page_data == self._page_cache[page]:
+                continue
+            self._page_cache[page] = page_data
             self._write_cmd(bytes([0xB0 | page, 0x00, 0x10]))
-            self._write_dat(data[page * self._width:(page + 1) * self._width])
+            self._write_dat(page_data)
 
     def clear(self):
         from PIL import Image  # type: ignore
@@ -119,11 +143,7 @@ class _LgpioBitbangSSD1309:
             self.clear()
         except Exception:
             pass
-        try:
-            self._lgpio.spi_close(self._spi_h)
-        except Exception:
-            pass
-        for p in [self._dc]:
+        for p in [self._sclk, self._sda, self._ce, self._dc]:
             try:
                 self._lgpio.gpio_free(self._gh, p)
             except Exception:
