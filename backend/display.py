@@ -28,48 +28,105 @@ import time
 logger = logging.getLogger(__name__)
 
 
-class _LgpioAdapter:
-    """Minimaler RPi.GPIO-kompatibler Wrapper um lgpio für luma.oled."""
+class _LgpioBitbangSSD1309:
+    """
+    Direkter lgpio-Bitbang-Treiber für SSD1309 OLED (kein luma.oled).
+    Kompatibel mit luma.core.render.canvas (hat .mode, .size, .display()).
+    RST muss extern auf 3.3V verdrahtet sein (kein Software-Reset).
+    """
 
-    OUT = 0
-    IN = 1
-    HIGH = 1
-    LOW = 0
-    BCM = 11
-    BOARD = 10
+    mode = "1"
 
-    def __init__(self):
+    def __init__(self, sclk: int, sda: int, ce: int, dc: int, width: int = 128, height: int = 64):
         import lgpio  # type: ignore
 
         self._lgpio = lgpio
-        self._h = lgpio.gpiochip_open(0)
-        self._pins: set = set()
+        self._gh = lgpio.gpiochip_open(0)
+        self._sclk = sclk
+        self._sda = sda
+        self._ce = ce
+        self._dc = dc
+        self._width = width
+        self._height = height
 
-    def setmode(self, _mode):
-        pass  # lgpio benötigt kein GPIO-Modus-Setting
+        for p in [sclk, sda, ce, dc]:
+            try:
+                lgpio.gpio_free(self._gh, p)
+            except Exception:
+                pass
+            lgpio.gpio_claim_output(self._gh, p)
 
-    def setup(self, pin, _direction):
-        try:
-            self._lgpio.gpio_free(self._h, pin)
-        except Exception:
-            pass
-        self._lgpio.gpio_claim_output(self._h, pin)
-        self._pins.add(pin)
+        lgpio.gpio_write(self._gh, ce, 1)
+        lgpio.gpio_write(self._gh, sclk, 0)
+        time.sleep(0.1)
+        self._init()
 
-    def output(self, pin, value):
-        self._lgpio.gpio_write(self._h, pin, 1 if value else 0)
+    @property
+    def size(self):
+        return (self._width, self._height)
+
+    def _send(self, byte: int, is_data: bool):
+        gh = self._gh
+        lg = self._lgpio
+        lg.gpio_write(gh, self._ce, 0)
+        lg.gpio_write(gh, self._dc, 1 if is_data else 0)
+        for i in range(7, -1, -1):
+            lg.gpio_write(gh, self._sda, (byte >> i) & 1)
+            lg.gpio_write(gh, self._sclk, 1)
+            lg.gpio_write(gh, self._sclk, 0)
+        lg.gpio_write(gh, self._ce, 1)
+
+    def _cmd(self, c: int):
+        self._send(c, False)
+
+    def _dat(self, d: int):
+        self._send(d, True)
+
+    def _init(self):
+        for b in [
+            0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40,
+            0x8D, 0x14, 0x20, 0x00, 0xA1, 0xC8, 0xDA, 0x12,
+            0x81, 0xFF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0xAF,
+        ]:
+            self._cmd(b)
+
+    def display(self, image):
+        """Sendet ein PIL-Image (beliebiger Modus) ans Display."""
+        from PIL import Image  # type: ignore
+
+        if image.mode != "1":
+            image = image.convert("1")
+        for page in range(8):
+            self._cmd(0xB0 | page)
+            self._cmd(0x00)
+            self._cmd(0x10)
+            for col in range(self._width):
+                byte = 0
+                for bit in range(8):
+                    y = page * 8 + bit
+                    if y < self._height and image.getpixel((col, y)):
+                        byte |= 1 << bit
+                self._dat(byte)
+
+    def clear(self):
+        from PIL import Image  # type: ignore
+
+        self.display(Image.new("1", self.size, 0))
 
     def cleanup(self):
-        for pin in self._pins:
+        try:
+            self.clear()
+        except Exception:
+            pass
+        for p in [self._sclk, self._sda, self._ce, self._dc]:
             try:
-                self._lgpio.gpio_free(self._h, pin)
+                self._lgpio.gpio_free(self._gh, p)
             except Exception:
                 pass
         try:
-            self._lgpio.gpiochip_close(self._h)
+            self._lgpio.gpiochip_close(self._gh)
         except Exception:
             pass
-        self._pins.clear()
 
 
 # ── Displaykonstanten ──────────────────────────────────────────────────────────
@@ -158,17 +215,16 @@ class OLEDDisplay:
         from PIL import ImageFont  # type: ignore
 
         if use_spi:
-            from luma.core.interface.serial import bitbang  # type: ignore
-            from luma.oled.device import ssd1309  # type: ignore
-
-            serial = bitbang(SCLK=gpio_sclk, SDA=gpio_sda, CE=gpio_ce, DC=gpio_dc, RST=None, gpio=_LgpioAdapter())
+            self._device = _LgpioBitbangSSD1309(
+                sclk=gpio_sclk, sda=gpio_sda, ce=gpio_ce, dc=gpio_dc,
+                width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT,
+            )
         else:
             from luma.core.interface.serial import i2c  # type: ignore
             from luma.oled.device import ssd1309  # type: ignore
 
             serial = i2c(port=1, address=i2c_addr)
-
-        self._device = ssd1309(serial, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT)
+            self._device = ssd1309(serial, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT)
 
         ttf = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
         try:
@@ -178,7 +234,7 @@ class OLEDDisplay:
             self._font = ImageFont.load_default()
             self._font_sm = self._font
 
-        logger.info("OLED initialisiert (Bitbang-SPI, SCLK=GPIO%d, SDA=GPIO%d, CE=GPIO%d, DC=GPIO%d).", gpio_sclk, gpio_sda, gpio_ce, gpio_dc)
+        logger.info("OLED initialisiert (lgpio-Bitbang, SCLK=GPIO%d, SDA=GPIO%d, CE=GPIO%d, DC=GPIO%d).", gpio_sclk, gpio_sda, gpio_ce, gpio_dc)
 
     # ── Öffentliche Schnittstelle ──────────────────────────────────────────────
 
