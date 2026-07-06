@@ -77,7 +77,7 @@ _DEFAULTS = {
     "display_use_spi": True,
     "display_spi_port": 0,
     "display_spi_device": 1,
-    "display_gpio_dc": 22,
+    "display_gpio_dc": 4,
     "display_gpio_rst": 27,
     "display_i2c_address": 60,
     # ANO-Rotary-Encoder (direktes GPIO, kein I2C)

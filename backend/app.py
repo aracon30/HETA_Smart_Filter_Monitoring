@@ -336,7 +336,7 @@ if settings.get("display_enabled", True):
             use_spi=settings.get("display_use_spi", True),
             spi_port=settings.get("display_spi_port", 0),
             spi_device=settings.get("display_spi_device", 1),
-            gpio_dc=settings.get("display_gpio_dc", 22),
+            gpio_dc=settings.get("display_gpio_dc", 4),
             gpio_rst=settings.get("display_gpio_rst", 27),
             i2c_address=settings.get("display_i2c_address", 60),
         )

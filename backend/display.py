@@ -5,7 +5,7 @@ Hardwareanschluss (BCM-Nummerierung, getestet mit AnoPi Shield auf Pi 3B+):
   DIN  → GPIO 10  (SPI0 MOSI, Pin 19)
   CLK  → GPIO 11  (SPI0 SCLK, Pin 23)
   CS   → GPIO  7  (SPI0 CE1, Pin 26)
-  DC   → GPIO 22  (Pin 15)   ← nicht GPIO25 (vom AnoPi Shield belegt)
+  DC   → GPIO  4  (Pin 7)    ← GPIO22 vom Pi-OS display_auto_detect belegt
   RST  → GPIO 27  (Pin 13)
 
 I2C-Betrieb (optional, Lötbrücke auf Modul umstellen):
@@ -78,7 +78,7 @@ DISPLAY_HEIGHT = 64
 
 # GPIO-Pins (BCM) – Waveshare 2.42" OLED SSD1309
 # DC auf GPIO22 (nicht GPIO25, der vom AnoPi Shield belegt wird)
-_SPI_GPIO_DC = 22
+_SPI_GPIO_DC = 4
 _SPI_GPIO_RST = 27
 
 # Layout-Konstanten
