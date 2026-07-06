@@ -32,6 +32,11 @@ class _LgpioAdapter:
     """Minimaler RPi.GPIO-kompatibler Wrapper um lgpio für luma.oled."""
 
     OUT = 0
+    IN = 1
+    HIGH = 1
+    LOW = 0
+    BCM = 11
+    BOARD = 10
 
     def __init__(self):
         import lgpio  # type: ignore
