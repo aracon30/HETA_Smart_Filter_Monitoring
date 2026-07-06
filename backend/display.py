@@ -77,9 +77,12 @@ DISPLAY_WIDTH = 128
 DISPLAY_HEIGHT = 64
 
 # GPIO-Pins (BCM) – Waveshare 2.42" OLED SSD1309
-# DC auf GPIO22 (nicht GPIO25, der vom AnoPi Shield belegt wird)
-_SPI_GPIO_DC = 4
-_SPI_GPIO_RST = 27
+# Bitbang-SPI auf freien Pins (GPIO17/27 vom AnoPi auf 0V gezogen)
+_SPI_GPIO_SCLK = 23
+_SPI_GPIO_SDA = 24
+_SPI_GPIO_CE = 25
+_SPI_GPIO_DC = 22
+_SPI_GPIO_RST = None  # RST dauerhaft mit 3.3V verbunden
 
 # Layout-Konstanten
 _HDR_H = 12  # Header-Höhe
@@ -128,10 +131,13 @@ class OLEDDisplay:
         self,
         use_spi: bool = True,
         spi_port: int = 0,
-        spi_device: int = 1,  # CE1 = Pin 26
+        spi_device: int = 1,
         gpio_dc: int = _SPI_GPIO_DC,
-        gpio_rst: int = _SPI_GPIO_RST,
+        gpio_rst=_SPI_GPIO_RST,
         i2c_address: int = 0x3C,
+        gpio_sclk: int = _SPI_GPIO_SCLK,
+        gpio_sda: int = _SPI_GPIO_SDA,
+        gpio_ce: int = _SPI_GPIO_CE,
     ):
         self._device = None
         self._font = None  # 9 pt – Header
@@ -141,35 +147,21 @@ class OLEDDisplay:
         self._current_screen = SCREEN_STATUS
 
         try:
-            self._init_hardware(use_spi, spi_port, spi_device, gpio_dc, gpio_rst, i2c_address)
+            self._init_hardware(use_spi, spi_port, spi_device, gpio_dc, gpio_rst, i2c_address, gpio_sclk, gpio_sda, gpio_ce)
         except Exception as exc:
             logger.warning("OLED-Hardware nicht verfügbar: %s – Simulationsmodus.", exc)
             self._simulated = True
 
     # ── Hardware-Init ──────────────────────────────────────────────────────────
 
-    def _init_hardware(self, use_spi, spi_port, spi_device, gpio_dc, gpio_rst, i2c_addr):
+    def _init_hardware(self, use_spi, spi_port, spi_device, gpio_dc, gpio_rst, i2c_addr, gpio_sclk=23, gpio_sda=24, gpio_ce=25):
         from PIL import ImageFont  # type: ignore
 
         if use_spi:
-            from luma.core.interface.serial import spi  # type: ignore
+            from luma.core.interface.serial import bitbang  # type: ignore
             from luma.oled.device import ssd1309  # type: ignore
 
-            # SSD1309 benötigt mindestens 100 ms RST-Impuls.
-            # luma.oled verwendet nur 1 ms – deshalb Reset manuell vor dem Init.
-            if gpio_rst is not None:
-                import lgpio as _lgpio  # type: ignore
-
-                _h = _lgpio.gpiochip_open(0)
-                _lgpio.gpio_claim_output(_h, gpio_rst)
-                _lgpio.gpio_write(_h, gpio_rst, 0)
-                time.sleep(0.15)
-                _lgpio.gpio_write(_h, gpio_rst, 1)
-                time.sleep(0.5)
-                _lgpio.gpio_free(_h, gpio_rst)
-                _lgpio.gpiochip_close(_h)
-
-            serial = spi(port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=None, gpio=_LgpioAdapter())
+            serial = bitbang(SCLK=gpio_sclk, SDA=gpio_sda, CE=gpio_ce, DC=gpio_dc, RST=None, gpio=_LgpioAdapter())
         else:
             from luma.core.interface.serial import i2c  # type: ignore
             from luma.oled.device import ssd1309  # type: ignore
@@ -186,7 +178,7 @@ class OLEDDisplay:
             self._font = ImageFont.load_default()
             self._font_sm = self._font
 
-        logger.info("OLED initialisiert (%s, DC=GPIO%d, RST=GPIO%d).", "SPI" if use_spi else "I2C", gpio_dc, gpio_rst)
+        logger.info("OLED initialisiert (Bitbang-SPI, SCLK=GPIO%d, SDA=GPIO%d, CE=GPIO%d, DC=GPIO%d).", gpio_sclk, gpio_sda, gpio_ce, gpio_dc)
 
     # ── Öffentliche Schnittstelle ──────────────────────────────────────────────
 
