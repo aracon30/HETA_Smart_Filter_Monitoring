@@ -50,38 +50,29 @@ echo "  Installiere python3-lgpio (GPIO-Backend für Pi 5)..."
 sudo apt-get install -y python3-lgpio || echo "  Hinweis: python3-lgpio nicht verfügbar – gpiozero nutzt verfügbares Backend."
 
 # -----------------------------------------------------------
-# 2. SPI und I2C aktivieren
+# 2. I2C aktivieren (AnoPi Shield)
 # -----------------------------------------------------------
 echo ""
-echo "[2/7] SPI und I2C-Konfiguration prüfen..."
+echo "[2/7] I2C-Konfiguration prüfen und aktivieren..."
 
 if [ -n "${BOOT_CONFIG}" ]; then
-    # SPI prüfen
-    if grep -q "^dtparam=spi=on" "${BOOT_CONFIG}" 2>/dev/null; then
-        echo "  SPI: bereits aktiviert (${BOOT_CONFIG})"
-    else
-        echo "  HINWEIS: SPI ist nicht aktiviert!"
-        echo "  Bitte in ${BOOT_CONFIG} eintragen: dtparam=spi=on"
-        echo "  Oder: sudo raspi-config → Interface Options → SPI → Yes"
-    fi
-
-    # I2C prüfen
     if grep -q "^dtparam=i2c_arm=on" "${BOOT_CONFIG}" 2>/dev/null; then
         echo "  I2C: bereits aktiviert (${BOOT_CONFIG})"
     else
-        echo "  HINWEIS: I2C ist nicht aktiviert!"
-        echo "  Bitte in ${BOOT_CONFIG} eintragen: dtparam=i2c_arm=on"
-        echo "  Oder: sudo raspi-config → Interface Options → I2C → Yes"
+        echo "  I2C aktivieren in ${BOOT_CONFIG}..."
+        echo "dtparam=i2c_arm=on" | sudo tee -a "${BOOT_CONFIG}" > /dev/null
+        echo "  I2C: aktiviert – Neustart erforderlich."
     fi
 else
-    echo "  Boot-Konfigurationsdatei nicht gefunden – SPI/I2C manuell prüfen."
+    echo "  Boot-Konfigurationsdatei nicht gefunden – I2C manuell prüfen."
+    echo "  Bitte ausführen: sudo raspi-config → Interface Options → I2C → Yes"
 fi
 
-# SPI-Gerätedatei prüfen (zeigt ob SPI nach Neustart wirklich aktiv ist)
-if ls /dev/spidev* &>/dev/null; then
-    echo "  SPI-Gerät: $(ls /dev/spidev* | tr '\n' ' ')(aktiv)"
+# I2C-Gerät prüfen
+if ls /dev/i2c-* &>/dev/null; then
+    echo "  I2C-Gerät: $(ls /dev/i2c-* | tr '\n' ' ')(aktiv)"
 else
-    echo "  SPI-Gerät: nicht gefunden – Neustart nach Aktivierung erforderlich."
+    echo "  I2C-Gerät: nicht gefunden – Neustart nach Aktivierung erforderlich."
 fi
 
 # -----------------------------------------------------------
@@ -178,9 +169,8 @@ echo ""
 echo "  Weboberfläche:     http://${LOCAL_IP}:8080"
 echo ""
 if [ -n "${BOOT_CONFIG}" ]; then
-    if ! grep -q "^dtparam=spi=on" "${BOOT_CONFIG}" 2>/dev/null || \
-       ! grep -q "^dtparam=i2c_arm=on" "${BOOT_CONFIG}" 2>/dev/null; then
-        echo "  WICHTIG: SPI oder I2C noch nicht aktiviert!"
+    if ! grep -q "^dtparam=i2c_arm=on" "${BOOT_CONFIG}" 2>/dev/null; then
+        echo "  WICHTIG: I2C noch nicht aktiviert!"
         echo "  Einstellungen vornehmen, dann neu starten:"
         echo "    sudo reboot"
         echo ""
