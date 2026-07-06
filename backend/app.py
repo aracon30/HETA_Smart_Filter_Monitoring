@@ -335,13 +335,10 @@ if settings.get("display_enabled", True):
         _display = OLEDDisplay(
             use_spi=settings.get("display_use_spi", True),
             spi_port=settings.get("display_spi_port", 0),
-            spi_device=settings.get("display_spi_device", 1),
-            gpio_dc=settings.get("display_gpio_dc", 22),
-            gpio_rst=settings.get("display_gpio_rst", None),
+            spi_device=settings.get("display_spi_device", 0),
+            gpio_dc=settings.get("display_gpio_dc", 25),
+            gpio_rst=settings.get("display_gpio_rst", 27),
             i2c_address=settings.get("display_i2c_address", 60),
-            gpio_sclk=settings.get("display_gpio_sclk", 23),
-            gpio_sda=settings.get("display_gpio_sda", 24),
-            gpio_ce=settings.get("display_gpio_ce", 25),
         )
         _display.show_boot_animation()
     except Exception as e:
