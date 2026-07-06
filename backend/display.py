@@ -49,6 +49,10 @@ class _LgpioAdapter:
         pass  # lgpio benötigt kein GPIO-Modus-Setting
 
     def setup(self, pin, _direction):
+        try:
+            self._lgpio.gpio_free(self._h, pin)
+        except Exception:
+            pass
         self._lgpio.gpio_claim_output(self._h, pin)
         self._pins.add(pin)
 
