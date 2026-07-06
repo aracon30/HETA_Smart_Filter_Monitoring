@@ -67,12 +67,21 @@ class _LgpioBitbangSSD1309:
     def size(self):
         return (self._width, self._height)
 
+    @staticmethod
+    def _busy_wait_us(microseconds: float):
+        """Kurze Wartezeit ohne time.sleep() (dessen OS-Granularität im ms-Bereich
+        liegt und die Übertragung unnötig ausbremsen würde)."""
+        end = time.perf_counter() + microseconds / 1_000_000
+        while time.perf_counter() < end:
+            pass
+
     def _send_bytes(self, data: bytes, is_data: bool):
         gh = self._gh
         lg = self._lgpio
         lg.gpio_write(gh, self._dc, 1 if is_data else 0)
         for byte in data:
             lg.gpio_write(gh, self._ce, 0)
+            self._busy_wait_us(1)  # CE-Setup-Zeit vor dem ersten Takt-Impuls
             lg.gpio_write(gh, self._sda, (byte >> 7) & 1)
             lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
             lg.gpio_write(gh, self._sda, (byte >> 6) & 1)
@@ -89,6 +98,7 @@ class _LgpioBitbangSSD1309:
             lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
             lg.gpio_write(gh, self._sda, byte & 1)
             lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+            self._busy_wait_us(1)  # CE-Hold-Zeit nach dem letzten Takt-Impuls
             lg.gpio_write(gh, self._ce, 1)
 
     def _write_cmd(self, data: bytes):
