@@ -45,6 +45,9 @@ class _LgpioAdapter:
         self._h = lgpio.gpiochip_open(0)
         self._pins: set = set()
 
+    def setmode(self, _mode):
+        pass  # lgpio benötigt kein GPIO-Modus-Setting
+
     def setup(self, pin, _direction):
         self._lgpio.gpio_claim_output(self._h, pin)
         self._pins.add(pin)
@@ -148,7 +151,21 @@ class OLEDDisplay:
             from luma.core.interface.serial import spi  # type: ignore
             from luma.oled.device import ssd1309  # type: ignore
 
-            serial = spi(port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=gpio_rst, gpio=_LgpioAdapter())
+            # SSD1309 benötigt mindestens 100 ms RST-Impuls.
+            # luma.oled verwendet nur 1 ms – deshalb Reset manuell vor dem Init.
+            if gpio_rst is not None:
+                import lgpio as _lgpio  # type: ignore
+
+                _h = _lgpio.gpiochip_open(0)
+                _lgpio.gpio_claim_output(_h, gpio_rst)
+                _lgpio.gpio_write(_h, gpio_rst, 0)
+                time.sleep(0.15)
+                _lgpio.gpio_write(_h, gpio_rst, 1)
+                time.sleep(0.5)
+                _lgpio.gpio_free(_h, gpio_rst)
+                _lgpio.gpiochip_close(_h)
+
+            serial = spi(port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=None, gpio=_LgpioAdapter())
         else:
             from luma.core.interface.serial import i2c  # type: ignore
             from luma.oled.device import ssd1309  # type: ignore
