@@ -112,7 +112,15 @@ class OLEDDisplay:
         if use_spi:
             from luma.core.interface.serial import spi  # type: ignore
 
-            serial = spi(port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=gpio_rst)
+            # Gedrosselte Taktrate: lange, ungeschirmte Steckkabel vertragen die
+            # luma-Standardgeschwindigkeit (mehrere MHz) oft nicht zuverlässig.
+            try:
+                serial = spi(
+                    port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=gpio_rst,
+                    bus_speed_hz=1_000_000,
+                )
+            except TypeError:
+                serial = spi(port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=gpio_rst)
             self._device = ssd1309(serial, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT)
         else:
             from luma.core.interface.serial import i2c  # type: ignore
