@@ -37,17 +37,11 @@ class _LgpioBitbangSSD1309:
 
     mode = "1"
 
-    # MISO wird für Write-only SPI nicht benötigt – freier Pin als Dummy
-    _DUMMY_MISO = 5
-
     def __init__(self, sclk: int, sda: int, ce: int, dc: int, width: int = 128, height: int = 64):
         import lgpio  # type: ignore
 
         self._lgpio = lgpio
         self._gh = lgpio.gpiochip_open(0)
-        self._sclk = sclk
-        self._sda = sda
-        self._ce = ce
         self._dc = dc
         self._width = width
         self._height = height
@@ -60,8 +54,8 @@ class _LgpioBitbangSSD1309:
         lgpio.gpio_claim_output(self._gh, dc)
         lgpio.gpio_write(self._gh, dc, 0)
 
-        # lgpio Software-SPI öffnen (kein MISO nötig → Dummy-Pin)
-        lgpio.bb_spi_open(ce, self._DUMMY_MISO, sda, sclk, 2_000_000, 0)
+        # Hardware-SPI via lgpio (spidev0.1 = CE1/GPIO7), 50kHz für AnoPi-Passthrough
+        self._spi_h = lgpio.spi_open(0, 1, 50_000, 0)
 
         time.sleep(0.1)
         self._init()
@@ -73,11 +67,11 @@ class _LgpioBitbangSSD1309:
 
     def _write_cmd(self, data: bytes):
         self._lgpio.gpio_write(self._gh, self._dc, 0)
-        self._lgpio.bb_spi_xfer(self._ce, data)
+        self._lgpio.spi_write(self._spi_h, data)
 
     def _write_dat(self, data: bytes):
         self._lgpio.gpio_write(self._gh, self._dc, 1)
-        self._lgpio.bb_spi_xfer(self._ce, data)
+        self._lgpio.spi_write(self._spi_h, data)
 
     def _cmd(self, c: int):
         self._write_cmd(bytes([c]))
@@ -126,7 +120,7 @@ class _LgpioBitbangSSD1309:
         except Exception:
             pass
         try:
-            self._lgpio.bb_spi_close(self._ce)
+            self._lgpio.spi_close(self._spi_h)
         except Exception:
             pass
         for p in [self._dc]:
