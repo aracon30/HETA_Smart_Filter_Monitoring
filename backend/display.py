@@ -60,6 +60,7 @@ class _LgpioBitbangSSD1309:
         lgpio.gpio_write(self._gh, sclk, 0)
         time.sleep(0.1)
         self._init()
+        self._last_data: bytes = b""
 
     @property
     def size(self):
@@ -70,10 +71,22 @@ class _LgpioBitbangSSD1309:
         lg = self._lgpio
         lg.gpio_write(gh, self._ce, 0)
         lg.gpio_write(gh, self._dc, 1 if is_data else 0)
-        for i in range(7, -1, -1):
-            lg.gpio_write(gh, self._sda, (byte >> i) & 1)
-            lg.gpio_write(gh, self._sclk, 1)
-            lg.gpio_write(gh, self._sclk, 0)
+        lg.gpio_write(gh, self._sda, (byte >> 7) & 1)
+        lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+        lg.gpio_write(gh, self._sda, (byte >> 6) & 1)
+        lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+        lg.gpio_write(gh, self._sda, (byte >> 5) & 1)
+        lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+        lg.gpio_write(gh, self._sda, (byte >> 4) & 1)
+        lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+        lg.gpio_write(gh, self._sda, (byte >> 3) & 1)
+        lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+        lg.gpio_write(gh, self._sda, (byte >> 2) & 1)
+        lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+        lg.gpio_write(gh, self._sda, (byte >> 1) & 1)
+        lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
+        lg.gpio_write(gh, self._sda, byte & 1)
+        lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
         lg.gpio_write(gh, self._ce, 1)
 
     def _cmd(self, c: int):
@@ -91,22 +104,33 @@ class _LgpioBitbangSSD1309:
             self._cmd(b)
 
     def display(self, image):
-        """Sendet ein PIL-Image (beliebiger Modus) ans Display."""
+        """Sendet ein PIL-Image (beliebiger Modus) ans Display – nur bei Änderung."""
         from PIL import Image  # type: ignore
 
         if image.mode != "1":
             image = image.convert("1")
+
+        buf = bytearray(self._width * 8)
         for page in range(8):
-            self._cmd(0xB0 | page)
-            self._cmd(0x00)
-            self._cmd(0x10)
             for col in range(self._width):
                 byte = 0
                 for bit in range(8):
                     y = page * 8 + bit
                     if y < self._height and image.getpixel((col, y)):
                         byte |= 1 << bit
-                self._dat(byte)
+                buf[page * self._width + col] = byte
+
+        data = bytes(buf)
+        if data == self._last_data:
+            return
+        self._last_data = data
+
+        for page in range(8):
+            self._cmd(0xB0 | page)
+            self._cmd(0x00)
+            self._cmd(0x10)
+            for col in range(self._width):
+                self._dat(buf[page * self._width + col])
 
     def clear(self):
         from PIL import Image  # type: ignore
