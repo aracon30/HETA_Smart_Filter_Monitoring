@@ -337,7 +337,7 @@ if settings.get("display_enabled", True):
             spi_port=settings.get("display_spi_port", 0),
             spi_device=settings.get("display_spi_device", 0),
             gpio_dc=settings.get("display_gpio_dc", 25),
-            gpio_rst=settings.get("display_gpio_rst", 27),
+            gpio_rst=settings.get("display_gpio_rst", 24),
             i2c_address=settings.get("display_i2c_address", 60),
         )
         _display.show_boot_animation()

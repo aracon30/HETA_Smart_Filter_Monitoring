@@ -92,10 +92,15 @@ Kanalbezeichnungen (aus `_CHANNEL_NAMES` in `sensors.py`):
 | CLK      | SPI SCLK    | GPIO 11           | Pin 23    | SPI-Takt            |
 | CS       | SPI CE0     | GPIO  8           | Pin 24    | Chip Select (aktiv Low) |
 | DC       | Data/Cmd    | **GPIO 25**       | **Pin 22**| Data=High, Cmd=Low  |
-| RES      | Reset       | **GPIO 27**       | **Pin 13**| Reset (aktiv Low)   |
+| RES      | Reset       | **GPIO 24**       | **Pin 18**| Reset (aktiv Low)   |
 
+> **Wichtig bei AnoPi Shield:** GPIO 17 und GPIO 27 werden vom AnoPi Shield
+> hardwareseitig dauerhaft auf 0V gezogen. RES darf deshalb **nicht** auf
+> GPIO 27 liegen (Display bliebe dauerhaft im Reset/schwarz), sondern auf
+> GPIO 24.
+>
 > **Konfigurierbar:** DC und RES sind über `config/settings.json` einstellbar:
-> `display_gpio_dc` (Standard: 25) und `display_gpio_rst` (Standard: 27).
+> `display_gpio_dc` (Standard: 25) und `display_gpio_rst` (Standard: 24).
 > SPI-Bus und CE über `display_spi_port` / `display_spi_device`.
 > Zum Deaktivieren des Displays: `display_enabled: false`.
 

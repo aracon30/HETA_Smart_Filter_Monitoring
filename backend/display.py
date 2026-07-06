@@ -6,7 +6,7 @@ Hardwareanschluss (BCM-Nummerierung) – Werkseinstellung, echtes Hardware-SPI:
   CLK  → GPIO 11  (SPI0 SCLK, Pin 23)
   CS   → GPIO  8  (SPI0 CE0, Pin 24)
   DC   → GPIO 25  (Pin 22)
-  RST  → GPIO 27  (Pin 13)
+  RST  → GPIO 24  (Pin 18)   ← NICHT GPIO27/17: vom AnoPi Shield hardwareseitig auf 0V gezogen
 
 I2C-Betrieb (optional, Lötbrücke auf Modul umstellen):
   DIN  → GPIO  2  (SDA)
@@ -34,7 +34,7 @@ DISPLAY_HEIGHT = 64
 
 # GPIO-Pins (BCM) – Waveshare 2.42" OLED SSD1309, Werkseinstellung Hardware-SPI
 _SPI_GPIO_DC = 25
-_SPI_GPIO_RST = 27
+_SPI_GPIO_RST = 24  # nicht 27: AnoPi Shield zieht GPIO17/27 hardwareseitig auf 0V
 
 # Layout-Konstanten
 _HDR_H = 12  # Header-Höhe

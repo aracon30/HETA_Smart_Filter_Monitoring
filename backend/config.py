@@ -78,7 +78,7 @@ _DEFAULTS = {
     "display_spi_port": 0,
     "display_spi_device": 0,
     "display_gpio_dc": 25,
-    "display_gpio_rst": 27,
+    "display_gpio_rst": 24,  # nicht 27: AnoPi Shield zieht GPIO17/27 auf 0V
     "display_i2c_address": 60,
     # ANO-Rotary-Encoder (direktes GPIO, kein I2C)
     "navigation_enabled": True,

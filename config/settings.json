@@ -50,7 +50,7 @@
   "display_spi_port": 0,
   "display_spi_device": 0,
   "display_gpio_dc": 25,
-  "display_gpio_rst": 27,
+  "display_gpio_rst": 24,
   "display_i2c_address": 60,
 
   "navigation_enabled": true,

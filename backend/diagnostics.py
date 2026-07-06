@@ -297,7 +297,7 @@ def run_diagnostics(
             spi_port = settings.get("display_spi_port", 0)
             spi_device = settings.get("display_spi_device", 0)
             dc = settings.get("display_gpio_dc", 25)
-            rst = settings.get("display_gpio_rst", 27)
+            rst = settings.get("display_gpio_rst", 24)
             hw_hints = [
                 f"SPI-Verbindung: DC→GPIO{dc}, RST→GPIO{rst}, DIN→GPIO10, CLK→GPIO11, CS→GPIO8",
                 f"SPI-Bus prüfen: ls /dev/spidev{spi_port}.{spi_device}",
