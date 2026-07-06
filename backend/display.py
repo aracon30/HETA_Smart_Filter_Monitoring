@@ -1,11 +1,11 @@
 """
 Display-Modul – steuert das 2.42"-OLED-Display (Waveshare SSD1309) über luma.oled.
 
-Hardwareanschluss (BCM-Nummerierung, getestet mit AnoPi Shield auf Pi 3B+):
+Hardwareanschluss (BCM-Nummerierung) – Werkseinstellung, echtes Hardware-SPI:
   DIN  → GPIO 10  (SPI0 MOSI, Pin 19)
   CLK  → GPIO 11  (SPI0 SCLK, Pin 23)
-  CS   → GPIO  7  (SPI0 CE1, Pin 26)
-  DC   → GPIO  4  (Pin 7)    ← GPIO22 vom Pi-OS display_auto_detect belegt
+  CS   → GPIO  8  (SPI0 CE0, Pin 24)
+  DC   → GPIO 25  (Pin 22)
   RST  → GPIO 27  (Pin 13)
 
 I2C-Betrieb (optional, Lötbrücke auf Modul umstellen):
@@ -28,166 +28,13 @@ import time
 logger = logging.getLogger(__name__)
 
 
-class _LgpioBitbangSSD1309:
-    """
-    Direkter lgpio-Bitbang-Treiber für SSD1309 OLED (kein luma.oled).
-    Kompatibel mit luma.core.render.canvas (hat .mode, .size, .display()).
-    RST muss extern auf 3.3V verdrahtet sein (kein Software-Reset).
-    """
-
-    mode = "1"
-
-    def __init__(self, sclk: int, sda: int, ce: int, dc: int, width: int = 128, height: int = 64):
-        import lgpio  # type: ignore
-
-        self._lgpio = lgpio
-        self._gh = lgpio.gpiochip_open(0)
-        self._sclk = sclk
-        self._sda = sda
-        self._ce = ce
-        self._dc = dc
-        self._width = width
-        self._height = height
-
-        for p in [sclk, sda, ce, dc]:
-            try:
-                lgpio.gpio_free(self._gh, p)
-            except Exception:
-                pass
-            lgpio.gpio_claim_output(self._gh, p)
-
-        lgpio.gpio_write(self._gh, ce, 1)
-        lgpio.gpio_write(self._gh, sclk, 0)
-        time.sleep(0.1)
-        self._init()
-        # Seitenweiser Cache (8 Seiten × 128 Bytes) gegen unnötige Redraws
-        self._page_cache: list[bytes] = [b""] * 8
-
-    @property
-    def size(self):
-        return (self._width, self._height)
-
-    @staticmethod
-    def _busy_wait_us(microseconds: float):
-        """Kurze Wartezeit ohne time.sleep() (dessen OS-Granularität im ms-Bereich
-        liegt und die Übertragung unnötig ausbremsen würde)."""
-        end = time.perf_counter() + microseconds / 1_000_000
-        while time.perf_counter() < end:
-            pass
-
-    def _send_bytes(self, data: bytes, is_data: bool):
-        gh = self._gh
-        lg = self._lgpio
-        lg.gpio_write(gh, self._dc, 1 if is_data else 0)
-        for byte in data:
-            lg.gpio_write(gh, self._ce, 0)
-            self._busy_wait_us(1)  # CE-Setup-Zeit vor dem ersten Takt-Impuls
-            lg.gpio_write(gh, self._sda, (byte >> 7) & 1)
-            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
-            lg.gpio_write(gh, self._sda, (byte >> 6) & 1)
-            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
-            lg.gpio_write(gh, self._sda, (byte >> 5) & 1)
-            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
-            lg.gpio_write(gh, self._sda, (byte >> 4) & 1)
-            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
-            lg.gpio_write(gh, self._sda, (byte >> 3) & 1)
-            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
-            lg.gpio_write(gh, self._sda, (byte >> 2) & 1)
-            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
-            lg.gpio_write(gh, self._sda, (byte >> 1) & 1)
-            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
-            lg.gpio_write(gh, self._sda, byte & 1)
-            lg.gpio_write(gh, self._sclk, 1); lg.gpio_write(gh, self._sclk, 0)
-            self._busy_wait_us(1)  # CE-Hold-Zeit nach dem letzten Takt-Impuls
-            lg.gpio_write(gh, self._ce, 1)
-
-    def _write_cmd(self, data: bytes):
-        self._send_bytes(data, False)
-
-    def _write_dat(self, data: bytes):
-        self._send_bytes(data, True)
-
-    def _cmd(self, c: int):
-        self._write_cmd(bytes([c]))
-
-    def _init(self):
-        # 0x20,0x02 = Page Addressing Mode – erforderlich, damit die 0xB0/Spalten-
-        # Befehle in display() den Schreibzeiger tatsächlich steuern (im Horizontal-
-        # Mode werden sie vom Controller ignoriert und Teil-Updates landen versetzt).
-        self._write_cmd(bytes([
-            0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40,
-            0x8D, 0x14, 0x20, 0x02, 0xA1, 0xC8, 0xDA, 0x12,
-            0x81, 0xFF, 0xD9, 0xF1, 0xDB, 0x40, 0xA4, 0xA6, 0xAF,
-        ]))
-
-    def display(self, image):
-        """Sendet ein PIL-Image (beliebiger Modus) ans Display – nur bei Änderung."""
-        from PIL import Image  # type: ignore
-
-        if image.mode != "1":
-            image = image.convert("1")
-
-        buf = bytearray(self._width * 8)
-        for page in range(8):
-            for col in range(self._width):
-                byte = 0
-                for bit in range(8):
-                    y = page * 8 + bit
-                    if y < self._height and image.getpixel((col, y)):
-                        byte |= 1 << bit
-                buf[page * self._width + col] = byte
-
-        # Geänderte Seiten ermitteln
-        changed = []
-        for page in range(8):
-            page_data = bytes(buf[page * self._width:(page + 1) * self._width])
-            if page_data != self._page_cache[page]:
-                changed.append((page, page_data))
-
-        if not changed:
-            return
-
-        # 0xA5: Display zeigt alle Pixel weiß – verdeckt den Schreibvorgang
-        self._write_cmd(bytes([0xA5]))
-        for page, page_data in changed:
-            self._page_cache[page] = page_data
-            self._write_cmd(bytes([0xB0 | page, 0x00, 0x10]))
-            self._write_dat(page_data)
-        # 0xA4: Display folgt wieder dem RAM-Inhalt
-        self._write_cmd(bytes([0xA4]))
-
-    def clear(self):
-        from PIL import Image  # type: ignore
-
-        self.display(Image.new("1", self.size, 0))
-
-    def cleanup(self):
-        try:
-            self.clear()
-        except Exception:
-            pass
-        for p in [self._sclk, self._sda, self._ce, self._dc]:
-            try:
-                self._lgpio.gpio_free(self._gh, p)
-            except Exception:
-                pass
-        try:
-            self._lgpio.gpiochip_close(self._gh)
-        except Exception:
-            pass
-
-
 # ── Displaykonstanten ──────────────────────────────────────────────────────────
 DISPLAY_WIDTH = 128
 DISPLAY_HEIGHT = 64
 
-# GPIO-Pins (BCM) – Waveshare 2.42" OLED SSD1309
-# Bitbang-SPI auf freien Pins (GPIO17/27 vom AnoPi auf 0V gezogen)
-_SPI_GPIO_SCLK = 23
-_SPI_GPIO_SDA = 24
-_SPI_GPIO_CE = 25
-_SPI_GPIO_DC = 22
-_SPI_GPIO_RST = None  # RST dauerhaft mit 3.3V verbunden
+# GPIO-Pins (BCM) – Waveshare 2.42" OLED SSD1309, Werkseinstellung Hardware-SPI
+_SPI_GPIO_DC = 25
+_SPI_GPIO_RST = 27
 
 # Layout-Konstanten
 _HDR_H = 12  # Header-Höhe
@@ -236,13 +83,10 @@ class OLEDDisplay:
         self,
         use_spi: bool = True,
         spi_port: int = 0,
-        spi_device: int = 1,
+        spi_device: int = 0,
         gpio_dc: int = _SPI_GPIO_DC,
-        gpio_rst=_SPI_GPIO_RST,
+        gpio_rst: int = _SPI_GPIO_RST,
         i2c_address: int = 0x3C,
-        gpio_sclk: int = _SPI_GPIO_SCLK,
-        gpio_sda: int = _SPI_GPIO_SDA,
-        gpio_ce: int = _SPI_GPIO_CE,
     ):
         self._device = None
         self._font = None  # 9 pt – Header
@@ -254,24 +98,24 @@ class OLEDDisplay:
         self._min_render_interval: float = 2.0  # Sekunden zwischen Redraws
 
         try:
-            self._init_hardware(use_spi, spi_port, spi_device, gpio_dc, gpio_rst, i2c_address, gpio_sclk, gpio_sda, gpio_ce)
+            self._init_hardware(use_spi, spi_port, spi_device, gpio_dc, gpio_rst, i2c_address)
         except Exception as exc:
             logger.warning("OLED-Hardware nicht verfügbar: %s – Simulationsmodus.", exc)
             self._simulated = True
 
     # ── Hardware-Init ──────────────────────────────────────────────────────────
 
-    def _init_hardware(self, use_spi, spi_port, spi_device, gpio_dc, gpio_rst, i2c_addr, gpio_sclk=23, gpio_sda=24, gpio_ce=25):
+    def _init_hardware(self, use_spi, spi_port, spi_device, gpio_dc, gpio_rst, i2c_addr):
         from PIL import ImageFont  # type: ignore
+        from luma.oled.device import ssd1309  # type: ignore
 
         if use_spi:
-            self._device = _LgpioBitbangSSD1309(
-                sclk=gpio_sclk, sda=gpio_sda, ce=gpio_ce, dc=gpio_dc,
-                width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT,
-            )
+            from luma.core.interface.serial import spi  # type: ignore
+
+            serial = spi(port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=gpio_rst)
+            self._device = ssd1309(serial, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT)
         else:
             from luma.core.interface.serial import i2c  # type: ignore
-            from luma.oled.device import ssd1309  # type: ignore
 
             serial = i2c(port=1, address=i2c_addr)
             self._device = ssd1309(serial, width=DISPLAY_WIDTH, height=DISPLAY_HEIGHT)
@@ -284,7 +128,13 @@ class OLEDDisplay:
             self._font = ImageFont.load_default()
             self._font_sm = self._font
 
-        logger.info("OLED initialisiert (lgpio-Bitbang, SCLK=GPIO%d, SDA=GPIO%d, CE=GPIO%d, DC=GPIO%d).", gpio_sclk, gpio_sda, gpio_ce, gpio_dc)
+        if use_spi:
+            logger.info(
+                "OLED initialisiert (Hardware-SPI /dev/spidev%d.%d, DC=GPIO%d, RST=GPIO%d).",
+                spi_port, spi_device, gpio_dc, gpio_rst,
+            )
+        else:
+            logger.info("OLED initialisiert (I2C, Adresse 0x%02X).", i2c_addr)
 
     # ── Öffentliche Schnittstelle ──────────────────────────────────────────────
 
