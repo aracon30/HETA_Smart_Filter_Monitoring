@@ -27,6 +27,39 @@ import time
 
 logger = logging.getLogger(__name__)
 
+
+class _LgpioAdapter:
+    """Minimaler RPi.GPIO-kompatibler Wrapper um lgpio für luma.oled."""
+
+    OUT = 0
+
+    def __init__(self):
+        import lgpio  # type: ignore
+
+        self._lgpio = lgpio
+        self._h = lgpio.gpiochip_open(0)
+        self._pins: set = set()
+
+    def setup(self, pin, _direction):
+        self._lgpio.gpio_claim_output(self._h, pin)
+        self._pins.add(pin)
+
+    def output(self, pin, value):
+        self._lgpio.gpio_write(self._h, pin, 1 if value else 0)
+
+    def cleanup(self):
+        for pin in self._pins:
+            try:
+                self._lgpio.gpio_free(self._h, pin)
+            except Exception:
+                pass
+        try:
+            self._lgpio.gpiochip_close(self._h)
+        except Exception:
+            pass
+        self._pins.clear()
+
+
 # ── Displaykonstanten ──────────────────────────────────────────────────────────
 DISPLAY_WIDTH = 128
 DISPLAY_HEIGHT = 64
@@ -109,7 +142,7 @@ class OLEDDisplay:
             from luma.core.interface.serial import spi  # type: ignore
             from luma.oled.device import ssd1309  # type: ignore
 
-            serial = spi(port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=gpio_rst)
+            serial = spi(port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=gpio_rst, gpio=_LgpioAdapter())
         else:
             from luma.core.interface.serial import i2c  # type: ignore
             from luma.oled.device import ssd1309  # type: ignore
