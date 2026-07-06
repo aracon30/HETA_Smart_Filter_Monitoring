@@ -1572,6 +1572,16 @@ def api_simulation_reset():
         _state["sim_p2_trend_pct"] = 0.0
         _state["sim_flow_drop_pct"] = 75.0
         _state["sim_temp_trend"] = 0.0
+    # Messzyklus-Thread läuft nach dem Reset nicht (running=False) und würde den
+    # waiting_for_flow-Zustand sonst nie ans Display melden – wie im Frontend
+    # (das direkt aus dem Status-State liest) hier ebenfalls sofort anzeigen.
+    if _display:
+        try:
+            threshold, stability, _ = _get_flow_thresholds()
+            dp_clean = settings.get("dp_clean_bar", 0.2)
+            _display.show_waiting_for_flow(0.0, threshold, 0.0, dp_clean * 0.5, 0, stability)
+        except Exception as e:
+            logger.debug("Display-Update nach Simulation-Reset übersprungen: %s", e)
     return jsonify({"success": True, "message": "System zurückgesetzt."})
 
 
