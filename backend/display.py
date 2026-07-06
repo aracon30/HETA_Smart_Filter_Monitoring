@@ -82,7 +82,7 @@ class OLEDDisplay:
         self,
         use_spi: bool = True,
         spi_port: int = 0,
-        spi_device: int = 0,
+        spi_device: int = 1,
         gpio_dc: int = _SPI_GPIO_DC,
         gpio_rst: int = _SPI_GPIO_RST,
         i2c_address: int = 0x3C,

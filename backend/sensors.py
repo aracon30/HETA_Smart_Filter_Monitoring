@@ -343,9 +343,7 @@ class FilterSimulator:
             p2_trend_factor,
         )
 
-    def simulate_cycle_samples(
-        self, steps: list, cycle_steps: int, sampling_interval: float, base_time: float
-    ) -> list:
+    def simulate_cycle_samples(self, steps: list, cycle_steps: int, sampling_interval: float, base_time: float) -> list:
         """
         Erzeugt deterministische physikalische Messwerte an den angegebenen Schritt-Indizes
         eines hypothetischen Zyklus – identische Physik wie get_readings() (inkl.
