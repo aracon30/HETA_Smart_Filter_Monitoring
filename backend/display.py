@@ -124,14 +124,24 @@ class _LgpioBitbangSSD1309:
                         byte |= 1 << bit
                 buf[page * self._width + col] = byte
 
-        # Nur geänderte Seiten senden
+        # Geänderte Seiten ermitteln
+        changed = []
         for page in range(8):
             page_data = bytes(buf[page * self._width:(page + 1) * self._width])
-            if page_data == self._page_cache[page]:
-                continue
+            if page_data != self._page_cache[page]:
+                changed.append((page, page_data))
+
+        if not changed:
+            return
+
+        # 0xA5: Display zeigt alle Pixel weiß – verdeckt den Schreibvorgang
+        self._write_cmd(bytes([0xA5]))
+        for page, page_data in changed:
             self._page_cache[page] = page_data
             self._write_cmd(bytes([0xB0 | page, 0x00, 0x10]))
             self._write_dat(page_data)
+        # 0xA4: Display folgt wieder dem RAM-Inhalt
+        self._write_cmd(bytes([0xA4]))
 
     def clear(self):
         from PIL import Image  # type: ignore
@@ -227,6 +237,8 @@ class OLEDDisplay:
         self._simulated = False
         self._nav_idx = 0  # aktiver Navigationspunkt
         self._current_screen = SCREEN_STATUS
+        self._last_render: float = 0.0
+        self._min_render_interval: float = 2.0  # Sekunden zwischen Redraws
 
         try:
             self._init_hardware(use_spi, spi_port, spi_device, gpio_dc, gpio_rst, i2c_address, gpio_sclk, gpio_sda, gpio_ce)
@@ -285,49 +297,44 @@ class OLEDDisplay:
             logger.info("OLED Boot-Animation (Simulation).")
             return
 
-        try:
-            from luma.core.render import canvas  # type: ignore
-        except ImportError:
-            return
+        from PIL import Image, ImageDraw  # type: ignore
 
         LOGO_LINES = ["  HETA  ", "Smart Filter", "Monitor"]
-        TOTAL_FRAMES = 30
+        TOTAL_FRAMES = 20
         frame_delay = duration / TOTAL_FRAMES
 
         for frame in range(TOTAL_FRAMES + 1):
             ratio = frame / TOTAL_FRAMES
             try:
-                with canvas(self._device) as draw:
-                    # ── Logo (Wipe: Zeilen erscheinen nacheinander) ──────────────
-                    y_offsets = [10, 27, 40]
-                    for i, (line, y) in enumerate(zip(LOGO_LINES, y_offsets)):
-                        appear_at = i / len(LOGO_LINES) * 0.6  # erste 60 % der Zeit
-                        if ratio >= appear_at:
-                            # Schrift: erste Zeile mit normalem Font, Rest klein
-                            fnt = self._font if i == 0 else self._font_sm
-                            tw = self._text_w(draw, line, fnt)
-                            x = (DISPLAY_WIDTH - tw) // 2
-                            draw.text((x, y), line, fill="white", font=fnt)
+                img = Image.new("1", (DISPLAY_WIDTH, DISPLAY_HEIGHT), 0)
+                draw = ImageDraw.Draw(img)
 
-                    # ── Trennlinie ───────────────────────────────────────────────
-                    if ratio >= 0.3:
-                        draw.line([(10, 52), (DISPLAY_WIDTH - 10, 52)], fill="white")
+                y_offsets = [10, 27, 40]
+                for i, (line, y) in enumerate(zip(LOGO_LINES, y_offsets)):
+                    appear_at = i / len(LOGO_LINES) * 0.6
+                    if ratio >= appear_at:
+                        fnt = self._font if i == 0 else self._font_sm
+                        tw = self._text_w(draw, line, fnt)
+                        x = (DISPLAY_WIDTH - tw) // 2
+                        draw.text((x, y), line, fill="white", font=fnt)
 
-                    # ── Ladebalken (ab 40 % der Animation) ──────────────────────
-                    if ratio >= 0.4:
-                        bar_ratio = (ratio - 0.4) / 0.6  # 0..1
-                        bx, by, bw, bh = 10, 55, DISPLAY_WIDTH - 20, 5
-                        draw.rectangle([(bx, by), (bx + bw - 1, by + bh - 1)], outline="white", fill="black")
-                        fill_w = max(1, int(bar_ratio * (bw - 2)))
-                        draw.rectangle([(bx + 1, by + 1), (bx + fill_w, by + bh - 2)], fill="white")
+                if ratio >= 0.3:
+                    draw.line([(10, 52), (DISPLAY_WIDTH - 10, 52)], fill="white")
 
+                if ratio >= 0.4:
+                    bar_ratio = (ratio - 0.4) / 0.6
+                    bx, by, bw, bh = 10, 55, DISPLAY_WIDTH - 20, 5
+                    draw.rectangle([(bx, by), (bx + bw - 1, by + bh - 1)], outline="white", fill="black")
+                    fill_w = max(1, int(bar_ratio * (bw - 2)))
+                    draw.rectangle([(bx + 1, by + 1), (bx + fill_w, by + bh - 2)], fill="white")
+
+                self._device.display(img)
             except Exception as exc:
                 logger.debug("Boot-Animation Fehler Frame %d: %s", frame, exc)
                 return
 
             time.sleep(frame_delay)
 
-        # Kurze Pause mit vollem Logo bevor der erste Echtbildschirm kommt
         time.sleep(0.3)
 
     # ── Bildschirme ────────────────────────────────────────────────────────────
@@ -619,7 +626,7 @@ class OLEDDisplay:
                     ma = channel_ma.get(ch, 0.0) or 0.0
                     ok = ch not in failed_set
                     status = "OK" if ok else "KABEL"
-                    label = f"{_PREFIXES[ch]} {_LABELS[ch]}  {ma:5.2f}mA {status}"
+                    label = f"{_PREFIXES[ch]} {_LABELS[ch]}  {ma:4.1f}mA {status}"
                     d.text((0, y), label, fill="white", font=self._font_sm)
             else:
                 d.text((0, _LINE0), "Fehlende Sensoren:", fill="white", font=self._font_sm)
@@ -721,17 +728,28 @@ class OLEDDisplay:
     # ── Render-Engine ──────────────────────────────────────────────────────────
 
     def _render(self, draw_fn, sim_label: str = ""):
-        """Führt draw_fn auf dem luma.oled-Canvas aus; im Sim-Modus nur Logging."""
+        """Rendert draw_fn in ein PIL-Image und schickt es ans Display."""
         if self._simulated:
             logger.debug("OLED[SIM] %s | Screen=%d", sim_label, self._nav_idx)
             return
+        now = time.monotonic()
+        if now - self._last_render < self._min_render_interval:
+            return
         try:
-            from luma.core.render import canvas  # type: ignore
+            from PIL import Image, ImageDraw  # type: ignore
 
-            with canvas(self._device) as draw:
-                draw_fn(draw)
+            img = Image.new("1", (DISPLAY_WIDTH, DISPLAY_HEIGHT), 0)
+            draw = ImageDraw.Draw(img)
+            draw_fn(draw)
+            self._device.display(img)
+            self._last_render = time.monotonic()
         except Exception as exc:
             logger.error("Display-Render-Fehler: %s", exc)
+
+    def _render_now(self, draw_fn, sim_label: str = ""):
+        """Wie _render(), aber ignoriert das Throttle-Intervall."""
+        self._last_render = 0.0
+        self._render(draw_fn, sim_label)
 
     # ── Properties ────────────────────────────────────────────────────────────
 
