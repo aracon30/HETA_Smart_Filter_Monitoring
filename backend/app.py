@@ -9,6 +9,7 @@ import json
 import logging
 import os
 import secrets
+import signal
 import socket
 import subprocess
 import sys
@@ -343,6 +344,24 @@ if settings.get("display_enabled", True):
         _display.show_boot_animation()
     except Exception as e:
         logger.warning("Display-Init übersprungen: %s", e)
+
+
+def _handle_sigterm(signum, frame):
+    """
+    Python fängt SIGTERM standardmäßig nicht ab (SIG_DFL beendet den Prozess
+    sofort, ohne atexit-Hooks) – systemctl stop/Shutdown senden aber SIGTERM.
+    Ohne diesen Handler bleibt das OLED auf dem letzten Bild stehen, obwohl
+    die 3.3V-Schiene nach dem Shutdown weiter versorgt wird.
+    """
+    if _display is not None:
+        try:
+            _display.clear()
+        except Exception:
+            pass
+    sys.exit(0)
+
+
+signal.signal(signal.SIGTERM, _handle_sigterm)
 
 # Navigation optional
 _navigation = None
