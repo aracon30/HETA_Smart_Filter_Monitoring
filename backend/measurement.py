@@ -159,7 +159,11 @@ class MeasurementLoop:
                         self._state["filter_status"] = STATUS_FEHLER
                         self._state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
                     if self._display:
-                        self._display.show_sensor_fault(failed_names)
+                        self._display.show_sensor_fault(
+                            failed_names,
+                            channel_ma=readings.get("channel_ma"),
+                            failed_channels=failed_ch,
+                        )
                     logger.warning("Startup-Sensorprüfung: Kanal(e) %s nicht verfügbar – warte.", failed_ch)
                     time.sleep(interval)
                     continue
@@ -193,7 +197,11 @@ class MeasurementLoop:
                         )
                         self._state["last_update"] = time.strftime("%Y-%m-%dT%H:%M:%S")
                     if self._display:
-                        self._display.show_sensor_fault(failed_names)
+                        self._display.show_sensor_fault(
+                            failed_names,
+                            channel_ma=readings.get("channel_ma"),
+                            failed_channels=failed_ch,
+                        )
                     logger.warning("Sensorfehler vor Zyklusstart – warte auf Sensoren. Kanäle: %s", failed_ch)
                     time.sleep(interval)
                     continue

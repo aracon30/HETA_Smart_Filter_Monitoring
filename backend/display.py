@@ -484,11 +484,27 @@ class OLEDDisplay:
 
         self._render(draw_fn, f"{title}: {message}")
 
-    def show_sensor_fault(self, failed_names: list, checking: bool = False):
+    def show_sensor_fault(
+        self,
+        failed_names: list,
+        checking: bool = False,
+        channel_ma: dict | None = None,
+        failed_channels: list | None = None,
+    ):
         """
-        Sensorfehler-Bildschirm: zeigt fehlende Kanäle und Hinweis zum Prüfen.
-        checking=True → zeigt animierten Prüf-Status statt Kanalauflistung.
+        Sensorfehler-Bildschirm.
+
+        Mit channel_ma (ch→mA, ch 1..4) wird eine Pro-Kanal-Tabelle angezeigt:
+          AI0  p1   4.06mA  OK
+          AI1  p2   4.06mA  OK
+          AI2  T    0.00mA  KABEL
+          AI3  Q    0.00mA  KABEL
+        Ohne channel_ma erscheint die einfache Fehlerliste.
+        checking=True → Prüf-Animation statt Tabelle.
         """
+        _LABELS = {1: "p1", 2: "p2", 3: "T", 4: "Q"}
+        _PREFIXES = {1: "AI0", 2: "AI1", 3: "AI2", 4: "AI3"}
+        failed_set = set(failed_channels or [])
 
         def draw_fn(d):
             self._draw_header(d, "SENSORFEHLER")
@@ -496,13 +512,22 @@ class OLEDDisplay:
             if checking:
                 d.text((0, _LINE1), "Pruefe Sensoren ...", fill="white", font=self._font_sm)
                 d.text((0, _LINE2), "Bitte warten.", fill="white", font=self._font_sm)
+            elif channel_ma:
+                # Kompakte 4-Zeilen-Tabelle: AI0 p1  4.06mA OK
+                for i, ch in enumerate([1, 2, 3, 4]):
+                    y = _LINE0 + i * 9
+                    ma = channel_ma.get(ch, 0.0) or 0.0
+                    ok = ch not in failed_set
+                    status = "OK" if ok else "KABEL"
+                    label = f"{_PREFIXES[ch]} {_LABELS[ch]}  {ma:5.2f}mA {status}"
+                    d.text((0, y), label, fill="white", font=self._font_sm)
             else:
                 d.text((0, _LINE0), "Fehlende Sensoren:", fill="white", font=self._font_sm)
                 y_positions = [_LINE1, _LINE2, _LINE3]
                 for i, name in enumerate(failed_names[:3]):
-                    d.text((2, y_positions[i]), f"• {name[:20]}", fill="white", font=self._font_sm)
+                    d.text((2, y_positions[i]), f"* {name[:20]}", fill="white", font=self._font_sm)
 
-            # Trennlinie + Hinweis
+            # Hinweis-Zeile unten
             d.line([(0, _LINE4 - 2), (DISPLAY_WIDTH - 1, _LINE4 - 2)], fill="white")
             hint = "Pruefen ..." if checking else "OK = Erneut pruefen"
             tw = self._text_w(d, hint, self._font_sm)

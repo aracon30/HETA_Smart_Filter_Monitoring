@@ -476,7 +476,11 @@ class _DisplayController:
                     _state["sensor_fault_message"] = (
                         f"Sensorfehler: {', '.join(result['failed_names'])} – Sensoren anschließen."
                     )
-                self._display.show_sensor_fault(result["failed_names"])
+                self._display.show_sensor_fault(
+                    result["failed_names"],
+                    channel_ma=result.get("channel_ma"),
+                    failed_channels=result["failed_channels"],
+                )
                 logger.warning("Sensor-Prüfung: Kanäle %s fehlen.", result["failed_channels"])
 
         threading.Thread(target=_check, daemon=True, name="sensor-check").start()

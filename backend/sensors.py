@@ -131,17 +131,20 @@ _CHANNEL_NAMES = {
 def check_hardware_sensors() -> dict:
     """
     Prüft alle 4 Sensorkanäle auf Erreichbarkeit (z. B. nach Bediener-Bestätigung).
-    Gibt zurück: {'all_ok': bool, 'failed_channels': list, 'failed_names': list}.
+    Gibt zurück: {'all_ok': bool, 'failed_channels': list, 'failed_names': list, 'channel_ma': dict}.
     """
     failed = []
+    channel_ma: dict = {}
     for ch in range(1, 5):
         ma = _read_anopi_channel(ch)
+        channel_ma[ch] = ma if ma is not None else 0.0
         if ma is None or _check_status(ma) == SENSOR_WIRE_BREAK:
             failed.append(ch)
     return {
         "all_ok": len(failed) == 0,
         "failed_channels": failed,
         "failed_names": [_CHANNEL_NAMES.get(ch, f"Kanal {ch}") for ch in failed],
+        "channel_ma": channel_ma,
     }
 
 
@@ -522,13 +525,16 @@ def read_sensors(
     # Kein Simulations-Fallback im Hardwaremodus – verfälschte Messwerte sind
     # im Produktionsbetrieb nicht akzeptabel.
     ma_values: dict = {}
+    channel_ma: dict = {}  # ch -> raw mA (0.0 if unreadable)
     failed_channels = []
     for ch in range(1, 5):
         val = _read_anopi_channel(ch)
         if val is None or _check_status(val) == SENSOR_WIRE_BREAK:
             failed_channels.append(ch)
+            channel_ma[ch] = val if val is not None else 0.0
         else:
             ma_values[ch] = val
+            channel_ma[ch] = val
 
     if failed_channels:
         names = [_CHANNEL_NAMES.get(ch, f"Kanal {ch}") for ch in failed_channels]
@@ -545,6 +551,7 @@ def read_sensors(
             "mode": "sensor_fault",
             "failed_channels": failed_channels,
             "failed_names": names,
+            "channel_ma": channel_ma,
         }
 
     def make_reading(channel, ma, scale_fn, unit):
