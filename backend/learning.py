@@ -456,6 +456,17 @@ class LearningManager:
         if not ref:
             return None
 
+        # Tatsächliche Zyklusdauer aus der bisherigen Laufzeit schätzen (wie in
+        # PredictionEngine.update_with_reference_curve). Läuft der aktuelle Zyklus
+        # schneller/langsamer als der gelernte Ø-Durchschnitt, skaliert das
+        # Sekunden-Fenster für den Steigungsvergleich automatisch mit – sonst
+        # würde ref_dur einen systematischen Versatz in die Steigungsabweichung
+        # einbringen sobald sich das Tempo vom gelernten Durchschnitt unterscheidet.
+        if elapsed_seconds >= 5.0 and t_pct > 0.5:
+            actual_duration = elapsed_seconds / (t_pct / 100.0)
+        else:
+            actual_duration = ref_dur
+
         def pct_dev(cur, ref_val):
             if ref_val and abs(ref_val) > 1e-9:
                 return round((cur / ref_val - 1.0) * 100.0, 1)
@@ -464,7 +475,7 @@ class LearningManager:
         # dp-Steigung: Referenz über dasselbe 30-s-Fenster wie die aktuelle Regression.
         # Beide Steigungen nutzen denselben Mittelungshorizont → kein Versatz.
         # Referenzfenster: 30 s um aktuelle t_pct-Position in der Referenzkurve.
-        ref_dp_slope = self._slope_windowed(curve, t_pct, ref_dur, field="dp", window_s=30)
+        ref_dp_slope = self._slope_windowed(curve, t_pct, actual_duration, field="dp", window_s=30)
         dp_slope_dev = (
             pct_dev(current_dp_slope, ref_dp_slope)
             if current_dp_slope is not None and abs(ref_dp_slope) > 1e-9
@@ -473,7 +484,7 @@ class LearningManager:
 
         # Rückwärts-Steigungen für Q, T, R_eff — identische Methodik wie dp
         def slope_dev(cur_slope, field):
-            ref_s = self._slope_windowed(curve, t_pct, ref_dur, field=field, window_s=30)
+            ref_s = self._slope_windowed(curve, t_pct, actual_duration, field=field, window_s=30)
             if cur_slope is None or abs(ref_s) < 1e-12:
                 return 0.0, ref_s
             return pct_dev(cur_slope, ref_s), ref_s
