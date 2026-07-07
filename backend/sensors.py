@@ -12,6 +12,7 @@ Alle Sensoren liefern 4–20 mA Signale.
 
 import logging
 import math
+import random
 import threading
 import time
 from dataclasses import dataclass, field
@@ -169,8 +170,16 @@ class FilterSimulator:
     _REF_DP_RANGE_BAR = 2.3  # bar
     _REF_CYCLE_SECS = 300.0  # Sekunden
 
+    # Exemplarstreuung des Sauberdruckabfalls beim (simulierten) Filterwechsel –
+    # bildet reale Fertigungstoleranz/Einbaulage nach, damit reference_dp_clean
+    # auch in der Simulation über mehrere Lernzyklen empirisch gemittelt wird,
+    # statt trivial den konfigurierten Wert zurückzuliefern.
+    _DP_CLEAN_JITTER_STD = 0.05  # 5 % Std.-Abw. um den Basiswert
+    _DP_CLEAN_JITTER_MAX = 0.15  # auf ±15 % begrenzt
+
     def __init__(self, dp_clean: float = 0.2, dp_limit: float = 2.5, flow_max: float = 150.0):
         self.dp_clean = dp_clean
+        self._dp_clean_base = dp_clean  # konfigurierter Sollwert (aus Settings)
         self.dp_limit = dp_limit
         self.flow_max = flow_max  # Sensor-Maximalbereich (nicht Q_base)
         self._lock = threading.Lock()
@@ -195,11 +204,27 @@ class FilterSimulator:
             dp_range = max(self.dp_limit - self.dp_clean, 0.01)
             return (dp_range / self._REF_DP_RANGE_BAR) * self._REF_CYCLE_SECS / max(self._dirt_rate_factor, 0.01)
 
+    def _roll_dp_clean(self) -> float:
+        """
+        Würfelt einen neuen Sauberdruckabfall um den konfigurierten Basiswert
+        (Aufruf nur während self._lock gehalten wird). Simuliert die reale
+        Exemplarstreuung eines frisch eingebauten Filters – analog zur echten
+        Hardware, wo reference_dp_clean erst über mehrere Lernzyklen empirisch
+        bestimmt wird, weil der tatsächliche Sauberdruck jeder Einzelkerze
+        etwas variiert.
+        """
+        jitter = random.gauss(0.0, self._DP_CLEAN_JITTER_STD * self._dp_clean_base)
+        limit = self._DP_CLEAN_JITTER_MAX * self._dp_clean_base
+        jitter = max(-limit, min(limit, jitter))
+        self.dp_clean = max(0.01, round(self._dp_clean_base + jitter, 4))
+        return self.dp_clean
+
     def reset(self):
-        """Setzt nur Beladungszustand zurück – Szenarien bleiben."""
+        """Setzt Beladungszustand zurück und würfelt einen neuen Sauberdruckabfall (neuer Filter)."""
         with self._lock:
             self._clogging = 0.0
             self._last_time = None
+            self._roll_dp_clean()
 
     def pause(self):
         """Friert die Zeitbasis ein (kein Zeitsprung bei Fortsetzung) – Beladungszustand bleibt erhalten."""
@@ -211,6 +236,7 @@ class FilterSimulator:
         with self._lock:
             self._clogging = 0.0
             self._last_time = None
+            self._roll_dp_clean()
             self._dirt_rate_factor = 1.0
             self._p1_trend_factor = 0.0
             self._p2_trend_factor = 0.0
@@ -426,7 +452,7 @@ def update_simulation_params(
                            wenn sich nur Anzeigeeinstellungen ändern).
     """
     with _simulator._lock:
-        _simulator.dp_clean = dp_clean
+        _simulator._dp_clean_base = dp_clean
         _simulator.dp_limit = dp_limit
         _simulator.flow_max = flow_max
         _simulator._p1_base = p1_base
@@ -435,6 +461,20 @@ def update_simulation_params(
         if reset_clogging:
             _simulator._clogging = 0.0
             _simulator._last_time = None
+            _simulator._roll_dp_clean()
+        else:
+            _simulator.dp_clean = dp_clean
+
+
+def roll_dp_clean_jitter() -> float:
+    """
+    Würfelt einen neuen Sauberdruckabfall um den konfigurierten Basiswert, ohne
+    den Beladungszustand zu berühren. Für unabhängig voneinander simulierte
+    Lernzyklen (Quick-Learn), damit jeder synthetische Zyklus seinen eigenen,
+    leicht streuenden Sauberdruck bekommt statt eines identischen Fixwerts.
+    """
+    with _simulator._lock:
+        return _simulator._roll_dp_clean()
 
 
 def set_simulation_scenario_params(

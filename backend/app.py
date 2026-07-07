@@ -44,6 +44,7 @@ from sensors import (
     probe_hardware,
     read_sensors,
     reset_simulation,
+    roll_dp_clean_jitter,
     set_simulation_scenario_params,
     simulate_reference_cycle,
     update_simulation_params,
@@ -1617,6 +1618,12 @@ def api_simulation_quick_learn():
 
     for i in range(needed):
         t_start = now - (needed - i) * (cycle_secs + 60)
+
+        # Jeder synthetische Lernzyklus bekommt einen eigenen, leicht streuenden
+        # Sauberdruck (Exemplarstreuung frischer Filter) – sonst würde
+        # reference_dp_clean trivial den konfigurierten Fixwert zurücklernen,
+        # statt echt über mehrere Zyklen gemittelt zu werden.
+        roll_dp_clean_jitter()
 
         # ── Physik identisch mit FilterSimulator.get_readings() (inkl. Temperatur-
         # Drift) – jeder gelernte Zyklus bekommt seinen eigenen t_start und damit
