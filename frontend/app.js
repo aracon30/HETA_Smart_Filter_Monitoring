@@ -1220,7 +1220,9 @@ function updateAnalysisSection(d) {
   const tDev      = d.analysis_temp_deviation_pct ?? 0;
   setText("an-tmp-ref", fmt(tSlopeRef * 60, 4) + " °C/min");
   setText("an-tmp-cur", fmt(tSlopeCur * 60, 4) + " °C/min");
-  setAnalysisDev("an-tmp-dev", tDev, "%", _tolTempC * 10, _tolTempC * 20);
+  // tDev ist bereits im Backend relativ zur ABSOLUTEN Temperaturtoleranz normiert
+  // (100 % = an der Toleranzgrenze) – hier nicht nochmal mit _tolTempC skalieren.
+  setAnalysisDev("an-tmp-dev", tDev, "%", 100, 200);
 
   setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev, dpSlopeCur));
 }
@@ -1248,8 +1250,11 @@ function buildDiagnosis(dpDevPct, flowDevPct, tempDev, dpSlopeCur = 0) {
   const dpFalling  = dpSlopeCur <  0;
   const flowLow    = flowDevPct < -20;
   const flowHigh   = flowDevPct >  15;
-  const tempHigh   = tempDev    >  15;
-  const tempLow    = tempDev    < -10;
+  // tempDev ist % der ABSOLUTEN Temperaturtoleranz (100 % = an der Toleranzgrenze,
+  // siehe learning.py::get_curve_analysis) – andere Skala als dp/flow, daher an der
+  // Toleranzgrenze selbst statt an einem willkürlichen Prozentsatz ausgelöst.
+  const tempHigh   = tempDev    >  100;
+  const tempLow    = tempDev    < -100;
 
   const hints = [];
 

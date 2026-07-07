@@ -419,6 +419,7 @@ class LearningManager:
         current_flow_slope: float | None = None,
         current_temp_slope: float | None = None,
         current_reff_slope: float | None = None,
+        tolerance_temp_c: float = 10.0,
     ) -> dict | None:
         """
         Vergleicht aktuelle Messwerte mit der gelernten Referenzkurve.
@@ -487,8 +488,21 @@ class LearningManager:
             return pct_dev(cur_slope, ref_s), ref_s
 
         flow_dev_pct, ref_flow_slope = slope_dev(current_flow_slope, "flow")
-        temp_dev_pct, ref_temp_slope = slope_dev(current_temp_slope, "temp")
         reff_dev_pct, ref_reff_slope = slope_dev(current_reff_slope, "r_eff")
+
+        # Temperatur: die Referenzsteigung ist im Normalfall nahe Null (T bleibt
+        # meist konstant) – ein prozentualer Vergleich relativ zu einer Fast-Null-
+        # Referenz ist mathematisch instabil (winzige reale Schwankungen können
+        # beliebig große %-Werte ergeben). Stattdessen wird die Abweichung als
+        # Prozentsatz der konfigurierten ABSOLUTEN Temperaturtoleranz ausgedrückt –
+        # gleiche Umrechnung wie die Toleranzbänder im Live-Chart
+        # (siehe charts.js::_computeRateRefBands, "°C absolut → in Rate umrechnen").
+        ref_temp_slope = self._slope_windowed(curve, t_pct, actual_duration, field="temp", window_s=30)
+        temp_tol_per_min = tolerance_temp_c / max(actual_duration / 60.0, 1e-6)
+        if current_temp_slope is not None and temp_tol_per_min > 1e-9:
+            temp_dev_pct = round(((current_temp_slope - ref_temp_slope) * 60.0 / temp_tol_per_min) * 100.0, 1)
+        else:
+            temp_dev_pct = 0.0
 
         return {
             "cycle_progress_pct": cycle_progress_pct,

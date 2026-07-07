@@ -582,6 +582,7 @@ class MeasurementLoop:
                         current_flow_slope=ch_slopes["flow"],
                         current_temp_slope=ch_slopes["temp"],
                         current_reff_slope=ch_slopes["r_eff"],
+                        tolerance_temp_c=self._settings.get("tolerance_temp_c", 10.0),
                     )
                 except Exception as _e:
                     logger.warning("Kurvenanalyse-Fehler: %s", _e, exc_info=True)
