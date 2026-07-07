@@ -929,12 +929,14 @@ main {
   background: var(--chip-color, var(--border));
   flex-shrink: 0;
 }
-.chart-chip.chip-active {
+.chart-chip.chip-active,
+.chart-chip.active {
   background: var(--chip-color, var(--heta-accent));
   color: #0a1628;
   border-color: var(--chip-color);
 }
-.chart-chip.chip-active::before { background: rgba(0,0,0,0.3); }
+.chart-chip.chip-active::before,
+.chart-chip.active::before { background: rgba(0,0,0,0.3); }
 .chart-chip:disabled, .chart-chip.disabled {
   opacity: .35;
   cursor: not-allowed;
