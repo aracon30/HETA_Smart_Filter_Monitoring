@@ -106,8 +106,8 @@ class OLEDDisplay:
     # ── Hardware-Init ──────────────────────────────────────────────────────────
 
     def _init_hardware(self, use_spi, spi_port, spi_device, gpio_dc, gpio_rst, i2c_addr):
-        from PIL import ImageFont  # type: ignore
         from luma.oled.device import ssd1309  # type: ignore
+        from PIL import ImageFont  # type: ignore
 
         if use_spi:
             from luma.core.interface.serial import spi  # type: ignore
