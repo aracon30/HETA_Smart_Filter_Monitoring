@@ -452,9 +452,6 @@ class LearningManager:
         # dp-basierter Zyklusfortschritt
         t_pct = self._invert_dp_to_tpct(curve, current_dp)
         cycle_progress_pct = round(t_pct, 1)
-        ref = self._interpolate_curve(curve, t_pct)
-        if not ref:
-            return None
 
         # Tatsächliche Zyklusdauer aus der bisherigen Laufzeit schätzen (wie in
         # PredictionEngine.update_with_reference_curve). Läuft der aktuelle Zyklus
@@ -513,27 +510,6 @@ class LearningManager:
             "cur_reff_slope": round(current_reff_slope, 9) if current_reff_slope is not None else None,
             "r_eff_deviation_pct": reff_dev_pct,
         }
-
-    @staticmethod
-    def _interpolate_curve(curve: list, t_pct: float) -> dict | None:
-        """Lineare Interpolation zwischen zwei Stützpunkten der Referenzkurve."""
-        if not curve:
-            return None
-        if t_pct <= curve[0]["t_pct"]:
-            return dict(curve[0])
-        if t_pct >= curve[-1]["t_pct"]:
-            return dict(curve[-1])
-        for i in range(len(curve) - 1):
-            t0, t1 = curve[i]["t_pct"], curve[i + 1]["t_pct"]
-            if t0 <= t_pct <= t1:
-                if t1 - t0 < 0.001:
-                    return dict(curve[i])
-                alpha = (t_pct - t0) / (t1 - t0)
-                return {
-                    k: (curve[i].get(k) or 0.0) + alpha * ((curve[i + 1].get(k) or 0.0) - (curve[i].get(k) or 0.0))
-                    for k in ("dp", "r_eff", "flow", "temp")
-                }
-        return dict(curve[-1])
 
     @staticmethod
     def _invert_dp_to_tpct(curve: list, dp_bar: float) -> float:
@@ -600,26 +576,6 @@ class LearningManager:
         actual_window_s = (t_hi - t_lo) / 100.0 * ref_duration
         return (v_hi - v_lo) / actual_window_s if actual_window_s > 0 else 0.0
 
-    @staticmethod
-    def _slope_at_tpct(curve: list, t_pct: float, ref_duration: float, field: str = "dp") -> float:
-        """
-        Berechnet die Referenzsteigung für ein beliebiges Kurvenfeld (bar/s, l/min/s, …)
-        an der Position t_pct. Ableitung: d(field)/d(t_pct) × (100 / ref_duration).
-        """
-        if not curve or ref_duration <= 0:
-            return 0.0
-        for i in range(len(curve) - 1):
-            t0 = curve[i].get("t_pct", 0)
-            t1 = curve[i + 1].get("t_pct", 0)
-            if t0 <= t_pct <= t1 and (t1 - t0) > 0.001:
-                v0 = curve[i].get(field) or 0.0
-                v1 = curve[i + 1].get(field) or 0.0
-                t_delta_s = (t1 - t0) / 100.0 * ref_duration
-                return (v1 - v0) / t_delta_s if t_delta_s > 0 else 0.0
-        # Fallback: mittlere Gesamtsteigung
-        v_total = (curve[-1].get(field) or 0.0) - (curve[0].get(field) or 0.0)
-        return v_total / ref_duration
-
     def get_profile(self, heta_code: str) -> dict | None:
         """Gibt das Referenzprofil zurück oder None."""
         return self.db.get_profile(heta_code)
@@ -628,10 +584,6 @@ class LearningManager:
         """Prüft ob ein valides Referenzprofil existiert."""
         profile = self.get_profile(heta_code)
         return bool(profile and profile.get("profile_valid"))
-
-    def get_cycles_count(self, heta_code: str) -> int:
-        """Gibt die Anzahl bestätigter Zyklen zurück."""
-        return self.db.count_confirmed_cycles(heta_code)
 
     # ------------------------------------------------------------------
     # Startverhalten-Prüfung
