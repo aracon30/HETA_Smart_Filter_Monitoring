@@ -407,6 +407,18 @@ function _computeRateRefBands(refCurve) {
   const tolReff     = refCurve.tolerance_reff_pct ?? 0.25;
   const tolTempAbs  = refCurve.tolerance_temp_c   ?? 10.0; // °C absolut → in Rate umrechnen
 
+  // Toleranzbandbreite aus der DURCHSCHNITTLICHEN Referenzrate über den ganzen
+  // Zyklus ableiten (konstante Breite), nicht aus der lokalen Rate an jedem
+  // Punkt – sonst würde das Band zum Zyklusende hin (wo Δp/Q/R_eff progressiv
+  // am steilsten verlaufen) immer breiter, obwohl Abweichungen dort am
+  // kritischsten sind (identische Überlegung wie learning.py::get_curve_analysis).
+  const first = curve[0], last = curve[curve.length - 1];
+  const avgRate = (field, scale) =>
+    first?.[field] != null && last?.[field] != null ? ((last[field] - first[field]) / refDuration) * scale : 0;
+  const dpTolWidth   = Math.abs(avgRate("dp", 1000)) * tolDp;      // mbar/s
+  const flowTolWidth = Math.abs(avgRate("flow", 60)) * tolFlow;    // l/min/min
+  const reffTolWidth = Math.abs(avgRate("r_eff", 1e6)) * tolReff;  // µ(b·min/l)/s
+
   // Wert eines Kurvenfelds an einer beliebigen t_pct-Position interpolieren
   // (identisch zur Backend-Logik in learning.py::_slope_windowed/interp_val).
   const interpVal = (t, field) => {
@@ -440,15 +452,15 @@ function _computeRateRefBands(refCurve) {
     if (dpLo != null && dpHi != null) {
       const r = (dpHi - dpLo) / dtS * 1000;            // mbar/s
       bands.dp.center.push({ x: xMid, y: r });
-      bands.dp.upper.push({  x: xMid, y: r * (1 + tolDp) });
-      bands.dp.lower.push({  x: xMid, y: Math.max(0, r * (1 - tolDp)) });
+      bands.dp.upper.push({  x: xMid, y: r + dpTolWidth });
+      bands.dp.lower.push({  x: xMid, y: Math.max(0, r - dpTolWidth) });
     }
     const flLo = interpVal(tLo, "flow"), flHi = interpVal(tHi, "flow");
     if (flLo != null && flHi != null) {
       const r = (flHi - flLo) / dtS * 60;               // l/min/min
       bands.flow.center.push({ x: xMid, y: r });
-      bands.flow.upper.push({  x: xMid, y: r * (1 + tolFlow) });
-      bands.flow.lower.push({  x: xMid, y: r - r * tolFlow });
+      bands.flow.upper.push({  x: xMid, y: r + flowTolWidth });
+      bands.flow.lower.push({  x: xMid, y: r - flowTolWidth });
     }
     const tpLo = interpVal(tLo, "temp"), tpHi = interpVal(tHi, "temp");
     if (tpLo != null && tpHi != null) {
@@ -462,8 +474,8 @@ function _computeRateRefBands(refCurve) {
     if (rfLo != null && rfHi != null) {
       const r = (rfHi - rfLo) / dtS * 1e6;              // µ(b·min/l)/s
       bands.reff.center.push({ x: xMid, y: r });
-      bands.reff.upper.push({  x: xMid, y: r * (1 + tolReff) });
-      bands.reff.lower.push({  x: xMid, y: r * (1 - tolReff) });
+      bands.reff.upper.push({  x: xMid, y: r + reffTolWidth });
+      bands.reff.lower.push({  x: xMid, y: Math.max(0, r - reffTolWidth) });
     }
   }
 

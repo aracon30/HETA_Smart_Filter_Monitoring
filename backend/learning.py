@@ -465,30 +465,41 @@ class LearningManager:
         else:
             actual_duration = ref_dur
 
-        def pct_dev(cur, ref_val):
-            if ref_val and abs(ref_val) > 1e-9:
-                return round((cur / ref_val - 1.0) * 100.0, 1)
-            return 0.0
+        # Durchschnittliche Referenzrate über den GESAMTEN gelernten Zyklus (Start→Ende
+        # der Kurvenanker). Die Abweichungs-% werden gegen diese KONSTANTE Rate normiert,
+        # nicht gegen die stark wachsende LOKALE Referenzrate – sonst würde die effektive
+        # Toleranz zum Zyklusende hin (wo Δp/Q/R_eff am steilsten verlaufen, progressive
+        # Verstopfungskurve) immer großzügiger, obwohl Abweichungen kurz vor dem
+        # Filterwechsel am kritischsten sind.
+        def avg_slope(field):
+            first_v = curve[0].get(field) if curve else None
+            last_v = curve[-1].get(field) if curve else None
+            if first_v is None or last_v is None or ref_dur <= 0:
+                return 0.0
+            return (last_v - first_v) / ref_dur
+
+        avg_dp_slope = avg_slope("dp")
+        avg_flow_slope = avg_slope("flow")
+        avg_reff_slope = avg_slope("r_eff")
+
+        def slope_dev_vs_avg(cur_slope, ref_local, avg_val):
+            if cur_slope is None or abs(avg_val) < 1e-12:
+                return 0.0
+            return round(((cur_slope - ref_local) / avg_val) * 100.0, 1)
 
         # dp-Steigung: Referenz über dasselbe 30-s-Fenster wie die aktuelle Regression.
         # Beide Steigungen nutzen denselben Mittelungshorizont → kein Versatz.
         # Referenzfenster: 30 s um aktuelle t_pct-Position in der Referenzkurve.
         ref_dp_slope = self._slope_windowed(curve, t_pct, actual_duration, field="dp", window_s=30)
-        dp_slope_dev = (
-            pct_dev(current_dp_slope, ref_dp_slope)
-            if current_dp_slope is not None and abs(ref_dp_slope) > 1e-9
-            else 0.0
-        )
+        dp_slope_dev = slope_dev_vs_avg(current_dp_slope, ref_dp_slope, avg_dp_slope)
 
-        # Rückwärts-Steigungen für Q, T, R_eff — identische Methodik wie dp
-        def slope_dev(cur_slope, field):
+        # Rückwärts-Steigungen für Q, R_eff — identische Methodik wie dp
+        def slope_dev(cur_slope, field, avg_val):
             ref_s = self._slope_windowed(curve, t_pct, actual_duration, field=field, window_s=30)
-            if cur_slope is None or abs(ref_s) < 1e-12:
-                return 0.0, ref_s
-            return pct_dev(cur_slope, ref_s), ref_s
+            return slope_dev_vs_avg(cur_slope, ref_s, avg_val), ref_s
 
-        flow_dev_pct, ref_flow_slope = slope_dev(current_flow_slope, "flow")
-        reff_dev_pct, ref_reff_slope = slope_dev(current_reff_slope, "r_eff")
+        flow_dev_pct, ref_flow_slope = slope_dev(current_flow_slope, "flow", avg_flow_slope)
+        reff_dev_pct, ref_reff_slope = slope_dev(current_reff_slope, "r_eff", avg_reff_slope)
 
         # Temperatur: die Referenzsteigung ist im Normalfall nahe Null (T bleibt
         # meist konstant) – ein prozentualer Vergleich relativ zu einer Fast-Null-
