@@ -1222,7 +1222,7 @@ function updateAnalysisSection(d) {
   setText("an-tmp-cur", fmt(tSlopeCur * 60, 4) + " °C/min");
   setAnalysisDev("an-tmp-dev", tDev, "%", _tolTempC * 10, _tolTempC * 20);
 
-  setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev, true));
+  setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev, dpSlopeCur));
 }
 
 function setAnalysisDev(id, val, unit, warnAt, critAt, isAbsolute = false) {
@@ -1239,31 +1239,33 @@ function setAnalysisDev(id, val, unit, warnAt, critAt, isAbsolute = false) {
   );
 }
 
-function buildDiagnosis(dpDevPct, flowDevPct, tempDev, isSlopeBase = false) {
-  const dpFast   = dpDevPct   >  40;
-  const dpSlow   = dpDevPct   < -30;
-  const flowLow  = flowDevPct < -20;
-  const flowHigh = flowDevPct >  15;
-  const tempHigh = tempDev    >  15;
-  const tempLow  = tempDev    < -10;
+function buildDiagnosis(dpDevPct, flowDevPct, tempDev, dpSlopeCur = 0) {
+  const dpFast     = dpDevPct   >  40;
+  const dpSlow     = dpDevPct   < -30;
+  // Δp kann durch Beladung physikalisch nur steigen, nie von selbst sinken – ein
+  // tatsächlich negativer Δp-Anstieg ist daher immer ein Hinweis auf einen
+  // strukturellen Defekt (Riss/Bypass), unabhängig von der Abweichungsgröße.
+  const dpFalling  = dpSlopeCur <  0;
+  const flowLow    = flowDevPct < -20;
+  const flowHigh   = flowDevPct >  15;
+  const tempHigh   = tempDev    >  15;
+  const tempLow    = tempDev    < -10;
 
   const hints = [];
 
-  if (dpFast && flowLow) {
+  if (dpFalling && flowHigh) {
+    hints.push("⚠ Δp fällt tatsächlich UND Durchfluss steigt → Verdacht auf Filterbruch/Bypass (Beladung kann sich nicht von selbst zurückbilden). Sofort prüfen.");
+  } else if (dpFast && flowLow) {
     hints.push("Schnelle Beladung + reduzierter Durchfluss → Verdacht auf Filterverstopfung oder erhöhten Verschmutzungseintrag.");
   } else if (dpFast) {
-    const label = isSlopeBase ? "Δp-Steigung höher als Referenz" : "Δp steigt schneller als gelernt";
-    hints.push(label + " → erhöhte Partikelkonzentration oder beschädigtes Filterelement möglich.");
+    hints.push("Δp-Steigung höher als Referenz → erhöhte Partikelkonzentration oder beschädigtes Filterelement möglich.");
   } else if (dpSlow) {
-    const label = isSlopeBase ? "Δp-Steigung niedriger als Referenz" : "Langsame Beladung";
-    hints.push(label + " → Prozess läuft mit reduzierter Last. Filterwechselintervall verlängert sich.");
+    hints.push("Δp-Steigung niedriger als Referenz → Prozess läuft mit reduzierter Last. Filterwechselintervall verlängert sich.");
   }
 
   if (flowLow && !dpFast) {
     hints.push("Durchfluss unter Referenz → Pumpenproblem, Leckage im Bypass oder Vorverstopfung möglich.");
-  } else if (flowHigh && !dpSlow) {
-    // flowHigh + dpSlow ist konsistent: weniger Beladung → niedrigerer Δp UND höherer
-    // Durchfluss (weniger Filterwiderstand). Kein Widerspruch – dpSlow-Hinweis reicht.
+  } else if (flowHigh && !dpSlow && !dpFalling) {
     hints.push("Erhöhter Durchfluss ohne Δp-Reduktion → mehr Partikelladung pro Zeiteinheit, Filterwechselintervall kann sich verkürzen.");
   }
 

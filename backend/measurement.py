@@ -673,6 +673,18 @@ class MeasurementLoop:
                             dev_active[ch] = False
                     self._state["_dev_active"] = dev_active
 
+                    # Laufende Abweichung eskaliert filter_status auch AUSSERHALB der
+                    # 10s-Startprüfung (z.B. Filterbruch mitten im Zyklus). Sicher ohne
+                    # eigenes Reset-Handling: der Startprüfungs-Block oben löscht
+                    # anomaly_active auf jedem Tick nach Ablauf seines 10s-Fensters,
+                    # bevor dieser Block hier ggf. neu setzt – daher hier bewusst nur
+                    # setzen, nie auf False zurücksetzen (das würde eine noch laufende
+                    # Start-Anomalie überschreiben).
+                    if any(dev_active.values()):
+                        worst_pct = max(abs(dev) for ch, dev, _, _ in checks if dev_active.get(ch))
+                        self._state["anomaly_active"] = True
+                        self._state["anomaly_percent"] = round(max(self._state["anomaly_percent"], worst_pct), 1)
+
             # ── Prognosestatus ────────────────────────────────────────────────
             req_cycles = self._settings.get("required_cycles_for_profile", 3)
             pred_status = self._predictor.get_status(
