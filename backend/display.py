@@ -106,8 +106,8 @@ class OLEDDisplay:
     # ── Hardware-Init ──────────────────────────────────────────────────────────
 
     def _init_hardware(self, use_spi, spi_port, spi_device, gpio_dc, gpio_rst, i2c_addr):
-        from PIL import ImageFont  # type: ignore
         from luma.oled.device import ssd1309  # type: ignore
+        from PIL import ImageFont  # type: ignore
 
         if use_spi:
             from luma.core.interface.serial import spi  # type: ignore
@@ -116,7 +116,10 @@ class OLEDDisplay:
             # luma-Standardgeschwindigkeit (mehrere MHz) oft nicht zuverlässig.
             try:
                 serial = spi(
-                    port=spi_port, device=spi_device, gpio_DC=gpio_dc, gpio_RST=gpio_rst,
+                    port=spi_port,
+                    device=spi_device,
+                    gpio_DC=gpio_dc,
+                    gpio_RST=gpio_rst,
                     bus_speed_hz=1_000_000,
                 )
             except TypeError:
@@ -139,7 +142,10 @@ class OLEDDisplay:
         if use_spi:
             logger.info(
                 "OLED initialisiert (Hardware-SPI /dev/spidev%d.%d, DC=GPIO%d, RST=GPIO%d).",
-                spi_port, spi_device, gpio_dc, gpio_rst,
+                spi_port,
+                spi_device,
+                gpio_dc,
+                gpio_rst,
             )
         else:
             logger.info("OLED initialisiert (I2C, Adresse 0x%02X).", i2c_addr)
