@@ -295,7 +295,6 @@ predictor = PredictionEngine(
 update_simulation_params(
     dp_clean=settings.get("dp_clean_bar", 0.2),
     dp_limit=settings.get("dp_limit_bar", 2.5),
-    flow_max=settings.get("flow_max_l_min", 150.0),
     p1_base=settings.get("sim_p1_base_bar", 4.0),
     q_base=settings.get("sim_q_base_l_min", 145.0),
     t_base=settings.get("sim_t_base_c", 25.0),
@@ -1203,7 +1202,6 @@ def api_settings_post():
     update_simulation_params(
         dp_clean=settings["dp_clean_bar"],
         dp_limit=settings["dp_limit_bar"],
-        flow_max=settings["flow_max_l_min"],
         p1_base=settings.get("sim_p1_base_bar", 4.0),
         q_base=settings.get("sim_q_base_l_min", 145.0),
         t_base=settings.get("sim_t_base_c", 25.0),
@@ -1494,7 +1492,6 @@ def api_onboarding_complete():
     update_simulation_params(
         dp_clean=settings["dp_clean_bar"],
         dp_limit=settings["dp_limit_bar"],
-        flow_max=settings["flow_max_l_min"],
         p1_base=settings.get("sim_p1_base_bar", 4.0),
         q_base=settings.get("sim_q_base_l_min", 145.0),
         t_base=settings.get("sim_t_base_c", 25.0),

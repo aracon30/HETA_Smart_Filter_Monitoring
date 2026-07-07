@@ -198,11 +198,10 @@ class FilterSimulator:
     # gehalten, da p2 überwiegend prozessseitig (Düse/Werkzeug) vorgegeben ist.
     _P2_FLOW_SENSITIVITY = 0.15
 
-    def __init__(self, dp_clean: float = 0.2, dp_limit: float = 2.5, flow_max: float = 150.0):
+    def __init__(self, dp_clean: float = 0.2, dp_limit: float = 2.5):
         self.dp_clean = dp_clean
         self._dp_clean_base = dp_clean  # konfigurierter Sollwert (aus Settings)
         self.dp_limit = dp_limit
-        self.flow_max = flow_max  # Sensor-Maximalbereich (nicht Q_base)
         self._lock = threading.Lock()
         # Feste Basiswerte (aus Konfiguration gesetzt)
         self._p1_base = 4.0
@@ -210,8 +209,8 @@ class FilterSimulator:
         self._t_base = 25.0
         # Szenario-Parameter (einstellbar)
         self._dirt_rate_factor = 1.0  # 1.0 = Referenzrate
-        self._p1_trend_factor = 0.0  # 0.0 = stabil, +0.1 = steigt 10 % über Zyklus
-        self._p2_trend_factor = 0.0  # zusätzlicher, von p1 unabhängiger Trend auf p2 (z.B. Leckage)
+        self._p1_trend_factor = 0.0  # additiver Abweichungs-Injektor auf p1 (0.0 = keine Abweichung)
+        self._p2_trend_factor = 0.0  # additiver Abweichungs-Injektor auf p2 (z.B. Leckage)
         self._flow_drop_factor = 0.75  # 0.75 = normaler Abfall
         self._temp_trend_per_cycle = 0.0  # °C-Änderung über Zyklus
         # Interner Zustand
@@ -258,12 +257,7 @@ class FilterSimulator:
             self._clogging = 0.0
             self._last_time = None
             self._roll_dp_clean()
-            self._dirt_rate_factor = 1.0
-            self._p1_trend_factor = 0.0
-            self._p2_trend_factor = 0.0
-            self._flow_drop_factor = 0.75
-            self._temp_trend_per_cycle = 0.0
-            self._rates_active = False
+            self._reset_scenario_defaults_locked()
 
     def set_scenario_params(
         self,
@@ -285,31 +279,21 @@ class FilterSimulator:
     def clear_scenario_params(self):
         """Setzt alle Szenario-Parameter auf Normalbetrieb zurück."""
         with self._lock:
-            self._dirt_rate_factor = 1.0
-            self._p1_trend_factor = 0.0
-            self._p2_trend_factor = 0.0
-            self._flow_drop_factor = 0.75
-            self._temp_trend_per_cycle = 0.0
-            self._rates_active = False
+            self._reset_scenario_defaults_locked()
+
+    def _reset_scenario_defaults_locked(self):
+        """Setzt die Szenario-Parameter auf Normalbetrieb (self._lock muss bereits gehalten werden)."""
+        self._dirt_rate_factor = 1.0
+        self._p1_trend_factor = 0.0
+        self._p2_trend_factor = 0.0
+        self._flow_drop_factor = 0.75
+        self._temp_trend_per_cycle = 0.0
+        self._rates_active = False
 
     @property
     def rates_active(self) -> bool:
         with self._lock:
             return self._rates_active
-
-    def get_scenario_params(self) -> dict:
-        """Gibt aktuelle Szenario-Parameter zurück (für quick-learn)."""
-        with self._lock:
-            return {
-                "p1_base": self._p1_base,
-                "q_base": self._q_base,
-                "t_base": self._t_base,
-                "dirt_rate_factor": self._dirt_rate_factor,
-                "p1_trend_factor": self._p1_trend_factor,
-                "p2_trend_factor": self._p2_trend_factor,
-                "flow_drop_factor": self._flow_drop_factor,
-                "temp_trend_per_cycle": self._temp_trend_per_cycle,
-            }
 
     @staticmethod
     def _compute_physics(
@@ -387,29 +371,26 @@ class FilterSimulator:
             dirt_rate = self._dirt_rate_factor * (self._REF_DP_RANGE_BAR / (dp_range * self._REF_CYCLE_SECS))
             self._clogging = min(1.0, self._clogging + dirt_rate * delta_t)
             clogging = self._clogging
+            params = self._snapshot_params_locked()
 
-            p1_base = self._p1_base
-            q_base = self._q_base
-            t_base = self._t_base
-            p1_trend_factor = self._p1_trend_factor
-            p2_trend_factor = self._p2_trend_factor
-            flow_drop_factor = self._flow_drop_factor
-            temp_trend_per_cycle = self._temp_trend_per_cycle
-            dp_clean = self.dp_clean
-            dp_limit = self.dp_limit
+        return self._compute_physics(clogging, now, *params)
 
-        return self._compute_physics(
-            clogging,
-            now,
-            p1_base,
-            q_base,
-            t_base,
-            p1_trend_factor,
-            flow_drop_factor,
-            temp_trend_per_cycle,
-            dp_clean,
-            dp_limit,
-            p2_trend_factor,
+    def _snapshot_params_locked(self) -> tuple:
+        """
+        Liest die aktuellen Basis-/Szenario-Parameter (self._lock muss bereits gehalten
+        werden) in der von _compute_physics erwarteten Reihenfolge – gemeinsam genutzt
+        von get_readings() und simulate_cycle_samples().
+        """
+        return (
+            self._p1_base,
+            self._q_base,
+            self._t_base,
+            self._p1_trend_factor,
+            self._flow_drop_factor,
+            self._temp_trend_per_cycle,
+            self.dp_clean,
+            self.dp_limit,
+            self._p2_trend_factor,
         )
 
     def simulate_cycle_samples(self, steps: list, cycle_steps: int, sampling_interval: float, base_time: float) -> list:
@@ -420,35 +401,13 @@ class FilterSimulator:
         simulierte Referenzzyklen (Quick-Learn).
         """
         with self._lock:
-            p1_base = self._p1_base
-            q_base = self._q_base
-            t_base = self._t_base
-            p1_trend_factor = self._p1_trend_factor
-            p2_trend_factor = self._p2_trend_factor
-            flow_drop_factor = self._flow_drop_factor
-            temp_trend_per_cycle = self._temp_trend_per_cycle
-            dp_clean = self.dp_clean
-            dp_limit = self.dp_limit
+            params = self._snapshot_params_locked()
 
         result = []
         for s in steps:
             clogging = min(s / max(cycle_steps, 1), 1.0)
             now = base_time + s * sampling_interval
-            result.append(
-                self._compute_physics(
-                    clogging,
-                    now,
-                    p1_base,
-                    q_base,
-                    t_base,
-                    p1_trend_factor,
-                    flow_drop_factor,
-                    temp_trend_per_cycle,
-                    dp_clean,
-                    dp_limit,
-                    p2_trend_factor,
-                )
-            )
+            result.append(self._compute_physics(clogging, now, *params))
         return result
 
 
@@ -477,7 +436,6 @@ def full_reset_simulation():
 def update_simulation_params(
     dp_clean: float,
     dp_limit: float,
-    flow_max: float,
     p1_base: float = 4.0,
     q_base: float = 145.0,
     t_base: float = 25.0,
@@ -494,7 +452,6 @@ def update_simulation_params(
     with _simulator._lock:
         _simulator._dp_clean_base = dp_clean
         _simulator.dp_limit = dp_limit
-        _simulator.flow_max = flow_max
         _simulator._p1_base = p1_base
         _simulator._q_base = q_base
         _simulator._t_base = t_base
@@ -555,11 +512,6 @@ def get_simulation_rates_active() -> bool:
 def get_simulation_estimated_cycle_secs() -> float:
     """Geschätzte Zyklusdauer in Sekunden basierend auf aktuellem dirt_rate_factor."""
     return _simulator.estimated_cycle_secs()
-
-
-def get_simulation_scenario_params() -> dict:
-    """Gibt aktuelle Szenario-Parameter zurück."""
-    return _simulator.get_scenario_params()
 
 
 # ---------------------------------------------------------------------------
