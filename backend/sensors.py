@@ -151,11 +151,28 @@ def check_hardware_sensors() -> dict:
 
 class FilterSimulator:
     """
-    Szenariobasierter Filterbeladungs-Simulator.
+    Filterbeladungs-Simulator für Prozessfiltration von Flüssigkeiten/Polymerschmelzen.
 
-    Feste Basiswerte: p1_base, q_base, t_base (aus Konfiguration).
-    Einstellbare Szenarien: dirt_rate_factor, p1_trend_factor,
-                            flow_drop_factor, temp_trend_per_cycle.
+    Kausalmodell (eine Zustandsgröße treibt alles, siehe _compute_physics):
+      1. Δp (Differenzdruck) ist die alleinige, autoritative Zustandsgröße. Sie steigt
+         progressiv mit der Beladung (clogging ∈ [0,1]) – bildet die zum Zyklusende hin
+         beschleunigte Porenverstopfung nach (dominanter Verschmutzungsmechanismus bei
+         Feinstpartikeln).
+      2. Q (Durchfluss) sinkt als Folge der Beladung.
+      3. p2 (Austrittsdruck) folgt aus dem sinkenden Q (Nachlagerwiderstand ~konstant,
+         Druckabfall danach skaliert mit dem Durchfluss) – sinkt also leicht mit.
+      4. p1 (Eintrittsdruck) ist die abgeleitete Größe p2 + Δp – steigt dadurch
+         automatisch und konsistent mit der Verschmutzung, statt unabhängig geregelt
+         zu werden.
+      5. T (Temperatur) bleibt im Normalfall konstant.
+
+    Szenario-Parameter:
+      - dirt_rate_factor: Steigung der Verschmutzungsrate (1.0 = Referenzrate) – der
+        einzige Regler, der den Beladungsfortschritt antreibt.
+      - flow_drop_factor: wie stark der Durchfluss zum Zyklusende hin abfällt.
+      - p1_trend_factor / p2_trend_factor / temp_trend_per_cycle: additive Abweichungs-
+        Injektoren obendrauf (für Testzwecke der Erkennungsalgorithmen), fließen NICHT
+        in die Δp-Berechnung zurück.
 
     clogging ∈ [0, 1] wächst zeitbasiert:
         dp_range = dp_limit - dp_clean
@@ -176,6 +193,10 @@ class FilterSimulator:
     # statt trivial den konfigurierten Wert zurückzuliefern.
     _DP_CLEAN_JITTER_STD = 0.05  # 5 % Std.-Abw. um den Basiswert
     _DP_CLEAN_JITTER_MAX = 0.15  # auf ±15 % begrenzt
+
+    # Wie stark p2 (Austrittsdruck) dem sinkenden Durchfluss folgt – bewusst klein
+    # gehalten, da p2 überwiegend prozessseitig (Düse/Werkzeug) vorgegeben ist.
+    _P2_FLOW_SENSITIVITY = 0.15
 
     def __init__(self, dp_clean: float = 0.2, dp_limit: float = 2.5, flow_max: float = 150.0):
         self.dp_clean = dp_clean
@@ -309,25 +330,44 @@ class FilterSimulator:
         (für die Temperatur-Drift). Wird von get_readings() (Echtzeit-Simulation) UND
         simulate_cycle_samples() (schnell simulierte Referenzzyklen) gemeinsam genutzt,
         damit gelernte Referenzzyklen und Live-Betrieb exakt dieselbe Physik abbilden.
+
+        Kausalkette: Δp ist die alleinige, autoritative Zustandsgröße (steigt progressiv
+        mit der Beladung – Porenverstopfung). Q sinkt als Folge der Beladung. p2 folgt aus
+        dem sinkenden Q (Nachlagerwiderstand). p1 ist die abgeleitete Größe p2 + Δp – sie
+        steigt dadurch automatisch mit der Verschmutzung, statt unabhängig geregelt zu sein.
+        p1_trend_factor/p2_trend_factor/temp_trend_per_cycle wirken als zusätzliche,
+        additive Abweichungs-Injektoren obendrauf (für Testzwecke der Erkennungsalgorithmen)
+        und fließen NICHT in die Δp-Berechnung zurück, damit der Zyklusfortschritt sauber
+        bleibt.
         """
-        # p1: Basiswert mit linearern Trend über den Zyklus
-        p1 = round(p1_base * (1.0 + p1_trend_factor * clogging), 4)
-        p1 = max(0.1, p1)
+        # Δp: einzige autoritative Zustandsgröße – progressiver Anstieg (Exponent 1.8,
+        # bildet die zum Ende hin beschleunigte Porenverstopfung nach). Bleibt bis zur
+        # Rückgabe unabgerundet, damit p1/p2 nicht durch verkettetes Runden minimal
+        # nicht-monoton werden.
+        dp_raw = dp_clean + (dp_limit - dp_clean) * clogging**1.8
+        dp_raw = max(dp_clean, min(dp_raw, dp_limit))
 
-        # Δp: nichtlinearer Anstieg (Exponent 1.8 → exponentiell am Ende) – bleibt die
-        # alleinige, autoritative Quelle für den Zyklusfortschritt/-abschluss.
-        dp = dp_clean + (dp_limit - dp_clean) * clogging**1.8
-        dp = round(max(dp_clean, min(dp, dp_limit)), 4)
-
-        # p2: physikalische Basis (p1 - dp) plus optionaler, von p1 unabhängiger
-        # Trend (z.B. simulierte Leckage) – wirkt NICHT auf dp zurück.
-        p2 = round(max(0.0, p1 - dp) * (1.0 + p2_trend_factor * clogging), 4)
-
-        # Q: sinkt mit Beladung, Minimum 10 % von Q_base
+        # Q: sinkt mit Beladung, Minimum 10 % von Q_base.
         q_min = max(1.0, q_base * 0.10)
         flow = round(max(q_min, q_base * (1.0 - flow_drop_factor * clogging**1.5)), 2)
 
-        # T: Basistemperatur + Trend über Zyklus + langsame Sinusdrift ±0,2 °C
+        # p2 (physikalische Basis): Nachlagerdruck ist überwiegend prozessseitig vorgegeben
+        # (z.B. Düse/Werkzeug), sinkt aber geringfügig mit dem zurückgehenden Durchfluss.
+        # Skaliert bewusst am dp-Bereich (nicht an p2_base) und mit demselben Exponenten
+        # wie Δp, damit der p2-Rückgang den Δp-Anstieg bei JEDER Konfiguration (auch bei
+        # sehr engem dp-Bereich) niemals überkompensieren kann – p1 = p2 + Δp bleibt so
+        # garantiert monoton steigend.
+        p2_base = max(0.1, p1_base - dp_clean)
+        p2_phys = p2_base - FilterSimulator._P2_FLOW_SENSITIVITY * (dp_limit - dp_clean) * clogging**1.8
+        p2 = round(max(0.0, p2_phys) * (1.0 + p2_trend_factor * clogging), 4)
+
+        # p1: abgeleitet aus p2 + Δp – steigt dadurch konsistent mit der Verschmutzung,
+        # zusätzlich additiver Abweichungs-Injektor für Testszenarien.
+        p1_phys = p2_phys + dp_raw
+        p1 = round(max(0.1, p1_phys) * (1.0 + p1_trend_factor * clogging), 4)
+        dp = round(dp_raw, 4)
+
+        # T: Basistemperatur + Trend über Zyklus + langsame Sinusdrift ±0,2 °C (Sensorrauschen)
         drift = 0.2 * math.sin(2.0 * math.pi * now / 600.0)
         temp = round(t_base + temp_trend_per_cycle * clogging + drift, 2)
 
