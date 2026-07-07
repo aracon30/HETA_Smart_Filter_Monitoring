@@ -362,11 +362,19 @@
         <h2 id="cycle-modal-title">Filterzyklus</h2>
         <button class="btn-close" onclick="closeCycleModal()">&#10005;</button>
       </div>
-      <!-- Channel toggles -->
-      <div id="cycle-modal-toggles" class="chart-toggle-bar" style="margin-top:.5rem"></div>
+      <!-- Live toggles - ABOVE chart -->
+      <div class="chart-toggle-bar" style="margin-top:.5rem">
+        <span class="chart-toggle-label">Messwerte</span>
+        <div id="cycle-live-chips" class="chart-toggle-chips"></div>
+      </div>
       <!-- Chart -->
       <div class="chart-container" style="height:320px;margin-top:0.5rem">
         <canvas id="chart-cycle-modal"></canvas>
+      </div>
+      <!-- Reference toggles - BELOW chart -->
+      <div class="chart-toggle-bar">
+        <span class="chart-toggle-label">Referenz &amp; Toleranz</span>
+        <div id="cycle-ref-chips" class="chart-toggle-chips"></div>
       </div>
       <!-- Events / Problems list -->
       <div id="cycle-modal-events" class="cycle-modal-events-list"></div>

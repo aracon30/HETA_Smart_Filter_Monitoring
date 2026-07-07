@@ -19,9 +19,6 @@ let _refCurveCacheCode = null;
 let _knownCycleStart     = null;
 let _knownLiveCycleStart = null;
 
-// Channel visibility state for cycle modal
-const _cycleModalVisible = { dp: true, flow: true, temp: false, reff: false };
-
 // ============================================================
 // Dataset-Metadaten & Achsen-Optionen
 // ============================================================
@@ -333,7 +330,8 @@ function initCharts() {
     },
   });
 
-  _buildChartToggleButtons();
+  _registerChartUI("live", combinedChart, "chart-live-chips", "chart-ref-chips");
+  _buildChartToggleButtons("live");
   _buildAxisPanel();
 }
 
@@ -394,50 +392,20 @@ async function _getRefCurve(hetaCode) {
   return null;
 }
 
-async function updateReferenceOverlay(status) {
-  if (!combinedChart) return;
-  const hetaCode    = status?.heta_code;
-  const cycleActive = !!status?.cycle_active;
-  const startTime   = status?.cycle_start_time;
-  const ds = combinedChart.data.datasets;
-
-  if (!cycleActive || !hetaCode || !startTime) {
-    const anyData = ds[10].data.length > 0 || ds[13].data.length > 0 ||
-                    ds[16].data.length > 0 || ds[19].data.length > 0;
-    if (anyData) {
-      // Clear all reference datasets 8-19
-      for (let i = 8; i <= 19; i++) ds[i].data = [];
-      combinedChart.update("none");
-      _refreshRefChips();
-    }
-    _knownCycleStart = null;
-    _knownLiveCycleStart = null;
-    return;
-  }
-
-  // Gleicher Zyklus + Referenz schon geladen → nichts tun
-  if (startTime === _knownCycleStart && ds[10].data.length > 0) return;
-  _knownCycleStart = startTime;
-
-  const refCurve = await _getRefCurve(hetaCode);
-  if (!refCurve?.curve?.length) return;
+// Berechnet die Referenz-Steigungsbänder (Δp/Q/T/R_eff, je Ober-/Unter-/Mittellinie)
+// aus der gelernten Referenzkurve. Gemeinsam genutzt von Live-Chart-Overlay und
+// Filterzyklus-Diagramm, damit beide identisch aussehen.
+function _computeRateRefBands(refCurve) {
+  const empty = () => ({ upper: [], lower: [], center: [] });
+  const bands = { dp: empty(), flow: empty(), temp: empty(), reff: empty() };
+  const curve = refCurve?.curve;
+  if (!curve?.length) return bands;
 
   const refDuration = refCurve.reference_duration_seconds || 300;
   const tolDp       = refCurve.tolerance_dp_pct   ?? refCurve.tolerance_pct ?? 0.25;
   const tolFlow     = refCurve.tolerance_flow_pct ?? 0.25;
   const tolReff     = refCurve.tolerance_reff_pct ?? 0.25;
   const tolTempAbs  = refCurve.tolerance_temp_c   ?? 10.0; // °C absolut → in Rate umrechnen
-
-  // Dp datasets (8=upper, 9=lower, 10=center)   [mbar/s]
-  const dpUpper = [], dpLower = [], dpCenter = [];
-  // Flow datasets (11=upper, 12=lower, 13=center) [l/min/min]
-  const flUpper = [], flLower = [], flCenter = [];
-  // Temp datasets (14=upper, 15=lower, 16=center) [°C/min]
-  const tpUpper = [], tpLower = [], tpCenter = [];
-  // Reff datasets (17=upper, 18=lower, 19=center) [µ(b·min/l)/s]
-  const rfUpper = [], rfLower = [], rfCenter = [];
-
-  const curve = refCurve.curve;
 
   // Wert eines Kurvenfelds an einer beliebigen t_pct-Position interpolieren
   // (identisch zur Backend-Logik in learning.py::_slope_windowed/interp_val).
@@ -471,81 +439,109 @@ async function updateReferenceOverlay(status) {
     const dpLo = interpVal(tLo, "dp"), dpHi = interpVal(tHi, "dp");
     if (dpLo != null && dpHi != null) {
       const r = (dpHi - dpLo) / dtS * 1000;            // mbar/s
-      dpCenter.push({ x: xMid, y: r });
-      dpUpper.push({  x: xMid, y: r * (1 + tolDp) });
-      dpLower.push({  x: xMid, y: Math.max(0, r * (1 - tolDp)) });
+      bands.dp.center.push({ x: xMid, y: r });
+      bands.dp.upper.push({  x: xMid, y: r * (1 + tolDp) });
+      bands.dp.lower.push({  x: xMid, y: Math.max(0, r * (1 - tolDp)) });
     }
     const flLo = interpVal(tLo, "flow"), flHi = interpVal(tHi, "flow");
     if (flLo != null && flHi != null) {
       const r = (flHi - flLo) / dtS * 60;               // l/min/min
-      flCenter.push({ x: xMid, y: r });
-      flUpper.push({  x: xMid, y: r * (1 + tolFlow) });
-      flLower.push({  x: xMid, y: r - r * tolFlow });
+      bands.flow.center.push({ x: xMid, y: r });
+      bands.flow.upper.push({  x: xMid, y: r * (1 + tolFlow) });
+      bands.flow.lower.push({  x: xMid, y: r - r * tolFlow });
     }
     const tpLo = interpVal(tLo, "temp"), tpHi = interpVal(tHi, "temp");
     if (tpLo != null && tpHi != null) {
       const r = (tpHi - tpLo) / dtS * 60;               // °C/min
       const tol = tolTempAbs / (refDuration / 60);       // °C/min Toleranzbreite
-      tpCenter.push({ x: xMid, y: r });
-      tpUpper.push({  x: xMid, y: r + tol });
-      tpLower.push({  x: xMid, y: r - tol });
+      bands.temp.center.push({ x: xMid, y: r });
+      bands.temp.upper.push({  x: xMid, y: r + tol });
+      bands.temp.lower.push({  x: xMid, y: r - tol });
     }
     const rfLo = interpVal(tLo, "r_eff"), rfHi = interpVal(tHi, "r_eff");
     if (rfLo != null && rfHi != null) {
       const r = (rfHi - rfLo) / dtS * 1e6;              // µ(b·min/l)/s
-      rfCenter.push({ x: xMid, y: r });
-      rfUpper.push({  x: xMid, y: r * (1 + tolReff) });
-      rfLower.push({  x: xMid, y: r * (1 - tolReff) });
+      bands.reff.center.push({ x: xMid, y: r });
+      bands.reff.upper.push({  x: xMid, y: r * (1 + tolReff) });
+      bands.reff.lower.push({  x: xMid, y: r * (1 - tolReff) });
     }
   }
 
-  ds[8].data = dpUpper;   ds[9].data = dpLower;   ds[10].data = dpCenter;
-  ds[11].data = flUpper;  ds[12].data = flLower;  ds[13].data = flCenter;
-  ds[14].data = tpUpper;  ds[15].data = tpLower;  ds[16].data = tpCenter;
-  ds[17].data = rfUpper;  ds[18].data = rfLower;  ds[19].data = rfCenter;
+  return bands;
+}
+
+// Rollierende Steigung (kleinste Quadrate) über ein window_s-Sekundenfenster
+// entlang der echten cycle_second-Zeitachse eines historischen Zyklus –
+// dieselbe Methodik wie PredictionEngine._linear_slope im Backend, mit der
+// tatsächlichen Zeitachse statt Sample-Index (robust ggü. Abtastlücken).
+function _rollingSlopeSeries(samples, field, durationSeconds, windowS = 30, scale = 1, minPoints = 5) {
+  const out = [];
+  let lo = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const tHi = samples[i].cycle_second;
+    while (samples[lo].cycle_second < tHi - windowS) lo++;
+    let n = 0, sumT = 0, sumV = 0, sumTT = 0, sumTV = 0;
+    for (let j = lo; j <= i; j++) {
+      const v = samples[j][field];
+      if (v == null) continue;
+      const t = samples[j].cycle_second;
+      n++; sumT += t; sumV += v; sumTT += t * t; sumTV += t * v;
+    }
+    if (n < minPoints) continue;
+    const denom = n * sumTT - sumT * sumT;
+    if (denom === 0) continue;
+    const slope = (n * sumTV - sumT * sumV) / denom;
+    const x = durationSeconds > 0 ? (tHi / durationSeconds) * 100 : tHi;
+    out.push({ x, y: slope * scale });
+  }
+  return out;
+}
+
+async function updateReferenceOverlay(status) {
+  if (!combinedChart) return;
+  const hetaCode    = status?.heta_code;
+  const cycleActive = !!status?.cycle_active;
+  const startTime   = status?.cycle_start_time;
+  const ds = combinedChart.data.datasets;
+
+  if (!cycleActive || !hetaCode || !startTime) {
+    const anyData = ds[10].data.length > 0 || ds[13].data.length > 0 ||
+                    ds[16].data.length > 0 || ds[19].data.length > 0;
+    if (anyData) {
+      // Clear all reference datasets 8-19
+      for (let i = 8; i <= 19; i++) ds[i].data = [];
+      combinedChart.update("none");
+      _refreshRefChips("live");
+    }
+    _knownCycleStart = null;
+    _knownLiveCycleStart = null;
+    return;
+  }
+
+  // Gleicher Zyklus + Referenz schon geladen → nichts tun
+  if (startTime === _knownCycleStart && ds[10].data.length > 0) return;
+  _knownCycleStart = startTime;
+
+  const refCurve = await _getRefCurve(hetaCode);
+  if (!refCurve?.curve?.length) return;
+
+  const bands = _computeRateRefBands(refCurve);
+  ds[8].data = bands.dp.upper;     ds[9].data = bands.dp.lower;     ds[10].data = bands.dp.center;
+  ds[11].data = bands.flow.upper;  ds[12].data = bands.flow.lower;  ds[13].data = bands.flow.center;
+  ds[14].data = bands.temp.upper;  ds[15].data = bands.temp.lower;  ds[16].data = bands.temp.center;
+  ds[17].data = bands.reff.upper;  ds[18].data = bands.reff.lower;  ds[19].data = bands.reff.center;
 
   combinedChart.update("none");
-  _refreshRefChips();
+  _refreshRefChips("live");
 }
 
 // ============================================================
 // Zyklus-Diagramm Modal (vergangene Zyklen)
 // ============================================================
 
-function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
-  const tolDp   = refCurve?.tolerance_dp_pct   ?? refCurve?.tolerance_pct ?? 0.25;
-  const tolFlow = refCurve?.tolerance_flow_pct ?? 0.25;
-  const tolTempC = refCurve?.tolerance_temp_c  ?? 10.0;
-  const tolReff  = refCurve?.tolerance_reff_pct ?? 0.25;
-  const reffStart = refCurve?.reference_r_eff_start || 0;
-
-  const xOf = s => durationSeconds > 0 ? (s.cycle_second / durationSeconds) * 100 : s.cycle_second;
-
-  // Measured channels
-  const dpData   = samples.map(s => ({ x: xOf(s), y: s.dp_bar   ?? null })).filter(p => p.y != null);
-  const flData   = samples.map(s => ({ x: xOf(s), y: s.flow_l_min ?? null })).filter(p => p.y != null);
-  const tpData   = samples.map(s => ({ x: xOf(s), y: s.temp_c   ?? null })).filter(p => p.y != null);
-  const rfData   = samples.map(s => {
-    const rv = s.r_eff ?? null;
-    if (rv == null) return null;
-    const norm = reffStart > 0 ? rv / reffStart : rv;
-    return { x: xOf(s), y: norm };
-  }).filter(Boolean);
-
-  // Reference channels
-  const curve = refCurve?.curve || [];
-  const dpRef = [], dpUp = [], dpLo = [];
-  const flRef = [], flUp = [], flLo = [];
-  const tpRef = [], tpUp = [], tpLo = [];
-  const rfRef = [], rfUp = [], rfLo = [];
-  for (const p of curve) {
-    if (p.dp  != null) { dpRef.push({x:p.t_pct,y:p.dp}); dpUp.push({x:p.t_pct,y:p.dp*(1+tolDp)}); dpLo.push({x:p.t_pct,y:Math.max(0,p.dp*(1-tolDp))}); }
-    if (p.flow != null) { flRef.push({x:p.t_pct,y:p.flow}); flUp.push({x:p.t_pct,y:p.flow*(1+tolFlow)}); flLo.push({x:p.t_pct,y:Math.max(0,p.flow*(1-tolFlow))}); }
-    if (p.temp != null) { tpRef.push({x:p.t_pct,y:p.temp}); tpUp.push({x:p.t_pct,y:p.temp+tolTempC}); tpLo.push({x:p.t_pct,y:p.temp-tolTempC}); }
-    if (p.r_eff != null) { const n = reffStart > 0 ? p.r_eff/reffStart : p.r_eff; rfRef.push({x:p.t_pct,y:n}); rfUp.push({x:p.t_pct,y:n*(1+tolReff)}); rfLo.push({x:p.t_pct,y:Math.max(0,n*(1-tolReff))}); }
-  }
-
-  // Annotations for events
+// Baut die Event-Annotationen (Fehler/Warnungen/Abweichungen) für das
+// Filterzyklus-Diagramm – unverändert gegenüber der Vorgängerversion.
+function _buildCycleEventAnnotations(events, samples, durationSeconds) {
   const annotations = {};
   const cycleStartTs = samples.length > 0 ? (samples[0].timestamp - samples[0].cycle_second) : 0;
 
@@ -600,151 +596,157 @@ function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
     }
   });
 
-  // Dataset visibility helpers
-  const hidden = ch => !_cycleModalVisible[ch];
+  return annotations;
+}
+
+// Baut die Chart.js-Konfiguration für ein vergangenes Filterzyklus-Diagramm.
+// Identische Dataset-/Achsenstruktur wie das Live-Diagramm (initCharts):
+// Steigungen (p1/p2/Δp/Q/T/R_eff) statt Absolutwerte, plus Δp aktuell und
+// Reststandzeit, plus Referenz-/Toleranzbänder – berechnet aus den
+// gespeicherten Samples nach derselben 30-s-Fenster-Methodik wie live.
+function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
+  const mkDs = (label, color, yAxis, data, extra = {}) => ({
+    label, yAxisID: yAxis, data, parsing: false,
+    borderColor: color, backgroundColor: "transparent",
+    borderWidth: 2, pointRadius: 0, tension: 0.3,
+    ...extra,
+  });
+
+  const WINDOW_S = 30;
+  const p1Rate = _rollingSlopeSeries(samples, "p1_bar",     durationSeconds, WINDOW_S, 1000);
+  const p2Rate = _rollingSlopeSeries(samples, "p2_bar",     durationSeconds, WINDOW_S, 1000);
+  const dpRate = _rollingSlopeSeries(samples, "dp_bar",     durationSeconds, WINDOW_S, 1000);
+  const flRate = _rollingSlopeSeries(samples, "flow_l_min", durationSeconds, WINDOW_S, 60);
+  const tpRate = _rollingSlopeSeries(samples, "temp_c",     durationSeconds, WINDOW_S, 60);
+  const rfRate = _rollingSlopeSeries(samples, "r_eff",      durationSeconds, WINDOW_S, 1e6);
+
+  const xOf = s => durationSeconds > 0 ? (s.cycle_second / durationSeconds) * 100 : s.cycle_second;
+  const remainData = samples
+    .filter(s => s.remaining_seconds != null)
+    .map(s => ({ x: xOf(s), y: s.remaining_seconds / 60 }));
+  const dpAbsData = samples
+    .filter(s => s.dp_bar != null)
+    .map(s => ({ x: xOf(s), y: s.dp_bar }));
+
+  const bands = _computeRateRefBands(refCurve);
+  const annotations = _buildCycleEventAnnotations(events, samples, durationSeconds);
 
   return {
     type: "line",
     data: {
       datasets: [
-        // 0 dp tol upper
-        { label: `_dp_up`, data: dpUp, yAxisID: "yDp",
+        // ── Messwerte (Indizes 0–7) – identisch zum Live-Chart ──────────
+        mkDs("p1 [mbar/s]", DS_COLORS.p1, "yDpRate", p1Rate, { borderWidth: 1.5 }),
+        mkDs("p2 [mbar/s]", DS_COLORS.p2, "yDpRate", p2Rate, { borderWidth: 1.5 }),
+        mkDs("Δp [mbar/s]", DS_COLORS.dp, "yDpRate", dpRate, {
+          borderWidth: 2.5, backgroundColor: "rgba(56,189,248,0.07)", fill: "origin",
+        }),
+        mkDs("Q [l/min/min]",        DS_COLORS.flow,   "yFlow", flRate),
+        mkDs("T [°C/min]",           DS_COLORS.temp,   "yTemp", tpRate),
+        mkDs("R_eff [µ(b·min/l)/s]", DS_COLORS.reff,   "yReff", rfRate, { borderDash: [5, 3] }),
+        mkDs("Reststandzeit [min]",  DS_COLORS.remain, "yTime", remainData, { borderDash: [5, 3] }),
+        mkDs("Δp aktuell [bar]",     DS_COLORS.dp,     "yPressure", dpAbsData, { borderWidth: 2 }),
+        // ── Referenz & Toleranz Δp (Indizes 8–10) ────────────────────────
+        { label: "±Tol Δp", yAxisID: "yDpRate", data: bands.dp.upper, parsing: false,
           borderColor: DS_COLORS.tolEdge, backgroundColor: DS_COLORS.tolBand,
-          borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0.3, parsing: false, fill: "+1", hidden: hidden("dp") },
-        // 1 dp tol lower
-        { label: "_dp_lo", data: dpLo, yAxisID: "yDp",
+          borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: "+1" },
+        { label: "_tol_dp_lower", yAxisID: "yDpRate", data: bands.dp.lower, parsing: false,
           borderColor: DS_COLORS.tolEdge, backgroundColor: "transparent",
-          borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0.3, parsing: false, fill: false, hidden: hidden("dp") },
-        // 2 dp ref
-        { label: "Ref Δp", data: dpRef, yAxisID: "yDp",
-          borderColor: DS_COLORS.refLine, backgroundColor: "transparent",
-          borderWidth: 1.5, borderDash: [10,5], pointRadius: 0, tension: 0.3, parsing: false, hidden: hidden("dp") },
-        // 3 dp measured
-        { label: "Δp", data: dpData, yAxisID: "yDp",
-          borderColor: DS_COLORS.dp, backgroundColor: "rgba(56,189,248,0.07)",
-          borderWidth: 2.5, pointRadius: 0, tension: 0.3, parsing: false, fill: "origin", hidden: hidden("dp") },
-        // 4 flow tol upper
-        { label: "_fl_up", data: flUp, yAxisID: "yFlow",
-          borderColor: "rgba(52,211,153,0.4)", backgroundColor: "rgba(52,211,153,0.08)",
-          borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0.3, parsing: false, fill: "+1", hidden: hidden("flow") },
-        // 5 flow tol lower
-        { label: "_fl_lo", data: flLo, yAxisID: "yFlow",
-          borderColor: "rgba(52,211,153,0.4)", backgroundColor: "transparent",
-          borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0.3, parsing: false, fill: false, hidden: hidden("flow") },
-        // 6 flow ref
-        { label: "Ref Q", data: flRef, yAxisID: "yFlow",
-          borderColor: "rgba(52,211,153,0.7)", backgroundColor: "transparent",
-          borderWidth: 1.5, borderDash: [10,5], pointRadius: 0, tension: 0.3, parsing: false, hidden: hidden("flow") },
-        // 7 flow measured
-        { label: "Q", data: flData, yAxisID: "yFlow",
-          borderColor: DS_COLORS.flow, backgroundColor: "rgba(52,211,153,0.07)",
-          borderWidth: 2, pointRadius: 0, tension: 0.3, parsing: false, hidden: hidden("flow") },
-        // 8 temp tol upper
-        { label: "_tp_up", data: tpUp, yAxisID: "yTemp",
-          borderColor: "rgba(251,146,60,0.4)", backgroundColor: "rgba(251,146,60,0.08)",
-          borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0.3, parsing: false, fill: "+1", hidden: hidden("temp") },
-        // 9 temp tol lower
-        { label: "_tp_lo", data: tpLo, yAxisID: "yTemp",
-          borderColor: "rgba(251,146,60,0.4)", backgroundColor: "transparent",
-          borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0.3, parsing: false, fill: false, hidden: hidden("temp") },
-        // 10 temp ref
-        { label: "Ref T", data: tpRef, yAxisID: "yTemp",
-          borderColor: "rgba(251,146,60,0.7)", backgroundColor: "transparent",
-          borderWidth: 1.5, borderDash: [10,5], pointRadius: 0, tension: 0.3, parsing: false, hidden: hidden("temp") },
-        // 11 temp measured
-        { label: "T", data: tpData, yAxisID: "yTemp",
-          borderColor: DS_COLORS.temp, backgroundColor: "rgba(251,146,60,0.07)",
-          borderWidth: 2, pointRadius: 0, tension: 0.3, parsing: false, hidden: hidden("temp") },
-        // 12 reff tol upper
-        { label: "_rf_up", data: rfUp, yAxisID: "yReff",
-          borderColor: "rgba(167,139,250,0.4)", backgroundColor: "rgba(167,139,250,0.08)",
-          borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0.3, parsing: false, fill: "+1", hidden: hidden("reff") },
-        // 13 reff tol lower
-        { label: "_rf_lo", data: rfLo, yAxisID: "yReff",
-          borderColor: "rgba(167,139,250,0.4)", backgroundColor: "transparent",
-          borderWidth: 1, borderDash: [3,4], pointRadius: 0, tension: 0.3, parsing: false, fill: false, hidden: hidden("reff") },
-        // 14 reff ref
-        { label: "Ref Rₑₑₑ", data: rfRef, yAxisID: "yReff",
-          borderColor: "rgba(167,139,250,0.7)", backgroundColor: "transparent",
-          borderWidth: 1.5, borderDash: [10,5], pointRadius: 0, tension: 0.3, parsing: false, hidden: hidden("reff") },
-        // 15 reff measured
-        { label: "Rₑₑₑ", data: rfData, yAxisID: "yReff",
-          borderColor: DS_COLORS.reff, backgroundColor: "rgba(167,139,250,0.07)",
-          borderWidth: 2, pointRadius: 0, tension: 0.3, parsing: false, hidden: hidden("reff") },
+          borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: false },
+        mkDs("Ref Δp", DS_COLORS.refLine, "yDpRate", bands.dp.center, { borderWidth: 1.5, borderDash: [10, 5] }),
+        // ── Referenz & Toleranz Q (Indizes 11–13) ───────────────────────
+        { label: "±Tol Q", yAxisID: "yFlow", data: bands.flow.upper, parsing: false,
+          borderColor: "rgba(52,211,153,0.35)", backgroundColor: "rgba(52,211,153,0.08)",
+          borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: "+1" },
+        { label: "_tol_flow_lower", yAxisID: "yFlow", data: bands.flow.lower, parsing: false,
+          borderColor: "rgba(52,211,153,0.35)", backgroundColor: "transparent",
+          borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: false },
+        mkDs("Ref Q", DS_COLORS.flow, "yFlow", bands.flow.center, { borderWidth: 1.5, borderDash: [10, 5] }),
+        // ── Referenz & Toleranz Temp (Indizes 14–16) ────────────────────
+        { label: "±Tol T", yAxisID: "yTemp", data: bands.temp.upper, parsing: false,
+          borderColor: "rgba(251,146,60,0.35)", backgroundColor: "rgba(251,146,60,0.08)",
+          borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: "+1" },
+        { label: "_tol_temp_lower", yAxisID: "yTemp", data: bands.temp.lower, parsing: false,
+          borderColor: "rgba(251,146,60,0.35)", backgroundColor: "transparent",
+          borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: false },
+        mkDs("Ref T", DS_COLORS.temp, "yTemp", bands.temp.center, { borderWidth: 1.5, borderDash: [10, 5] }),
+        // ── Referenz & Toleranz R_eff (Indizes 17–19) ───────────────────
+        { label: "±Tol R_eff", yAxisID: "yReff", data: bands.reff.upper, parsing: false,
+          borderColor: "rgba(192,132,252,0.35)", backgroundColor: "rgba(192,132,252,0.08)",
+          borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: "+1" },
+        { label: "_tol_reff_lower", yAxisID: "yReff", data: bands.reff.lower, parsing: false,
+          borderColor: "rgba(192,132,252,0.35)", backgroundColor: "transparent",
+          borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: false },
+        mkDs("Ref R_eff", DS_COLORS.reff, "yReff", bands.reff.center, { borderWidth: 1.5, borderDash: [10, 5] }),
       ],
     },
     options: {
       animation: false, responsive: true, maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
       plugins: {
-        legend: {
-          display: true, position: "top",
-          labels: { usePointStyle: true, padding: 12, font: { size: 11 }, color: "#cbd5e1",
-            filter: item => !item.text.startsWith("_") },
-        },
+        legend: { display: false },
         tooltip: {
+          mode: "index", intersect: false,
           backgroundColor: "rgba(12,22,38,0.95)",
           titleColor: "#a8c8f0", bodyColor: "#dde8f5",
-          borderColor: "#1c3a5c", borderWidth: 1, padding: 9,
+          borderColor: "#1c3a5c", borderWidth: 1, padding: 10,
           usePointStyle: true,
           callbacks: {
-            title: items => items[0] ? `Fortschritt: ${Number(items[0].parsed.x).toFixed(1)} %` : "",
+            title: items => items[0] ? `Fortschritt: ${items[0].parsed.x.toFixed(1)} %` : "",
             label: ctx => {
               if (ctx.dataset.label.startsWith("_")) return null;
               const v = ctx.parsed.y;
               if (v == null || isNaN(v)) return null;
-              const lbl = ctx.dataset.label;
-              if (lbl.startsWith("Ref ") || lbl.startsWith("Rₑ") || lbl === "Δp" || lbl === "Q" || lbl === "T") {
-                return ` ${lbl}: ${v.toFixed(3)}`;
-              }
-              return ` ${lbl}: ${v.toFixed(3)}`;
+              const dec = {
+                "p1 [mbar/s]": 3, "p2 [mbar/s]": 3,
+                "Δp [mbar/s]": 3, "Q [l/min/min]": 3,
+                "T [°C/min]": 3, "R_eff [µ(b·min/l)/s]": 3,
+                "Reststandzeit [min]": 1,
+                "Δp aktuell [bar]": 3,
+                "Ref Δp": 3, "Ref Q": 3, "Ref T": 3, "Ref R_eff": 3,
+              };
+              return ` ${ctx.dataset.label}: ${v.toFixed(dec[ctx.dataset.label] ?? 2)}`;
             },
           },
         },
         annotation: { annotations },
       },
       scales: {
-        x: { type: "linear", min: 0,
-          title: { display: true, text: "Zyklusfortschritt [%]", font: { size: 11 }, color: "#94a3b8" },
-          ticks: { font: { size: 10 }, color: "#64748b" },
+        x: { type: "linear", min: 0, max: 100,
+          title: { display: true, text: "Zyklusfortschritt [%]", font: { size: 10 }, color: "#64748b" },
+          ticks: { maxTicksLimit: 11, maxRotation: 0, font: { size: 10 }, color: "#64748b", callback: val => val + " %" },
           grid: { color: "rgba(100,130,160,0.15)" } },
-        yDp: { type: "linear", position: "left", min: 0,
-          title: { display: true, text: "Δp [bar]", font: { size: 10 }, color: "#94a3b8" },
-          ticks: { font: { size: 10 }, color: "#64748b" },
-          grid: { color: "rgba(100,130,160,0.15)" },
-          display: _cycleModalVisible.dp },
-        yFlow: { type: "linear", position: "right", min: 0,
-          title: { display: true, text: "Q [l/min]", font: { size: 10 }, color: "#94a3b8" },
-          ticks: { font: { size: 10 }, color: "#64748b" },
-          grid: { drawOnChartArea: false },
-          display: _cycleModalVisible.flow },
-        yTemp: { type: "linear", position: "right",
-          title: { display: true, text: "T [°C]", font: { size: 10 }, color: "#94a3b8" },
-          ticks: { font: { size: 10 }, color: "#64748b" },
-          grid: { drawOnChartArea: false },
-          display: _cycleModalVisible.temp },
-        yReff: { type: "linear", position: "right", min: 0,
-          title: { display: true, text: "Rₑff [×]", font: { size: 10 }, color: "#94a3b8" },
-          ticks: { font: { size: 10 }, color: "#64748b" },
-          grid: { drawOnChartArea: false },
-          display: _cycleModalVisible.reff },
+        yPressure: { type: "linear", position: "left", display: false, min: 0,
+          title: { display: true, text: "Δp [bar]", font: { size: 10 }, color: DS_COLORS.dp },
+          ticks: { font: { size: 10 }, color: DS_COLORS.dp },
+          grid: { color: "rgba(100,130,160,0.15)" } },
+        yDpRate: { type: "linear", position: "left",
+          title: { display: true, text: "Druckraten [mbar/s]", font: { size: 10 }, color: DS_COLORS.dp },
+          ticks: { font: { size: 10 }, color: DS_COLORS.dp },
+          grid: { color: "rgba(100,130,160,0.15)" } },
+        yFlow: { type: "linear", position: "right", display: false,
+          title: { display: true, text: "ΔQ [l/min/min]", font: { size: 10 }, color: DS_COLORS.flow },
+          ticks: { font: { size: 10 }, color: DS_COLORS.flow },
+          grid: { drawOnChartArea: false } },
+        yTemp: { type: "linear", position: "right", display: false,
+          title: { display: true, text: "ΔT [°C/min]", font: { size: 10 }, color: DS_COLORS.temp },
+          ticks: { font: { size: 10 }, color: DS_COLORS.temp },
+          grid: { drawOnChartArea: false } },
+        yReff: { type: "linear", position: "right", display: false,
+          title: { display: true, text: "ΔR_eff [µ(b·min/l)/s]", font: { size: 10 }, color: DS_COLORS.reff },
+          ticks: { font: { size: 10 }, color: DS_COLORS.reff },
+          grid: { drawOnChartArea: false } },
+        yTime: { type: "linear", position: "right", display: false, min: 0,
+          grid: { drawOnChartArea: false } },
       },
     },
   };
 }
 
-function _cycleDataFromSamples(samples, durationSeconds) {
-  if (!samples?.length) return [];
-  if (durationSeconds > 0)
-    return samples.map(s => ({ x: (s.cycle_second / durationSeconds) * 100, y: s.dp_bar }));
-  return samples.map(s => ({ x: s.cycle_second, y: s.dp_bar }));
-}
-
 async function openCycleModal(cycleId, cycleNum, dateStr, hetaCode, durationSeconds, eventsJson) {
-  const overlay   = document.getElementById("cycle-modal-overlay");
-  const titleEl   = document.getElementById("cycle-modal-title");
-  const eventsEl  = document.getElementById("cycle-modal-events");
-  const togglesEl = document.getElementById("cycle-modal-toggles");
+  const overlay  = document.getElementById("cycle-modal-overlay");
+  const titleEl  = document.getElementById("cycle-modal-title");
+  const eventsEl = document.getElementById("cycle-modal-events");
   if (!overlay) return;
 
   if (titleEl) titleEl.textContent = `Filterzyklus #${cycleNum} – ${dateStr}`;
@@ -790,22 +792,6 @@ async function openCycleModal(cycleId, cycleNum, dateStr, hetaCode, durationSeco
     }
   }
 
-  // Render channel toggle chips
-  if (togglesEl) {
-    const channels = [
-      { key: "dp",   label: "Δp",  color: DS_COLORS.dp },
-      { key: "flow", label: "Q",   color: DS_COLORS.flow },
-      { key: "temp", label: "T",   color: DS_COLORS.temp },
-      { key: "reff", label: "Rₑff", color: DS_COLORS.reff },
-    ];
-    togglesEl.innerHTML = channels.map(ch =>
-      `<button class="chart-chip${_cycleModalVisible[ch.key] ? " chip-active" : ""}"
-        data-ch="${ch.key}"
-        style="--chip-color:${ch.color}"
-        onclick="_toggleCycleChannel('${ch.key}', this)">${ch.label}</button>`
-    ).join("");
-  }
-
   const [samples, refCurve] = await Promise.all([
     apiFetch(`/api/cycle-samples/${cycleId}`),
     hetaCode ? _getRefCurve(hetaCode) : Promise.resolve(null),
@@ -816,28 +802,19 @@ async function openCycleModal(cycleId, cycleNum, dateStr, hetaCode, durationSeco
   if (cycleModalChart) { cycleModalChart.destroy(); cycleModalChart = null; }
   cycleModalChart = new Chart(ctx,
     _buildCycleChartConfig(samples || [], refCurve, events, durationSeconds));
-}
 
-function _toggleCycleChannel(ch, btn) {
-  _cycleModalVisible[ch] = !_cycleModalVisible[ch];
-  btn.classList.toggle("chip-active", _cycleModalVisible[ch]);
-  if (!cycleModalChart) return;
-  const ds = cycleModalChart.data.datasets;
-  const scales = cycleModalChart.options.scales;
-  // indices per channel: dp=0-3, flow=4-7, temp=8-11, reff=12-15
-  const ranges = { dp: [0,3], flow: [4,7], temp: [8,11], reff: [12,15] };
-  const axisMap = { dp: "yDp", flow: "yFlow", temp: "yTemp", reff: "yReff" };
-  const [lo, hi] = ranges[ch];
-  const vis = _cycleModalVisible[ch];
-  for (let i = lo; i <= hi; i++) ds[i].hidden = !vis;
-  if (scales[axisMap[ch]]) scales[axisMap[ch]].display = vis;
-  cycleModalChart.update("none");
+  // Toggle-Chips wie beim Live-Chart aufbauen (Messwerte + Referenz/Toleranz),
+  // Referenzdaten sind hier von Anfang an vollständig geladen.
+  _registerChartUI("cycle", cycleModalChart, "cycle-live-chips", "cycle-ref-chips");
+  _buildChartToggleButtons("cycle");
+  _refreshRefChips("cycle");
 }
 
 function closeCycleModal() {
   const overlay = document.getElementById("cycle-modal-overlay");
   if (overlay) overlay.classList.add("hidden");
   if (cycleModalChart) { cycleModalChart.destroy(); cycleModalChart = null; }
+  delete _chartUI.cycle;
 }
 
 function updateChartDpLimit(dpLimitBar) {
@@ -851,12 +828,25 @@ function updateChartDpLimit(dpLimitBar) {
 // ============================================================
 // Chart Toggle Buttons & Axis Panel
 // ============================================================
+//
+// Beide Diagramme (Live-Chart & Filterzyklus-Modal) haben dieselbe
+// 20-Dataset-Struktur (siehe DS_META) und teilen sich deshalb dieselbe
+// Toggle-/Referenz-Logik. _chartUI registriert pro Chart-Instanz die
+// Container-IDs, damit Chip-Klicks nur die eigenen Chips betreffen.
 
-function _buildChartToggleButtons() {
-  if (!combinedChart) return;
+const _chartUI = {};
+
+function _registerChartUI(key, chart, liveContainerId, refContainerId) {
+  _chartUI[key] = { chart, liveContainerId, refContainerId };
+}
+
+function _buildChartToggleButtons(key) {
+  const ui = _chartUI[key];
+  if (!ui?.chart) return;
+  const chart = ui.chart;
 
   // ── Live chips (indices 0..LIVE_COUNT-1) ─────────────────────
-  const liveContainer = document.getElementById("chart-live-chips");
+  const liveContainer = document.getElementById(ui.liveContainerId);
   if (liveContainer) {
     liveContainer.innerHTML = "";
     for (let i = 0; i < LIVE_COUNT; i++) {
@@ -867,15 +857,15 @@ function _buildChartToggleButtons() {
       btn.style.setProperty("--chip-color", meta.color);
       btn.textContent = meta.label;
       // Initially active unless the dataset meta says hidden
-      const hidden = combinedChart.getDatasetMeta(i).hidden;
+      const hidden = chart.getDatasetMeta(i).hidden;
       if (!hidden) btn.classList.add("active");
-      btn.addEventListener("click", () => toggleChartDs(i));
+      btn.addEventListener("click", () => toggleChartDs(key, i));
       liveContainer.appendChild(btn);
     }
   }
 
   // ── Reference chips (grouped) ────────────────────────────────
-  const refContainer = document.getElementById("chart-ref-chips");
+  const refContainer = document.getElementById(ui.refContainerId);
   if (refContainer) {
     refContainer.innerHTML = "";
 
@@ -901,7 +891,7 @@ function _buildChartToggleButtons() {
       refBtn.textContent = `Ref ${grp.label}`;
       refBtn.classList.add("disabled");
       refBtn.disabled = true;
-      refBtn.addEventListener("click", () => toggleChartDs(grp.refIdx));
+      refBtn.addEventListener("click", () => toggleChartDs(key, grp.refIdx));
       wrapper.appendChild(refBtn);
 
       // Tol chip (toggles both upper and lower together)
@@ -916,7 +906,7 @@ function _buildChartToggleButtons() {
       tolBtn.disabled = true;
       tolBtn.addEventListener("click", () => {
         const indices = JSON.parse(tolBtn.dataset.tolPair);
-        toggleChartDs(indices[0], indices);
+        toggleChartDs(key, indices[0], indices);
       });
       wrapper.appendChild(tolBtn);
 
@@ -975,40 +965,47 @@ function _buildAxisPanel() {
   }
 }
 
-function toggleChartDs(primaryIndex, allIndices) {
-  if (!combinedChart) return;
+function toggleChartDs(key, primaryIndex, allIndices) {
+  const ui = _chartUI[key];
+  if (!ui?.chart) return;
+  const chart = ui.chart;
   const indices = allIndices || [primaryIndex];
 
   // Determine new state based on primary dataset
-  const primaryMeta = combinedChart.getDatasetMeta(primaryIndex);
+  const primaryMeta = chart.getDatasetMeta(primaryIndex);
   const newHidden = !primaryMeta.hidden;
 
   for (const idx of indices) {
-    combinedChart.getDatasetMeta(idx).hidden = newHidden;
+    chart.getDatasetMeta(idx).hidden = newHidden;
   }
 
-  // Update chip button active state
-  // Find all buttons that reference this primary index
-  document.querySelectorAll(`.chart-chip[data-ds-index="${primaryIndex}"]`).forEach(btn => {
-    btn.classList.toggle("active", !newHidden);
+  // Update chip button active state – scoped to this chart's own containers
+  // (both charts use the same dataset indices, so a global query would hit
+  // the wrong chart's chips too).
+  [ui.liveContainerId, ui.refContainerId].forEach(containerId => {
+    document.querySelectorAll(`#${containerId} .chart-chip[data-ds-index="${primaryIndex}"]`).forEach(btn => {
+      btn.classList.toggle("active", !newHidden);
+    });
   });
 
-  updateAxisVisibility();
-  combinedChart.update();
+  updateAxisVisibility(key);
+  chart.update();
 }
 
 function setDatasetAxis(index, axisId) {
   if (!combinedChart) return;
   combinedChart.data.datasets[index].yAxisID = axisId;
   if (DS_META[index]) DS_META[index].axis = axisId;
-  updateAxisVisibility();
+  updateAxisVisibility("live");
   combinedChart.update();
 }
 
-function updateAxisVisibility() {
-  if (!combinedChart) return;
-  const scales = combinedChart.options.scales;
-  const datasets = combinedChart.data.datasets;
+function updateAxisVisibility(key) {
+  const ui = _chartUI[key];
+  if (!ui?.chart) return;
+  const chart = ui.chart;
+  const scales = chart.options.scales;
+  const datasets = chart.data.datasets;
 
   for (const axisId of Object.keys(scales)) {
     if (axisId === "x") continue;
@@ -1016,7 +1013,7 @@ function updateAxisVisibility() {
     let hasVisible = false;
     datasets.forEach((ds, idx) => {
       if (ds.yAxisID === axisId) {
-        const m = combinedChart.getDatasetMeta(idx);
+        const m = chart.getDatasetMeta(idx);
         if (m.hidden !== true) hasVisible = true;
       }
     });
@@ -1032,9 +1029,11 @@ function toggleAxisPanel() {
   if (chevron) chevron.innerHTML = isHidden ? "&#9660;" : "&#9650;";
 }
 
-function _refreshRefChips() {
-  if (!combinedChart) return;
-  const ds = combinedChart.data.datasets;
+function _refreshRefChips(key) {
+  const ui = _chartUI[key];
+  if (!ui?.chart) return;
+  const chart = ui.chart;
+  const ds = chart.data.datasets;
   const hasData = ds[10].data.length > 0;
 
   // Groups and their indices
@@ -1049,13 +1048,13 @@ function _refreshRefChips() {
     const grpHasData = ds[grp.refIdx].data.length > 0;
 
     // Find chips for this ref index and tol indices
-    const refChip = document.querySelector(`#chart-ref-chips .chart-chip[data-ds-index="${grp.refIdx}"]`);
-    const tolChip = document.querySelector(`#chart-ref-chips .chart-chip[data-ds-index="${grp.tolIdx[0]}"]`);
+    const refChip = document.querySelector(`#${ui.refContainerId} .chart-chip[data-ds-index="${grp.refIdx}"]`);
+    const tolChip = document.querySelector(`#${ui.refContainerId} .chart-chip[data-ds-index="${grp.tolIdx[0]}"]`);
 
     if (refChip) {
       refChip.disabled = !grpHasData;
       refChip.classList.toggle("disabled", !grpHasData);
-      if (grpHasData && !combinedChart.getDatasetMeta(grp.refIdx).hidden) {
+      if (grpHasData && !chart.getDatasetMeta(grp.refIdx).hidden) {
         refChip.classList.add("active");
       } else if (!grpHasData) {
         refChip.classList.remove("active");
@@ -1064,25 +1063,15 @@ function _refreshRefChips() {
     if (tolChip) {
       tolChip.disabled = !grpHasData;
       tolChip.classList.toggle("disabled", !grpHasData);
-      if (grpHasData && !combinedChart.getDatasetMeta(grp.tolIdx[0]).hidden) {
+      if (grpHasData && !chart.getDatasetMeta(grp.tolIdx[0]).hidden) {
         tolChip.classList.add("active");
       } else if (!grpHasData) {
         tolChip.classList.remove("active");
       }
     }
-
-    // When data first becomes available, make visible by default
-    if (grpHasData) {
-      [grp.refIdx, ...grp.tolIdx].forEach(idx => {
-        if (combinedChart.getDatasetMeta(idx).hidden === undefined ||
-            combinedChart.getDatasetMeta(idx).hidden === null) {
-          // leave as is (default visible)
-        }
-      });
-    }
   }
 
-  // Also update the hint text
+  // Also update the hint text (live chart only)
   const hintEl = document.getElementById("chart-ref-hint");
   if (hintEl) {
     hintEl.textContent = hasData ? "" : "Kein aktiver Zyklus mit HETA-Code";
@@ -1098,5 +1087,5 @@ function clearCharts() {
   _refCurveCache = null;
   _refCurveCacheCode = null;
   combinedChart.update("none");
-  _refreshRefChips();
+  _refreshRefChips("live");
 }
