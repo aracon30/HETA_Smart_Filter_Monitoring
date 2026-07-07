@@ -169,8 +169,11 @@ class PredictionEngine:
              Damit passt sich die Restzeit automatisch an langsamere/schnellere
              Beladung an: reduzierte Last → dp niedrig → t_pct klein →
              actual_duration groß → Restzeit springt sofort nach oben.
-          3. Fallback auf ref_duration wenn elapsed zu klein für eine
-             zuverlässige Schätzung (erste 5 Sekunden).
+          3. Übergang von der Referenzdauer (unbekanntes Ist-Tempo) zur Ist-Tempo-
+             Schätzung erfolgt graduell über t_pct/elapsed_seconds statt an einem
+             festen Schwellwert umzuschalten – bei kleinem t_pct ist die Division
+             elapsed/t_pct selbst noch instabil, ein harter Umschaltpunkt würde
+             dadurch einen sichtbaren Sprung in der Restzeit erzeugen.
         _dp_history wird mitgeführt, damit get_current_slope() aktuelle
         Daten liefert (identisch zu update()).
         """
@@ -180,9 +183,16 @@ class PredictionEngine:
             self._dp_history.pop(0)
         t_pct = self._invert_curve_dp_to_tpct(dp_bar, ref_curve)
 
-        # Tatsächliche Zyklusdauer aus Laufzeit ableiten (ab 5 s zuverlässig)
-        if elapsed_seconds >= 5.0 and t_pct > 0.5:
-            actual_duration = elapsed_seconds / (t_pct / 100.0)
+        # Vertrauen in die Ist-Tempo-Schätzung wächst graduell (0→1) statt an
+        # einer festen Schwelle umzuschalten; beide Rampen müssen fortgeschritten
+        # sein (min), sonst dominiert weiterhin die Referenzdauer.
+        t_confidence = self._ramp(t_pct, 0.5, 5.0)
+        time_confidence = self._ramp(elapsed_seconds, 5.0, 30.0)
+        confidence = min(t_confidence, time_confidence)
+
+        if t_pct > 0.01:
+            actual_duration_est = elapsed_seconds / (t_pct / 100.0)
+            actual_duration = ref_duration * (1.0 - confidence) + actual_duration_est * confidence
         else:
             actual_duration = ref_duration
 
@@ -200,6 +210,13 @@ class PredictionEngine:
                 self._last_remaining += 0.4 * (remaining - self._last_remaining)
 
         return self._last_remaining
+
+    @staticmethod
+    def _ramp(value: float, low: float, high: float) -> float:
+        """Lineare Rampe: 0 bei value<=low, 1 bei value>=high, dazwischen linear."""
+        if high <= low:
+            return 1.0 if value >= high else 0.0
+        return max(0.0, min(1.0, (value - low) / (high - low)))
 
     def _invert_curve_dp_to_tpct(self, dp_bar: float, curve: list) -> float:
         """
