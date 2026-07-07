@@ -300,6 +300,26 @@ class PredictionEngine:
             self._last_remaining = float(initial_seconds)
             self._seeded_ceiling = float(initial_seconds)  # kein Sprung über diesen Wert
 
+    def seed_histories(
+        self, dp_bar: float, flow: float, temp: float, r_eff: float, p1: float, p2: float, count: int = 10
+    ):
+        """
+        Füllt alle Verlaufspuffer mit `count` Kopien des Startzustands vor.
+
+        Im Hardwaremodus wärmt die Durchflusserkennungs-Wartezeit die Puffer
+        nebenbei schon vor (update_channels läuft dort bereits vor Zyklusstart).
+        Im Simulationsmodus entfällt diese Wartezeit (bewusst, für Schnellstart) –
+        ohne Vorfüllung wäre die Steigungsregression in den ersten Sekunden auf
+        zu wenige/zu ähnliche Samples angewiesen und würde entsprechend rauschen.
+        """
+        n = min(max(count, 0), self._history_window)
+        self._dp_history = [dp_bar] * n
+        self._flow_history = [flow] * n
+        self._temp_history = [temp] * n
+        self._reff_history = [r_eff] * n
+        self._p1_history = [p1] * n
+        self._p2_history = [p2] * n
+
     def update_limits(self, dp_limit: float, dp_clean: float):
         """Aktualisiert die Grenzwerte ohne Neustart."""
         self.dp_limit = dp_limit

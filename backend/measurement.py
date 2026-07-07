@@ -319,6 +319,13 @@ class MeasurementLoop:
                     self.mstate.flow_stable_since = None
                     self._learning.start_cycle(learning_code, fs.r_eff, fs.dp_bar)
                     self._seed_predictor(learning_code)
+                    # Puffer-Vorfüllung: im Hardwaremodus wärmt die Durchflusserkennungs-
+                    # Wartezeit die Steigungs-Regressionspuffer nebenbei vor; die Simulation
+                    # startet ohne diese Wartezeit sofort – daher hier explizit vorfüllen,
+                    # damit die Ratenkurven nicht in den ersten Sekunden verrauscht wirken.
+                    self._predictor.seed_histories(
+                        fs.dp_bar, fs.flow_l_min, fs.temperature_c, fs.r_eff, fs.p1_bar, fs.p2_bar
+                    )
                     with self._state_lock:
                         self._state["waiting_for_flow"] = False
                         self._state["cycle_active"] = True
