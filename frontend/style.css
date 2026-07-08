@@ -673,6 +673,11 @@ main {
   padding: 0;
 }
 
+.cycle-events {
+  margin: .85rem 0 0;
+  padding: 0;
+}
+
 .cycle-events-ok {
   color: var(--ok-green);
   font-size: .88rem;

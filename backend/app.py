@@ -914,7 +914,13 @@ def help_page():
 def api_status():
     """Vollständiger Systemstatus."""
     with _state_lock:
-        return jsonify(dict(_state))
+        state = dict(_state)
+    # Ereignisse des laufenden Zyklus (inkl. bereits wieder geschlossener
+    # Abweichungen) – sonst sieht man erst nach Zyklusende, dass zwischenzeitlich
+    # z.B. eine Q-Abweichung auftrat und sich von selbst normalisiert hat.
+    cycle = learning.active_cycle
+    state["active_cycle_events"] = cycle.events if cycle else []
+    return jsonify(state)
 
 
 @app.route("/api/measurements/latest")

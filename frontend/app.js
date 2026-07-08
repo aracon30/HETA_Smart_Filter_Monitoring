@@ -1230,6 +1230,7 @@ function updateAnalysisSection(d) {
   setAnalysisDev("an-tmp-dev", tDev, "%", 100, 200);
 
   setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev, dpSlopeCur));
+  updateLiveEvents(d.active_cycle_events);
 }
 
 function setAnalysisDev(id, val, unit, warnAt, critAt, isAbsolute = false) {

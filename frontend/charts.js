@@ -828,6 +828,50 @@ function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
   };
 }
 
+// Rendert eine Ereignisliste (Ereignisse & Abweichungen) in ein Container-Element –
+// gemeinsam genutzt vom Filterzyklus-Modal (abgeschlossene Zyklen) und der Live-
+// Ansicht im Prozessanalyse-Bereich (laufender Zyklus, inkl. bereits wieder
+// geschlossener Abweichungen).
+function _renderEventsList(containerEl, events) {
+  if (!containerEl) return;
+  if (!events || !events.length) {
+    containerEl.innerHTML = '<p class="cycle-events-ok">&#10003; Keine Probleme in diesem Zyklus.</p>';
+    return;
+  }
+  const sevColor = s => {
+    if (s === "FEHLER")     return "var(--alert-red)";
+    if (s === "ABWEICHUNG") return "#fb923c";
+    return "var(--warn-yellow)";
+  };
+  const fmtTs = ts => ts ? new Date(ts * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "–";
+  const rows = events.map(e => {
+    const tsStart = e.ts_start ?? e.ts;
+    const tsEnd   = e.ts_end ?? null;
+    let timeStr;
+    if (tsEnd) {
+      const durSec = tsEnd - tsStart;
+      const durFmt = durSec >= 60
+        ? `${Math.floor(durSec / 60)} min ${durSec % 60} s`
+        : `${durSec} s`;
+      timeStr = `${fmtTs(tsStart)} – ${fmtTs(tsEnd)} (${durFmt})`;
+    } else {
+      timeStr = `${fmtTs(tsStart)} – noch aktiv`;
+    }
+    const icon = e.severity === "ABWEICHUNG" ? "⬆" : "⚠";
+    return `<div class="cycle-event-row">
+      <span class="cycle-event-sev" style="color:${sevColor(e.severity)}">${icon} ${e.severity}</span>
+      <span class="cycle-event-ts">${timeStr}</span>
+      <span class="cycle-event-msg">${e.message}</span>
+    </div>`;
+  }).join("");
+  containerEl.innerHTML = `<div class="cycle-events-header">&#9888; Ereignisse &amp; Abweichungen</div>${rows}`;
+}
+
+// Aktualisiert die Live-Ereignisliste im Prozessanalyse-Bereich (laufender Zyklus).
+function updateLiveEvents(events) {
+  _renderEventsList(document.getElementById("analysis-events"), events);
+}
+
 async function openCycleModal(cycleId, cycleNum, dateStr, hetaCode, durationSeconds, eventsJson) {
   const overlay  = document.getElementById("cycle-modal-overlay");
   const titleEl  = document.getElementById("cycle-modal-title");
@@ -842,40 +886,7 @@ async function openCycleModal(cycleId, cycleNum, dateStr, hetaCode, durationSeco
   let events = [];
   try { events = JSON.parse(eventsJson || "[]"); } catch (_) {}
 
-  // Render events list
-  if (eventsEl) {
-    if (!events.length) {
-      eventsEl.innerHTML = '<p class="cycle-events-ok">&#10003; Keine Probleme in diesem Zyklus.</p>';
-    } else {
-      const sevColor = s => {
-        if (s === "FEHLER")     return "var(--alert-red)";
-        if (s === "ABWEICHUNG") return "#fb923c";
-        return "var(--warn-yellow)";
-      };
-      const fmtTs = ts => ts ? new Date(ts * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "–";
-      const rows = events.map(e => {
-        const tsStart = e.ts_start ?? e.ts;
-        const tsEnd   = e.ts_end ?? null;
-        let timeStr;
-        if (tsEnd) {
-          const durSec = tsEnd - tsStart;
-          const durFmt = durSec >= 60
-            ? `${Math.floor(durSec / 60)} min ${durSec % 60} s`
-            : `${durSec} s`;
-          timeStr = `${fmtTs(tsStart)} – ${fmtTs(tsEnd)} (${durFmt})`;
-        } else {
-          timeStr = fmtTs(tsStart);
-        }
-        const icon = e.severity === "ABWEICHUNG" ? "⬆" : "⚠";
-        return `<div class="cycle-event-row">
-          <span class="cycle-event-sev" style="color:${sevColor(e.severity)}">${icon} ${e.severity}</span>
-          <span class="cycle-event-ts">${timeStr}</span>
-          <span class="cycle-event-msg">${e.message}</span>
-        </div>`;
-      }).join("");
-      eventsEl.innerHTML = `<div class="cycle-events-header">&#9888; Ereignisse &amp; Abweichungen</div>${rows}`;
-    }
-  }
+  _renderEventsList(eventsEl, events);
 
   const [samples, refCurve] = await Promise.all([
     apiFetch(`/api/cycle-samples/${cycleId}`),
