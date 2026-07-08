@@ -101,12 +101,14 @@ function initCharts() {
         mkDs("T [°C/min]",            DS_COLORS.temp,   "yTemp"),
         mkDs("R_eff [µ(b·min/l)/s]",  DS_COLORS.reff,   "yReff",  { borderDash: [5, 3] }),
         mkDs("Reststandzeit [min]", DS_COLORS.remain, "yTime",   { borderDash: [5, 3] }),
-        mkDs("Δp aktuell [bar]",   DS_COLORS.dp,     "yPressure", { borderWidth: 2 }),
-        // 8–11 = Realwerte p1/p2/Q/T (keine Steigungen)
-        mkDs("p1 aktuell [bar]",  DS_COLORS.p1,     "yPressure", { borderWidth: 1.5 }),
-        mkDs("p2 aktuell [bar]",  DS_COLORS.p2,     "yPressure", { borderWidth: 1.5 }),
-        mkDs("Q aktuell [l/min]", DS_COLORS.flow,   "yFlowAbs",  { borderWidth: 1.5 }),
-        mkDs("T aktuell [°C]",    DS_COLORS.temp,   "yTempAbs",  { borderWidth: 1.5 }),
+        // Realwerte (7–11): standardmäßig ausgeblendet (hidden: true) – nur Steigungen
+        // sollen initial sichtbar sein, Realwerte muss der Benutzer bei Bedarf über die
+        // Chips einblenden, damit das Diagramm nicht überladen wirkt.
+        mkDs("Δp aktuell [bar]",   DS_COLORS.dp,     "yPressure", { borderWidth: 2, hidden: true }),
+        mkDs("p1 aktuell [bar]",  DS_COLORS.p1,     "yPressure", { borderWidth: 1.5, hidden: true }),
+        mkDs("p2 aktuell [bar]",  DS_COLORS.p2,     "yPressure", { borderWidth: 1.5, hidden: true }),
+        mkDs("Q aktuell [l/min]", DS_COLORS.flow,   "yFlowAbs",  { borderWidth: 1.5, hidden: true }),
+        mkDs("T aktuell [°C]",    DS_COLORS.temp,   "yTempAbs",  { borderWidth: 1.5, hidden: true }),
         // ── Referenz & Toleranz Δp (Indizes 12–14) ────────────────────────────
         // 12 = Toleranz Δp-Rate obere Grenze → füllt bis Dataset 13
         {
@@ -363,6 +365,9 @@ function initCharts() {
   _registerChartUI("live", combinedChart, "chart-live-chips", "chart-ref-chips");
   _buildChartToggleButtons("live");
   _buildAxisPanel();
+  // Achsen der initial ausgeblendeten Realwert-Reihen (hidden:true) müssen selbst
+  // auch verborgen bleiben, statt durch die statische Scale-Konfiguration allein.
+  updateAxisVisibility("live");
 }
 
 // ============================================================
@@ -701,12 +706,12 @@ function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
         mkDs("T [°C/min]",           DS_COLORS.temp,   "yTemp", tpRate),
         mkDs("R_eff [µ(b·min/l)/s]", DS_COLORS.reff,   "yReff", rfRate, { borderDash: [5, 3] }),
         mkDs("Reststandzeit [min]",  DS_COLORS.remain, "yTime", remainData, { borderDash: [5, 3] }),
-        mkDs("Δp aktuell [bar]",     DS_COLORS.dp,     "yPressure", dpAbsData, { borderWidth: 2 }),
-        // 8–11 = Realwerte p1/p2/Q/T (keine Steigungen)
-        mkDs("p1 aktuell [bar]",  DS_COLORS.p1,   "yPressure", p1AbsData,   { borderWidth: 1.5 }),
-        mkDs("p2 aktuell [bar]", DS_COLORS.p2,   "yPressure", p2AbsData,   { borderWidth: 1.5 }),
-        mkDs("Q aktuell [l/min]", DS_COLORS.flow, "yFlowAbs",  flowAbsData, { borderWidth: 1.5 }),
-        mkDs("T aktuell [°C]",    DS_COLORS.temp, "yTempAbs",  tempAbsData, { borderWidth: 1.5 }),
+        // Realwerte (7–11): standardmäßig ausgeblendet – siehe initCharts() für Begründung.
+        mkDs("Δp aktuell [bar]",     DS_COLORS.dp,     "yPressure", dpAbsData, { borderWidth: 2, hidden: true }),
+        mkDs("p1 aktuell [bar]",  DS_COLORS.p1,   "yPressure", p1AbsData,   { borderWidth: 1.5, hidden: true }),
+        mkDs("p2 aktuell [bar]", DS_COLORS.p2,   "yPressure", p2AbsData,   { borderWidth: 1.5, hidden: true }),
+        mkDs("Q aktuell [l/min]", DS_COLORS.flow, "yFlowAbs",  flowAbsData, { borderWidth: 1.5, hidden: true }),
+        mkDs("T aktuell [°C]",    DS_COLORS.temp, "yTempAbs",  tempAbsData, { borderWidth: 1.5, hidden: true }),
         // ── Referenz & Toleranz Δp (Indizes 12–14) ────────────────────────
         { label: "±Tol Δp", yAxisID: "yDpRate", data: bands.dp.upper, parsing: false,
           borderColor: DS_COLORS.tolEdge, backgroundColor: DS_COLORS.tolBand,
@@ -879,6 +884,7 @@ async function openCycleModal(cycleId, cycleNum, dateStr, hetaCode, durationSeco
   _registerChartUI("cycle", cycleModalChart, "cycle-live-chips", "cycle-ref-chips");
   _buildChartToggleButtons("cycle");
   _refreshRefChips("cycle");
+  updateAxisVisibility("cycle");
 }
 
 function closeCycleModal() {
