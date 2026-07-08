@@ -24,7 +24,7 @@ let _knownLiveCycleStart = null;
 // ============================================================
 
 // Anzahl der "live" Messwert-Datasets (Indizes 0..LIVE_COUNT-1) vor den Referenz-/Toleranzgruppen
-const LIVE_COUNT = 8;
+const LIVE_COUNT = 12;
 
 // Dataset metadata for toggle buttons and axis config
 const DS_META = [
@@ -36,20 +36,24 @@ const DS_META = [
   { label: "Widerstandsfaktor", color: DS_COLORS.reff, live: true, axisFixed: false, unit: "µ(b·min/l)/s", axis: "yReff"     },
   { label: "Reststandzeit",color: DS_COLORS.remain, live: true,  axisFixed: false, unit: "min",             axis: "yTime"     },
   { label: "Δp aktuell",   color: DS_COLORS.dp,     live: true,  axisFixed: true,  unit: "bar",             axis: "yPressure" },
-  // Reference dp (indices 8,9,10)
-  { label: "±Tol Δp",     color: "rgba(0,212,255,0.35)",  ref: true, refGroup: "dp",   groupLabel: "Δp",   isTolerancePair: [8,9], isTolUpper: true },
+  { label: "p1 aktuell",   color: DS_COLORS.p1,     live: true,  axisFixed: true,  unit: "bar",             axis: "yPressure" },
+  { label: "p2 aktuell",   color: DS_COLORS.p2,     live: true,  axisFixed: true,  unit: "bar",             axis: "yPressure" },
+  { label: "Q aktuell",    color: DS_COLORS.flow,   live: true,  axisFixed: false, unit: "l/min",           axis: "yFlowAbs"  },
+  { label: "T aktuell",    color: DS_COLORS.temp,   live: true,  axisFixed: false, unit: "°C",              axis: "yTempAbs"  },
+  // Reference dp (indices 12,13,14)
+  { label: "±Tol Δp",     color: "rgba(0,212,255,0.35)",  ref: true, refGroup: "dp",   groupLabel: "Δp",   isTolerancePair: [12,13], isTolUpper: true },
   { label: "_tol_dp_lo",  color: "rgba(0,212,255,0.35)",  ref: true, refGroup: "dp",   isToleranceLower: true },
   { label: "Ref Δp",      color: DS_COLORS.refLine,        ref: true, refGroup: "dp",   refLabel: "Ref Δp"  },
-  // flow group (11, 12, 13)
-  { label: "±Tol Q",      color: "rgba(52,211,153,0.35)",  ref: true, refGroup: "flow", groupLabel: "Q",    isTolerancePair: [11,12], isTolUpper: true },
+  // flow group (indices 15,16,17)
+  { label: "±Tol Q",      color: "rgba(52,211,153,0.35)",  ref: true, refGroup: "flow", groupLabel: "Q",    isTolerancePair: [15,16], isTolUpper: true },
   { label: "_tol_fl_lo",  color: "rgba(52,211,153,0.35)",  ref: true, refGroup: "flow", isToleranceLower: true },
   { label: "Ref Q",       color: DS_COLORS.flow,           ref: true, refGroup: "flow", refLabel: "Ref Q"   },
-  // temp group (14, 15, 16)
-  { label: "±Tol T",      color: "rgba(251,146,60,0.35)",  ref: true, refGroup: "temp", groupLabel: "T",    isTolerancePair: [14,15], isTolUpper: true },
+  // temp group (indices 18,19,20)
+  { label: "±Tol T",      color: "rgba(251,146,60,0.35)",  ref: true, refGroup: "temp", groupLabel: "T",    isTolerancePair: [18,19], isTolUpper: true },
   { label: "_tol_tp_lo",  color: "rgba(251,146,60,0.35)",  ref: true, refGroup: "temp", isToleranceLower: true },
   { label: "Ref T",       color: DS_COLORS.temp,           ref: true, refGroup: "temp", refLabel: "Ref T"   },
-  // reff group (17, 18, 19)
-  { label: "±Tol R",      color: "rgba(192,132,252,0.35)", ref: true, refGroup: "reff", groupLabel: "Wid.faktor", isTolerancePair: [17,18], isTolUpper: true },
+  // reff group (indices 21,22,23)
+  { label: "±Tol R",      color: "rgba(192,132,252,0.35)", ref: true, refGroup: "reff", groupLabel: "Wid.faktor", isTolerancePair: [21,22], isTolUpper: true },
   { label: "_tol_rf_lo",  color: "rgba(192,132,252,0.35)", ref: true, refGroup: "reff", isToleranceLower: true },
   { label: "Ref R",       color: DS_COLORS.reff,           ref: true, refGroup: "reff", refLabel: "Ref Wid.faktor" },
 ];
@@ -60,7 +64,9 @@ const AXIS_OPTIONS = [
   { id: "yTemp",     label: "Rechts 2 – ΔT [°C/min]"             },
   { id: "yReff",     label: "Rechts 3 – ΔR_eff [µ(b·min/l)/s]"  },
   { id: "yTime",     label: "Rechts 4 – Reststandzeit [min]"     },
-  { id: "yPressure", label: "Links 2 – Δp aktuell & Grenze [bar]" },
+  { id: "yPressure", label: "Links 2 – p1/p2/Δp aktuell & Grenze [bar]" },
+  { id: "yFlowAbs",  label: "Rechts 5 – Q aktuell [l/min]"       },
+  { id: "yTempAbs",  label: "Rechts 6 – T aktuell [°C]"          },
 ];
 
 // ============================================================
@@ -83,7 +89,7 @@ function initCharts() {
     type: "line",
     data: {
       datasets: [
-        // ── Messwerte (Indizes 0–7) ──────────────────────────────────────
+        // ── Messwerte (Indizes 0–11) ──────────────────────────────────────
         mkDs("p1 [mbar/s]",          DS_COLORS.p1,     "yDpRate",  { borderWidth: 1.5 }),
         mkDs("p2 [mbar/s]",          DS_COLORS.p2,     "yDpRate",  { borderWidth: 1.5 }),
         mkDs("Δp [mbar/s]",           DS_COLORS.dp,     "yDpRate", {
@@ -96,8 +102,13 @@ function initCharts() {
         mkDs("R_eff [µ(b·min/l)/s]",  DS_COLORS.reff,   "yReff",  { borderDash: [5, 3] }),
         mkDs("Reststandzeit [min]", DS_COLORS.remain, "yTime",   { borderDash: [5, 3] }),
         mkDs("Δp aktuell [bar]",   DS_COLORS.dp,     "yPressure", { borderWidth: 2 }),
-        // ── Referenz & Toleranz Δp (Indizes 8–10) ────────────────────────────
-        // 8 = Toleranz Δp-Rate obere Grenze → füllt bis Dataset 9
+        // 8–11 = Realwerte p1/p2/Q/T (keine Steigungen)
+        mkDs("p1 aktuell [bar]",  DS_COLORS.p1,     "yPressure", { borderWidth: 1.5 }),
+        mkDs("p2 aktuell [bar]",  DS_COLORS.p2,     "yPressure", { borderWidth: 1.5 }),
+        mkDs("Q aktuell [l/min]", DS_COLORS.flow,   "yFlowAbs",  { borderWidth: 1.5 }),
+        mkDs("T aktuell [°C]",    DS_COLORS.temp,   "yTempAbs",  { borderWidth: 1.5 }),
+        // ── Referenz & Toleranz Δp (Indizes 12–14) ────────────────────────────
+        // 12 = Toleranz Δp-Rate obere Grenze → füllt bis Dataset 13
         {
           label: "±Tol Δp",
           yAxisID: "yDpRate", data: [], parsing: false,
@@ -106,7 +117,7 @@ function initCharts() {
           borderWidth: 1, borderDash: [3, 4],
           pointRadius: 0, tension: 0.3, fill: "+1",
         },
-        // 9 = Toleranz Δp-Rate untere Grenze
+        // 13 = Toleranz Δp-Rate untere Grenze
         {
           label: "_tol_dp_lower",
           yAxisID: "yDpRate", data: [], parsing: false,
@@ -115,12 +126,12 @@ function initCharts() {
           borderWidth: 1, borderDash: [3, 4],
           pointRadius: 0, tension: 0.3, fill: false,
         },
-        // 10 = Referenz Δp-Rate-Linie
+        // 14 = Referenz Δp-Rate-Linie
         mkDs("Ref Δp", DS_COLORS.refLine, "yDpRate", {
           borderWidth: 1.5, borderDash: [10, 5],
         }),
-        // ── Referenz & Toleranz Q (Indizes 11–13) ───────────────────────────
-        // 11 = Toleranz Q obere Grenze → füllt bis Dataset 12
+        // ── Referenz & Toleranz Q (Indizes 15–17) ───────────────────────────
+        // 15 = Toleranz Q obere Grenze → füllt bis Dataset 16
         {
           label: "±Tol Q",
           yAxisID: "yFlow", data: [], parsing: false,
@@ -129,7 +140,7 @@ function initCharts() {
           borderWidth: 1, borderDash: [3, 4],
           pointRadius: 0, tension: 0.3, fill: "+1",
         },
-        // 12 = Toleranz Q untere Grenze
+        // 16 = Toleranz Q untere Grenze
         {
           label: "_tol_flow_lower",
           yAxisID: "yFlow", data: [], parsing: false,
@@ -138,12 +149,12 @@ function initCharts() {
           borderWidth: 1, borderDash: [3, 4],
           pointRadius: 0, tension: 0.3, fill: false,
         },
-        // 13 = Referenz Q-Linie
+        // 17 = Referenz Q-Linie
         mkDs("Ref Q", DS_COLORS.flow, "yFlow", {
           borderWidth: 1.5, borderDash: [10, 5],
         }),
-        // ── Referenz & Toleranz Temp (Indizes 14–16) ────────────────────────
-        // 14 = Toleranz T obere Grenze → füllt bis Dataset 15
+        // ── Referenz & Toleranz Temp (Indizes 18–20) ────────────────────────
+        // 18 = Toleranz T obere Grenze → füllt bis Dataset 19
         {
           label: "±Tol T",
           yAxisID: "yTemp", data: [], parsing: false,
@@ -152,7 +163,7 @@ function initCharts() {
           borderWidth: 1, borderDash: [3, 4],
           pointRadius: 0, tension: 0.3, fill: "+1",
         },
-        // 15 = Toleranz T untere Grenze
+        // 19 = Toleranz T untere Grenze
         {
           label: "_tol_temp_lower",
           yAxisID: "yTemp", data: [], parsing: false,
@@ -161,12 +172,12 @@ function initCharts() {
           borderWidth: 1, borderDash: [3, 4],
           pointRadius: 0, tension: 0.3, fill: false,
         },
-        // 16 = Referenz T-Linie
+        // 20 = Referenz T-Linie
         mkDs("Ref T", DS_COLORS.temp, "yTemp", {
           borderWidth: 1.5, borderDash: [10, 5],
         }),
-        // ── Referenz & Toleranz R_eff (Indizes 17–19) ───────────────────────
-        // 17 = Toleranz R_eff obere Grenze → füllt bis Dataset 18
+        // ── Referenz & Toleranz R_eff (Indizes 21–23) ───────────────────────
+        // 21 = Toleranz R_eff obere Grenze → füllt bis Dataset 22
         {
           label: "±Tol R_eff",
           yAxisID: "yReff", data: [], parsing: false,
@@ -175,7 +186,7 @@ function initCharts() {
           borderWidth: 1, borderDash: [3, 4],
           pointRadius: 0, tension: 0.3, fill: "+1",
         },
-        // 18 = Toleranz R_eff untere Grenze
+        // 22 = Toleranz R_eff untere Grenze
         {
           label: "_tol_reff_lower",
           yAxisID: "yReff", data: [], parsing: false,
@@ -184,7 +195,7 @@ function initCharts() {
           borderWidth: 1, borderDash: [3, 4],
           pointRadius: 0, tension: 0.3, fill: false,
         },
-        // 19 = Referenz R_eff-Linie
+        // 23 = Referenz R_eff-Linie
         mkDs("Ref R_eff", DS_COLORS.reff, "yReff", {
           borderWidth: 1.5, borderDash: [10, 5],
         }),
@@ -223,6 +234,8 @@ function initCharts() {
                 "T [°C/min]": 3, "R_eff [µ(b·min/l)/s]": 3,
                 "Reststandzeit [min]": 1,
                 "Δp aktuell [bar]": 3,
+                "p1 aktuell [bar]": 3, "p2 aktuell [bar]": 3,
+                "Q aktuell [l/min]": 1, "T aktuell [°C]": 2,
                 "Ref Δp": 3, "Ref Q": 3, "Ref T": 3, "Ref R_eff": 3,
               };
               return ` ${ctx.dataset.label}: ${v.toFixed(dec[ctx.dataset.label] ?? 2)}`;
@@ -326,6 +339,23 @@ function initCharts() {
           min: 0,
           grid: { drawOnChartArea: false },
         },
+        yFlowAbs: {
+          type: "linear",
+          position: "right",
+          display: false,
+          min: 0,
+          title: { display: true, text: "Q aktuell [l/min]", font: { size: 10 }, color: DS_COLORS.flow },
+          ticks: { font: { size: 10 }, color: DS_COLORS.flow },
+          grid: { drawOnChartArea: false },
+        },
+        yTempAbs: {
+          type: "linear",
+          position: "right",
+          display: false,
+          title: { display: true, text: "T aktuell [°C]", font: { size: 10 }, color: DS_COLORS.temp },
+          ticks: { font: { size: 10 }, color: DS_COLORS.temp },
+          grid: { drawOnChartArea: false },
+        },
       },
     },
   });
@@ -373,6 +403,10 @@ function pushChartData(status) {
   ds[5].data.push({ x: xPct, y: rfRate });
   ds[6].data.push({ x: xPct, y: remMin });
   ds[7].data.push({ x: xPct, y: status.dp_bar ?? null });
+  ds[8].data.push({ x: xPct, y: status.p1_bar ?? null });
+  ds[9].data.push({ x: xPct, y: status.p2_bar ?? null });
+  ds[10].data.push({ x: xPct, y: status.flow_l_min ?? null });
+  ds[11].data.push({ x: xPct, y: status.temperature_c ?? null });
   for (let i = 0; i < LIVE_COUNT; i++) {
     if (ds[i].data.length > MAX_CHART_POINTS) ds[i].data.shift();
   }
@@ -524,11 +558,11 @@ async function updateReferenceOverlay(status) {
   const ds = combinedChart.data.datasets;
 
   if (!cycleActive || !hetaCode || !startTime) {
-    const anyData = ds[10].data.length > 0 || ds[13].data.length > 0 ||
-                    ds[16].data.length > 0 || ds[19].data.length > 0;
+    const anyData = ds[14].data.length > 0 || ds[17].data.length > 0 ||
+                    ds[20].data.length > 0 || ds[23].data.length > 0;
     if (anyData) {
-      // Clear all reference datasets 8-19
-      for (let i = 8; i <= 19; i++) ds[i].data = [];
+      // Clear all reference datasets 12-23
+      for (let i = 12; i <= 23; i++) ds[i].data = [];
       combinedChart.update("none");
       _refreshRefChips("live");
     }
@@ -538,17 +572,17 @@ async function updateReferenceOverlay(status) {
   }
 
   // Gleicher Zyklus + Referenz schon geladen → nichts tun
-  if (startTime === _knownCycleStart && ds[10].data.length > 0) return;
+  if (startTime === _knownCycleStart && ds[14].data.length > 0) return;
   _knownCycleStart = startTime;
 
   const refCurve = await _getRefCurve(hetaCode);
   if (!refCurve?.curve?.length) return;
 
   const bands = _computeRateRefBands(refCurve);
-  ds[8].data = bands.dp.upper;     ds[9].data = bands.dp.lower;     ds[10].data = bands.dp.center;
-  ds[11].data = bands.flow.upper;  ds[12].data = bands.flow.lower;  ds[13].data = bands.flow.center;
-  ds[14].data = bands.temp.upper;  ds[15].data = bands.temp.lower;  ds[16].data = bands.temp.center;
-  ds[17].data = bands.reff.upper;  ds[18].data = bands.reff.lower;  ds[19].data = bands.reff.center;
+  ds[12].data = bands.dp.upper;    ds[13].data = bands.dp.lower;    ds[14].data = bands.dp.center;
+  ds[15].data = bands.flow.upper;  ds[16].data = bands.flow.lower;  ds[17].data = bands.flow.center;
+  ds[18].data = bands.temp.upper;  ds[19].data = bands.temp.lower;  ds[20].data = bands.temp.center;
+  ds[21].data = bands.reff.upper;  ds[22].data = bands.reff.lower;  ds[23].data = bands.reff.center;
 
   combinedChart.update("none");
   _refreshRefChips("live");
@@ -643,9 +677,12 @@ function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
   const remainData = samples
     .filter(s => s.remaining_seconds != null)
     .map(s => ({ x: xOf(s), y: s.remaining_seconds / 60 }));
-  const dpAbsData = samples
-    .filter(s => s.dp_bar != null)
-    .map(s => ({ x: xOf(s), y: s.dp_bar }));
+  const absData = field => samples.filter(s => s[field] != null).map(s => ({ x: xOf(s), y: s[field] }));
+  const dpAbsData   = absData("dp_bar");
+  const p1AbsData    = absData("p1_bar");
+  const p2AbsData    = absData("p2_bar");
+  const flowAbsData  = absData("flow_l_min");
+  const tempAbsData  = absData("temp_c");
 
   const bands = _computeRateRefBands(refCurve);
   const annotations = _buildCycleEventAnnotations(events, samples, durationSeconds);
@@ -654,7 +691,7 @@ function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
     type: "line",
     data: {
       datasets: [
-        // ── Messwerte (Indizes 0–7) – identisch zum Live-Chart ──────────
+        // ── Messwerte (Indizes 0–11) – identisch zum Live-Chart ──────────
         mkDs("p1 [mbar/s]", DS_COLORS.p1, "yDpRate", p1Rate, { borderWidth: 1.5 }),
         mkDs("p2 [mbar/s]", DS_COLORS.p2, "yDpRate", p2Rate, { borderWidth: 1.5 }),
         mkDs("Δp [mbar/s]", DS_COLORS.dp, "yDpRate", dpRate, {
@@ -665,7 +702,12 @@ function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
         mkDs("R_eff [µ(b·min/l)/s]", DS_COLORS.reff,   "yReff", rfRate, { borderDash: [5, 3] }),
         mkDs("Reststandzeit [min]",  DS_COLORS.remain, "yTime", remainData, { borderDash: [5, 3] }),
         mkDs("Δp aktuell [bar]",     DS_COLORS.dp,     "yPressure", dpAbsData, { borderWidth: 2 }),
-        // ── Referenz & Toleranz Δp (Indizes 8–10) ────────────────────────
+        // 8–11 = Realwerte p1/p2/Q/T (keine Steigungen)
+        mkDs("p1 aktuell [bar]",  DS_COLORS.p1,   "yPressure", p1AbsData,   { borderWidth: 1.5 }),
+        mkDs("p2 aktuell [bar]", DS_COLORS.p2,   "yPressure", p2AbsData,   { borderWidth: 1.5 }),
+        mkDs("Q aktuell [l/min]", DS_COLORS.flow, "yFlowAbs",  flowAbsData, { borderWidth: 1.5 }),
+        mkDs("T aktuell [°C]",    DS_COLORS.temp, "yTempAbs",  tempAbsData, { borderWidth: 1.5 }),
+        // ── Referenz & Toleranz Δp (Indizes 12–14) ────────────────────────
         { label: "±Tol Δp", yAxisID: "yDpRate", data: bands.dp.upper, parsing: false,
           borderColor: DS_COLORS.tolEdge, backgroundColor: DS_COLORS.tolBand,
           borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: "+1" },
@@ -673,7 +715,7 @@ function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
           borderColor: DS_COLORS.tolEdge, backgroundColor: "transparent",
           borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: false },
         mkDs("Ref Δp", DS_COLORS.refLine, "yDpRate", bands.dp.center, { borderWidth: 1.5, borderDash: [10, 5] }),
-        // ── Referenz & Toleranz Q (Indizes 11–13) ───────────────────────
+        // ── Referenz & Toleranz Q (Indizes 15–17) ───────────────────────
         { label: "±Tol Q", yAxisID: "yFlow", data: bands.flow.upper, parsing: false,
           borderColor: "rgba(52,211,153,0.35)", backgroundColor: "rgba(52,211,153,0.08)",
           borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: "+1" },
@@ -681,7 +723,7 @@ function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
           borderColor: "rgba(52,211,153,0.35)", backgroundColor: "transparent",
           borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: false },
         mkDs("Ref Q", DS_COLORS.flow, "yFlow", bands.flow.center, { borderWidth: 1.5, borderDash: [10, 5] }),
-        // ── Referenz & Toleranz Temp (Indizes 14–16) ────────────────────
+        // ── Referenz & Toleranz Temp (Indizes 18–20) ────────────────────
         { label: "±Tol T", yAxisID: "yTemp", data: bands.temp.upper, parsing: false,
           borderColor: "rgba(251,146,60,0.35)", backgroundColor: "rgba(251,146,60,0.08)",
           borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: "+1" },
@@ -689,7 +731,7 @@ function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
           borderColor: "rgba(251,146,60,0.35)", backgroundColor: "transparent",
           borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: false },
         mkDs("Ref T", DS_COLORS.temp, "yTemp", bands.temp.center, { borderWidth: 1.5, borderDash: [10, 5] }),
-        // ── Referenz & Toleranz R_eff (Indizes 17–19) ───────────────────
+        // ── Referenz & Toleranz R_eff (Indizes 21–23) ───────────────────
         { label: "±Tol R_eff", yAxisID: "yReff", data: bands.reff.upper, parsing: false,
           borderColor: "rgba(192,132,252,0.35)", backgroundColor: "rgba(192,132,252,0.08)",
           borderWidth: 1, borderDash: [3, 4], pointRadius: 0, tension: 0.3, fill: "+1" },
@@ -722,6 +764,8 @@ function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
                 "T [°C/min]": 3, "R_eff [µ(b·min/l)/s]": 3,
                 "Reststandzeit [min]": 1,
                 "Δp aktuell [bar]": 3,
+                "p1 aktuell [bar]": 3, "p2 aktuell [bar]": 3,
+                "Q aktuell [l/min]": 1, "T aktuell [°C]": 2,
                 "Ref Δp": 3, "Ref Q": 3, "Ref T": 3, "Ref R_eff": 3,
               };
               return ` ${ctx.dataset.label}: ${v.toFixed(dec[ctx.dataset.label] ?? 2)}`;
@@ -756,6 +800,14 @@ function _buildCycleChartConfig(samples, refCurve, events, durationSeconds) {
           ticks: { font: { size: 10 }, color: DS_COLORS.reff },
           grid: { drawOnChartArea: false } },
         yTime: { type: "linear", position: "right", display: false, min: 0,
+          grid: { drawOnChartArea: false } },
+        yFlowAbs: { type: "linear", position: "right", display: false, min: 0,
+          title: { display: true, text: "Q aktuell [l/min]", font: { size: 10 }, color: DS_COLORS.flow },
+          ticks: { font: { size: 10 }, color: DS_COLORS.flow },
+          grid: { drawOnChartArea: false } },
+        yTempAbs: { type: "linear", position: "right", display: false,
+          title: { display: true, text: "T aktuell [°C]", font: { size: 10 }, color: DS_COLORS.temp },
+          ticks: { font: { size: 10 }, color: DS_COLORS.temp },
           grid: { drawOnChartArea: false } },
       },
     },
@@ -888,12 +940,12 @@ function _buildChartToggleButtons(key) {
   if (refContainer) {
     refContainer.innerHTML = "";
 
-    // Groups: dp(8,9,10), flow(11,12,13), temp(14,15,16), reff(17,18,19)
+    // Groups: dp(12,13,14), flow(15,16,17), temp(18,19,20), reff(21,22,23)
     const groups = [
-      { name: "dp",   label: "Δp",     refIdx: 10, tolIdx: [8,9],   color: DS_COLORS.refLine,  tolColor: "rgba(0,212,255,0.35)"  },
-      { name: "flow", label: "Q",      refIdx: 13, tolIdx: [11,12], color: DS_COLORS.flow,     tolColor: "rgba(52,211,153,0.35)" },
-      { name: "temp", label: "T",      refIdx: 16, tolIdx: [14,15], color: DS_COLORS.temp,     tolColor: "rgba(251,146,60,0.35)" },
-      { name: "reff", label: "R_eff",  refIdx: 19, tolIdx: [17,18], color: DS_COLORS.reff,     tolColor: "rgba(192,132,252,0.35)"},
+      { name: "dp",   label: "Δp",     refIdx: 14, tolIdx: [12,13], color: DS_COLORS.refLine,  tolColor: "rgba(0,212,255,0.35)"  },
+      { name: "flow", label: "Q",      refIdx: 17, tolIdx: [15,16], color: DS_COLORS.flow,     tolColor: "rgba(52,211,153,0.35)" },
+      { name: "temp", label: "T",      refIdx: 20, tolIdx: [18,19], color: DS_COLORS.temp,     tolColor: "rgba(251,146,60,0.35)" },
+      { name: "reff", label: "R_eff",  refIdx: 23, tolIdx: [21,22], color: DS_COLORS.reff,     tolColor: "rgba(192,132,252,0.35)"},
     ];
 
     for (const grp of groups) {
@@ -1053,14 +1105,14 @@ function _refreshRefChips(key) {
   if (!ui?.chart) return;
   const chart = ui.chart;
   const ds = chart.data.datasets;
-  const hasData = ds[10].data.length > 0;
+  const hasData = ds[14].data.length > 0;
 
   // Groups and their indices
   const groupInfo = [
-    { refIdx: 10, tolIdx: [8,9]   },
-    { refIdx: 13, tolIdx: [11,12] },
-    { refIdx: 16, tolIdx: [14,15] },
-    { refIdx: 19, tolIdx: [17,18] },
+    { refIdx: 14, tolIdx: [12,13] },
+    { refIdx: 17, tolIdx: [15,16] },
+    { refIdx: 20, tolIdx: [18,19] },
+    { refIdx: 23, tolIdx: [21,22] },
   ];
 
   for (const grp of groupInfo) {
