@@ -26,6 +26,9 @@ let _knownLiveCycleStart = null;
 // Anzahl der "live" Messwert-Datasets (Indizes 0..LIVE_COUNT-1) vor den Referenz-/Toleranzgruppen
 const LIVE_COUNT = 12;
 
+// Realwert-Datasets (Δp/p1/p2/Q/T aktuell) – sollen initial ausgeblendet sein.
+const ABS_VALUE_INDICES = [7, 8, 9, 10, 11];
+
 // Dataset metadata for toggle buttons and axis config
 const DS_META = [
   { label: "p1",           color: DS_COLORS.p1,     live: true,  axisFixed: true,  unit: "mbar/s",          axis: "yDpRate"   },
@@ -361,6 +364,12 @@ function initCharts() {
       },
     },
   });
+
+  // dataset.hidden:true allein reicht nicht – Chart.js löst getDatasetMeta(i).hidden
+  // erst bei einem Render-/Update-Zyklus aus dataset.hidden auf; bis dahin liest es
+  // sich als null (= "sichtbar") und die Chips/Achsen-Logik unten würde es als aktiv
+  // einstufen. Deshalb hier explizit erzwingen, bevor Chips/Achsen gebaut werden.
+  for (const idx of ABS_VALUE_INDICES) combinedChart.getDatasetMeta(idx).hidden = true;
 
   _registerChartUI("live", combinedChart, "chart-live-chips", "chart-ref-chips");
   _buildChartToggleButtons("live");
@@ -878,6 +887,10 @@ async function openCycleModal(cycleId, cycleNum, dateStr, hetaCode, durationSeco
   if (cycleModalChart) { cycleModalChart.destroy(); cycleModalChart = null; }
   cycleModalChart = new Chart(ctx,
     _buildCycleChartConfig(samples || [], refCurve, events, durationSeconds));
+
+  // Meta-Zustand explizit erzwingen – siehe initCharts() für die Begründung
+  // (dataset.hidden allein wird erst bei einem Render-Zyklus in getDatasetMeta().hidden übernommen).
+  for (const idx of ABS_VALUE_INDICES) cycleModalChart.getDatasetMeta(idx).hidden = true;
 
   // Toggle-Chips wie beim Live-Chart aufbauen (Messwerte + Referenz/Toleranz),
   // Referenzdaten sind hier von Anfang an vollständig geladen.
