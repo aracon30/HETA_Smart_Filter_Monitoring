@@ -996,6 +996,16 @@ main {
   font-size: .82rem;
   color: var(--text-main);
 }
+.chart-axis-section-header {
+  grid-column: 1 / -1;
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: .2rem;
+}
+.chart-axis-section-header:first-child { margin-top: 0; }
 .chart-axis-dot {
   width: 10px;
   height: 10px;
@@ -1004,6 +1014,7 @@ main {
 }
 .chart-axis-select {
   flex: 1;
+  min-width: 0;
   background: rgba(255,255,255,0.05);
   color: var(--text-main);
   border: 1px solid var(--border);
@@ -1012,6 +1023,9 @@ main {
   font-size: .8rem;
   cursor: pointer;
   outline: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chart-axis-select:focus { border-color: var(--heta-accent); }
 

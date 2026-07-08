@@ -67,9 +67,9 @@ const AXIS_OPTIONS = [
   { id: "yTemp",     label: "Rechts 2 – ΔT [°C/min]"             },
   { id: "yReff",     label: "Rechts 3 – ΔR_eff [µ(b·min/l)/s]"  },
   { id: "yTime",     label: "Rechts 4 – Reststandzeit [min]"     },
-  { id: "yPressure", label: "Links 2 – p1/p2/Δp aktuell & Grenze [bar]" },
-  { id: "yFlowAbs",  label: "Rechts 5 – Q aktuell [l/min]"       },
-  { id: "yTempAbs",  label: "Rechts 6 – T aktuell [°C]"          },
+  { id: "yPressure", label: "Links 2 – Druck [bar]"              },
+  { id: "yFlowAbs",  label: "Rechts 5 – Q [l/min]"                },
+  { id: "yTempAbs",  label: "Rechts 6 – T [°C]"                   },
 ];
 
 // ============================================================
@@ -1031,7 +1031,17 @@ function _buildAxisPanel() {
   if (!panel) return;
   panel.innerHTML = "";
 
+  const addSectionHeader = text => {
+    const h = document.createElement("div");
+    h.className = "chart-axis-section-header";
+    h.textContent = text;
+    panel.appendChild(h);
+  };
+
   for (let i = 0; i < LIVE_COUNT; i++) {
+    if (i === 0) addSectionHeader("Steigungen");
+    if (ABS_VALUE_INDICES[0] === i) addSectionHeader("Realwerte");
+
     const meta = DS_META[i];
     const row = document.createElement("div");
     row.className = "chart-axis-row";
