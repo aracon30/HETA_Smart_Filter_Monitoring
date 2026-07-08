@@ -350,7 +350,14 @@ function pushChartData(status) {
     _knownLiveCycleStart = cycleStart;
   }
 
-  const xPct   = status.analysis_cycle_progress_pct ?? 0;
+  // Vor dem 4. Zyklus existiert noch kein gelerntes Profil – analysis_cycle_progress_pct
+  // kommt ausschließlich aus der Referenzkurven-Invertierung (get_curve_analysis) und bleibt
+  // ohne Profil bei 0 hängen. Fallback auf eine Δp-basierte Fortschrittsschätzung
+  // (100 − filter_health_percent), die schon ab der ersten Sekunde verfügbar ist –
+  // sonst kleben alle Live-Punkte während der Lernzyklen bei x=0.
+  const xPct = status.analysis_ready
+    ? (status.analysis_cycle_progress_pct ?? 0)
+    : (status.filter_health_percent != null ? 100 - status.filter_health_percent : 0);
   const remMin = status.remaining_seconds != null ? status.remaining_seconds / 60 : null;
   const p1Rate   = status.analysis_p1_rate_current   != null ? status.analysis_p1_rate_current   * 1000 : null;
   const p2Rate   = status.analysis_p2_rate_current   != null ? status.analysis_p2_rate_current   * 1000 : null;
