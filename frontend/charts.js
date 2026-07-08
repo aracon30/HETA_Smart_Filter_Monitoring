@@ -936,9 +936,26 @@ function _buildChartToggleButtons(key) {
   const chart = ui.chart;
 
   // ── Live chips (indices 0..LIVE_COUNT-1) ─────────────────────
+  // Zwei Zeilen: Steigungen (aktiv) oben, Realwerte (ausgeblendet) unten –
+  // getrennt, damit die unterschiedlichen Größenarten nicht durcheinander wirken.
   const liveContainer = document.getElementById(ui.liveContainerId);
   if (liveContainer) {
     liveContainer.innerHTML = "";
+
+    const rowSlopes = document.createElement("div");
+    rowSlopes.className = "chart-toggle-chips-row";
+    const slopesLabel = document.createElement("span");
+    slopesLabel.className = "chart-toggle-row-label";
+    slopesLabel.textContent = "Steigungen";
+    rowSlopes.appendChild(slopesLabel);
+
+    const rowAbs = document.createElement("div");
+    rowAbs.className = "chart-toggle-chips-row";
+    const absLabel = document.createElement("span");
+    absLabel.className = "chart-toggle-row-label";
+    absLabel.textContent = "Realwerte";
+    rowAbs.appendChild(absLabel);
+
     for (let i = 0; i < LIVE_COUNT; i++) {
       const meta = DS_META[i];
       const btn = document.createElement("button");
@@ -950,8 +967,11 @@ function _buildChartToggleButtons(key) {
       const hidden = chart.getDatasetMeta(i).hidden;
       if (!hidden) btn.classList.add("active");
       btn.addEventListener("click", () => toggleChartDs(key, i));
-      liveContainer.appendChild(btn);
+      (ABS_VALUE_INDICES.includes(i) ? rowAbs : rowSlopes).appendChild(btn);
     }
+
+    liveContainer.appendChild(rowSlopes);
+    liveContainer.appendChild(rowAbs);
   }
 
   // ── Reference chips (grouped) ────────────────────────────────

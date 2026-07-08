@@ -905,6 +905,22 @@ main {
   flex-wrap: wrap;
   gap: .35rem;
 }
+.chart-toggle-chips-row {
+  display: flex;
+  flex: 0 0 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem;
+}
+.chart-toggle-row-label {
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-right: .2rem;
+}
 .chart-chip {
   display: inline-flex;
   align-items: center;
