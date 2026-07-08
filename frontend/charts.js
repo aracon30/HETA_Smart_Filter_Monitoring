@@ -1053,8 +1053,10 @@ function _buildAxisPanel() {
 
     const label = document.createElement("span");
     label.textContent = meta.label;
-    label.style.flex = "0 0 auto";
-    label.style.minWidth = "5rem";
+    label.style.flex = "0 0 8rem";
+    label.style.whiteSpace = "nowrap";
+    label.style.overflow = "hidden";
+    label.style.textOverflow = "ellipsis";
     row.appendChild(label);
 
     if (meta.axisFixed) {

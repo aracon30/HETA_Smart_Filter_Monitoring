@@ -984,10 +984,11 @@ main {
 }
 .chart-axis-config-toggle:hover { color: var(--heta-blue-mid); }
 .chart-axis-panel {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: .4rem .75rem;
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
   padding: .65rem .1rem .3rem;
+  max-width: 32rem;
 }
 .chart-axis-row {
   display: flex;
@@ -997,13 +998,12 @@ main {
   color: var(--text-main);
 }
 .chart-axis-section-header {
-  grid-column: 1 / -1;
   font-size: .7rem;
   font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
   color: var(--text-muted);
-  margin-top: .2rem;
+  margin-top: .3rem;
 }
 .chart-axis-section-header:first-child { margin-top: 0; }
 .chart-axis-dot {
