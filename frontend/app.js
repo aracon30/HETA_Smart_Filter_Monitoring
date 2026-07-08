@@ -1239,10 +1239,17 @@ function setAnalysisDev(id, val, unit, warnAt, critAt, isAbsolute = false) {
   const sign = val > 0 ? "+" : "";
   const disp = isAbsolute ? Math.abs(val).toFixed(1) : Math.abs(Math.round(val));
   const prefix = val >= 0 ? sign : "−";
-  el.textContent = `${prefix}${disp} ${unit}`;
   const absVal = Math.abs(val);
+  const inTol  = absVal < warnAt;
+  const icon   = inTol ? "✓" : "⚠";
+  // Grenze = die tatsächliche Toleranzschwelle (warnAt), ab der der Backend-Check
+  // (measurement.py: abs(dev) > tol) den Status auf WARNUNG eskaliert – critAt ist
+  // nur eine zusätzliche UI-Eskalationsstufe ohne eigene Bedeutung im Backend.
+  el.innerHTML =
+    `<span class="analysis-dev-val">${icon} ${prefix}${disp} ${unit}</span>` +
+    `<span class="analysis-dev-tol">Grenze &plusmn;${Math.round(warnAt)}%</span>`;
   el.className = "analysis-dev " + (
-    absVal < warnAt ? "dev-ok" :
+    inTol ? "dev-ok" :
     absVal < critAt ? "dev-warn" : "dev-crit"
   );
 }
