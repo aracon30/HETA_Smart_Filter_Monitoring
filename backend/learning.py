@@ -450,8 +450,22 @@ class LearningManager:
             logger.debug("get_curve_analysis: leere Kurve nach JSON-Parse für %s", heta_code)
             return None
 
+        # Δp relativ zum SAUBERDRUCK DIESES Zyklus normieren, bevor gegen die
+        # Referenzkurve invertiert wird. Jeder Zyklus würfelt einen eigenen,
+        # leicht streuenden Sauberdruckabfall (Exemplarstreuung, siehe
+        # FilterSimulator._roll_dp_clean) – ohne diese Normierung bleibt t_pct bei
+        # 0 % hängen, solange der reale Δp-Wert noch unter dem AUS DEN LERNZYKLEN
+        # GEMITTELTEN Referenz-Sauberdruck liegt, selbst wenn der Zyklus real
+        # schon deutlich fortgeschritten ist.
+        ref_dp_clean = curve[0].get("dp", current_dp) if curve else current_dp
+        cycle = self._active_cycle
+        if cycle is not None and cycle.heta_code == heta_code:
+            dp_for_inversion = current_dp - (cycle.start_dp - ref_dp_clean)
+        else:
+            dp_for_inversion = current_dp
+
         # dp-basierter Zyklusfortschritt
-        t_pct = self._invert_dp_to_tpct(curve, current_dp)
+        t_pct = self._invert_dp_to_tpct(curve, dp_for_inversion)
         cycle_progress_pct = round(t_pct, 1)
 
         # Tatsächliche Zyklusdauer aus der bisherigen Laufzeit schätzen (wie in

@@ -556,7 +556,14 @@ class MeasurementLoop:
                 if _rc_json and _rc_dur > 0:
                     try:
                         _rc = json.loads(_rc_json) if isinstance(_rc_json, str) else _rc_json
-                        remaining_s = self._predictor.update_with_reference_curve(fs.dp_bar, _rc_dur, _rc, elapsed)
+                        _active = self._learning.active_cycle
+                        remaining_s = self._predictor.update_with_reference_curve(
+                            fs.dp_bar,
+                            _rc_dur,
+                            _rc,
+                            elapsed,
+                            cycle_dp_clean=_active.start_dp if _active else None,
+                        )
                     except Exception as _e:
                         logger.warning("update_with_reference_curve Fehler: %s", _e)
                         remaining_s = self._predictor.update(fs.dp_bar)

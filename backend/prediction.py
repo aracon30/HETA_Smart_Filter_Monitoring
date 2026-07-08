@@ -158,6 +158,7 @@ class PredictionEngine:
         ref_duration: float,
         ref_curve: list,
         elapsed_seconds: float = 0.0,
+        cycle_dp_clean: float | None = None,
     ) -> float:
         """
         Berechnet Reststandzeit durch Invertierung der gelernten Referenzkurve.
@@ -174,6 +175,11 @@ class PredictionEngine:
              festen Schwellwert umzuschalten – bei kleinem t_pct ist die Division
              elapsed/t_pct selbst noch instabil, ein harter Umschaltpunkt würde
              dadurch einen sichtbaren Sprung in der Restzeit erzeugen.
+          4. cycle_dp_clean (Sauberdruck DIESES Zyklus) verschiebt dp_bar vor der
+             Invertierung um die Differenz zum gelernten Referenz-Sauberdruck –
+             sonst bleibt t_pct bei 0 % hängen, solange der reale Δp-Wert noch
+             unter dem aus den Lernzyklen gemittelten Referenzwert liegt (jeder
+             Zyklus würfelt einen eigenen, leicht streuenden Sauberdruckabfall).
         _dp_history wird mitgeführt, damit get_current_slope() aktuelle
         Daten liefert (identisch zu update()).
         """
@@ -181,7 +187,12 @@ class PredictionEngine:
         self._dp_history.append(dp_bar)
         if len(self._dp_history) > self._history_window:
             self._dp_history.pop(0)
-        t_pct = self._invert_curve_dp_to_tpct(dp_bar, ref_curve)
+
+        dp_for_inversion = dp_bar
+        if cycle_dp_clean is not None and ref_curve:
+            ref_dp_clean = ref_curve[0].get("dp", dp_bar)
+            dp_for_inversion = dp_bar - (cycle_dp_clean - ref_dp_clean)
+        t_pct = self._invert_curve_dp_to_tpct(dp_for_inversion, ref_curve)
 
         # Vertrauen in die Ist-Tempo-Schätzung wächst graduell (0→1) statt an
         # einer festen Schwelle umzuschalten; beide Rampen müssen fortgeschritten
