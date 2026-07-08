@@ -376,6 +376,9 @@ async function loadSettingsIntoForm() {
       const warnEl = document.getElementById("sim-mode-warning");
       if (warnEl) warnEl.classList.toggle("hidden", !s.simulation_mode);
     }
+    const expertCb = document.getElementById("s-chart-expert-mode");
+    if (expertCb) expertCb.checked = !!s.chart_expert_mode;
+    _updateChartAxisConfigVisibility(s.chart_expert_mode);
     setText("dp-limit-hint", `Limit: ${Number(s.dp_limit_bar).toFixed(2)} bar`);
     updateChartDpLimit(s.dp_limit_bar ?? 2.5);
     // p1-Regler-Maximum synchronisieren
@@ -461,6 +464,7 @@ async function saveSettings() {
     temperature_max_c:         parseFloat(document.getElementById("s-temp-max").value),
     sampling_interval_seconds: parseInt(document.getElementById("s-interval").value, 10),
     simulation_mode:           document.getElementById("s-simulation-mode").checked,
+    chart_expert_mode:         document.getElementById("s-chart-expert-mode")?.checked ?? false,
     operation_mode:            document.getElementById("s-operation-mode")?.value ?? "continuous",
     flow_start_threshold_l_min: document.getElementById("s-flow-threshold")?.value !== ""
       ? parseFloat(document.getElementById("s-flow-threshold").value) : null,
@@ -491,6 +495,7 @@ async function saveSettings() {
     _tolReff  = result.settings.tolerance_reff_pct ?? 0.25;
     _tolFlow  = result.settings.tolerance_flow_pct ?? 0.25;
     _tolTempC = result.settings.tolerance_temp_c   ?? 10.0;
+    _updateChartAxisConfigVisibility(result.settings.chart_expert_mode);
     document.getElementById("settings-reset-warning").classList.add("hidden");
     document.getElementById("s-new-pw").value = "";
     document.getElementById("s-old-pw").value = "";

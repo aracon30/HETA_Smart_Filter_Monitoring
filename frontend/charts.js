@@ -1151,6 +1151,12 @@ function toggleAxisPanel() {
   if (chevron) chevron.innerHTML = isHidden ? "&#9660;" : "&#9650;";
 }
 
+// Achsenzuordnung ist eine Profi-Funktion – standardmäßig ausgeblendet, nur über
+// die Einstellung "Profi-Ansicht Diagramm" (Betrieb > Allgemein) sichtbar.
+function _updateChartAxisConfigVisibility(chartExpertMode) {
+  document.getElementById("chart-axis-config")?.classList.toggle("hidden", !chartExpertMode);
+}
+
 function _refreshRefChips(key) {
   const ui = _chartUI[key];
   if (!ui?.chart) return;

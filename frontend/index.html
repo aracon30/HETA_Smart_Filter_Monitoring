@@ -537,6 +537,10 @@
                 <input type="checkbox" id="s-simulation-mode" onchange="onSimModeToggle(this)" />
                 Simulationsmodus
               </label>
+              <label class="checkbox-label">
+                <input type="checkbox" id="s-chart-expert-mode" />
+                Profi-Ansicht Diagramm (Achsenzuordnung anzeigen)
+              </label>
             </div>
           </div>
 
@@ -927,8 +931,8 @@
           <div id="chart-ref-chips" class="chart-toggle-chips"></div>
           <span id="chart-ref-hint" class="chart-hint" style="font-size:.73rem;margin-left:.25rem"></span>
         </div>
-        <!-- Y-axis assignment panel -->
-        <div class="chart-axis-config">
+        <!-- Y-axis assignment panel – nur sichtbar mit "Profi-Ansicht Diagramm" (Einstellungen > Betrieb) -->
+        <div class="chart-axis-config hidden" id="chart-axis-config">
           <button class="chart-axis-config-toggle" onclick="toggleAxisPanel()">
             Achsenzuordnung <span id="chart-axis-chevron">&#9660;</span>
           </button>
