@@ -27,11 +27,12 @@ from flask import Flask, jsonify, request, send_from_directory
 from calculations import (
     FilterState,
 )
-from config import get_abs_path, hash_password, save_settings, settings, verify_password
+from config import get_abs_path, hash_password, password_needs_rehash, save_settings, settings, verify_password
 from database import Database
 from diagnostics import run_diagnostics as _run_diagnostics
 from heta_code import verify_activation
 from learning import LearningManager
+from login_guard import LoginThrottle
 from measurement import MeasurementLoop
 from prediction import PredictionEngine
 from sensors import (
@@ -107,6 +108,7 @@ def _reject_cross_origin_writes():
 # { token: last_access_timestamp }
 _sessions: dict[str, float] = {}
 _sessions_lock = threading.Lock()
+_login_throttle = LoginThrottle()
 
 # Kritische Parameter – bei Änderung muss der Lernprozess neu starten
 _LEARNING_SENSITIVE_KEYS = {
@@ -158,6 +160,46 @@ def _require_auth():
     if _validate_session(token):
         return True, None
     return False, (jsonify({"success": False, "message": "Nicht authentifiziert. Bitte anmelden."}), 401)
+
+
+def _check_password(password: str):
+    """
+    Prüft das Zugriffspasswort mit Login-Bremse je Client-Adresse.
+
+    Gibt (True, None) bei Erfolg, (False, None) bei falschem Passwort und
+    (False, Response) während einer Sperre zurück. Alte SHA-256-Hashes werden
+    nach erfolgreicher Prüfung transparent auf scrypt umgestellt.
+    """
+    client = request.remote_addr or "unbekannt"
+    wait = _login_throttle.retry_after(client)
+    if wait:
+        return False, (
+            jsonify(
+                {
+                    "success": False,
+                    "message": f"Zu viele Fehlversuche. Bitte {wait} s warten.",
+                    "retry_after": wait,
+                }
+            ),
+            429,
+            {"Retry-After": str(wait)},
+        )
+
+    stored_hash = settings.get("settings_password_hash", "")
+    if verify_password(password, stored_hash):
+        _login_throttle.register_success(client)
+        if password_needs_rehash(stored_hash):
+            settings["settings_password_hash"] = hash_password(password)
+            save_settings(settings)
+            logger.info("Passwort-Hash auf scrypt umgestellt.")
+        return True, None
+
+    lock_seconds = _login_throttle.register_failure(client)
+    if lock_seconds:
+        logger.warning("Falsches Passwort von %s – gesperrt für %d s.", client, lock_seconds)
+    else:
+        logger.warning("Falsches Passwort von %s.", client)
+    return False, None
 
 
 def _get_local_ip() -> str:
@@ -1199,7 +1241,10 @@ def api_settings_post():
     new_password = data.pop("new_password", None)
     old_password = data.pop("old_password", None)
     if new_password:
-        if not verify_password(old_password or "", settings.get("settings_password_hash", "")):
+        pw_ok, pw_err = _check_password(old_password or "")
+        if pw_err:
+            return pw_err
+        if not pw_ok:
             return jsonify({"success": False, "message": "Altes Passwort falsch."}), 403
         settings["settings_password_hash"] = hash_password(new_password)
 
@@ -1372,15 +1417,16 @@ def api_settings_login():
     if not stored_hash:
         return jsonify({"success": False, "message": "Kein Passwort gesetzt. Onboarding abschließen."}), 403
 
-    if verify_password(password, stored_hash):
+    pw_ok, pw_err = _check_password(password)
+    if pw_err:
+        return pw_err
+    if pw_ok:
         token = _create_session()
         logger.info("Einstellungsbereich: Anmeldung erfolgreich.")
         return jsonify(
             {"success": True, "token": token, "timeout_minutes": settings.get("session_timeout_minutes", 30)}
         )
-    else:
-        logger.warning("Einstellungsbereich: Falsches Passwort.")
-        return jsonify({"success": False, "message": "Falsches Passwort."}), 401
+    return jsonify({"success": False, "message": "Falsches Passwort."}), 401
 
 
 @app.route("/api/settings/logout", methods=["POST"])
@@ -1413,7 +1459,10 @@ def api_factory_reset():
 
     data = request.get_json(force=True, silent=True) or {}
     password = data.get("password", "")
-    if not verify_password(password, settings.get("settings_password_hash", "")):
+    pw_ok, pw_err = _check_password(password)
+    if pw_err:
+        return pw_err
+    if not pw_ok:
         return jsonify({"success": False, "message": "Passwort falsch."}), 403
 
     logger.warning("WERKSRESET ausgeführt.")

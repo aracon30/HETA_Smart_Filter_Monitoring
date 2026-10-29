@@ -4,12 +4,15 @@ on:
   push:
     paths:
       - "backend/**/*.py"
+      - "tests/**/*.py"
       - "pyproject.toml"
       - ".github/workflows/lint.yml"
   pull_request:
     paths:
       - "backend/**/*.py"
+      - "tests/**/*.py"
       - "pyproject.toml"
+      - ".github/workflows/lint.yml"
 
 jobs:
   ruff:
@@ -26,7 +29,24 @@ jobs:
         run: pip install ruff
 
       - name: Check (lint)
-        run: ruff check backend/
+        run: ruff check backend/ tests/
 
       - name: Check (format)
-        run: ruff format --check backend/
+        run: ruff format --check backend/ tests/
+
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Die Tests decken reine Python-Module ab (keine Hardware-/Flask-Abhängigkeit)
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Run tests
+        run: pytest -q
