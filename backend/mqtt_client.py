@@ -38,7 +38,7 @@ class MQTTClient:
         try:
             import paho.mqtt.client as mqtt  # type: ignore
 
-            self._client = mqtt.Client(client_id=self._client_id)
+            self._client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=self._client_id)
             self._client.on_connect = self._on_connect
             self._client.on_disconnect = self._on_disconnect
             self._client.connect(self._broker, self._port, keepalive=60)
@@ -56,16 +56,16 @@ class MQTTClient:
             self._client.disconnect()
             logger.info("MQTT getrennt.")
 
-    def _on_connect(self, client, userdata, flags, rc):
-        self._connected = rc == 0
+    def _on_connect(self, client, userdata, flags, reason_code, properties):
+        self._connected = not reason_code.is_failure
         if self._connected:
-            logger.info("MQTT verbunden (rc=%d).", rc)
+            logger.info("MQTT verbunden (%s).", reason_code)
         else:
-            logger.warning("MQTT Verbindungsfehler rc=%d.", rc)
+            logger.warning("MQTT Verbindungsfehler: %s.", reason_code)
 
-    def _on_disconnect(self, client, userdata, rc):
+    def _on_disconnect(self, client, userdata, flags, reason_code, properties):
         self._connected = False
-        logger.info("MQTT getrennt (rc=%d).", rc)
+        logger.info("MQTT getrennt (%s).", reason_code)
 
     def publish(self, topic: str, payload: dict, qos: int = 0, retain: bool = False) -> bool:
         """Veröffentlicht eine Nachricht auf einem MQTT-Topic."""

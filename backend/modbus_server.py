@@ -71,6 +71,7 @@ class ModbusTCPServer:
         self._server = None
         self._thread: threading.Thread | None = None
         self._context = None
+        self._device = None
         self._running = False
 
     def start(self) -> bool:
@@ -79,13 +80,23 @@ class ModbusTCPServer:
             from pymodbus.datastore import (  # type: ignore
                 ModbusSequentialDataBlock,
                 ModbusServerContext,
-                ModbusSlaveContext,
             )
             from pymodbus.server import StartTcpServer  # type: ignore
 
-            block = ModbusSequentialDataBlock(0, [0] * REG_COUNT)
-            slave = ModbusSlaveContext(hr=block)
-            self._context = ModbusServerContext(slaves=slave, single=True)
+            # Start bei 1: pymodbus addiert intern +1 auf die Protokolladresse
+            # (Register 0 der Registermap liegt im Block an Adresse 1).
+            block = ModbusSequentialDataBlock(1, [0] * REG_COUNT)
+            try:
+                # pymodbus >= 3.10: "slave" wurde in "device" umbenannt
+                from pymodbus.datastore import ModbusDeviceContext  # type: ignore
+
+                self._device = ModbusDeviceContext(hr=block)
+                self._context = ModbusServerContext(devices=self._device, single=True)
+            except ImportError:
+                from pymodbus.datastore import ModbusSlaveContext  # type: ignore
+
+                self._device = ModbusSlaveContext(hr=block)
+                self._context = ModbusServerContext(slaves=self._device, single=True)
 
             self._running = True
             self._thread = threading.Thread(
@@ -134,7 +145,7 @@ class ModbusTCPServer:
         Schreibt aktuelle Messwerte in die Holding-Register.
         Wird aus dem Messloop nach jedem Zyklus aufgerufen.
         """
-        if self._context is None:
+        if self._device is None:
             return
         try:
             regs = [0] * REG_COUNT
@@ -159,6 +170,6 @@ class ModbusTCPServer:
 
             regs[REG_CYCLE_COUNT] = _clamp(state.get("cycle_count", 0))
 
-            self._context[0].setValues(3, 0, regs)
+            self._device.setValues(3, 0, regs)
         except Exception as e:
             logger.warning("Modbus register update Fehler: %s", e)
