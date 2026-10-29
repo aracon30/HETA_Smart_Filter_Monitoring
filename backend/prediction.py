@@ -158,6 +158,7 @@ class PredictionEngine:
         ref_duration: float,
         ref_curve: list,
         elapsed_seconds: float = 0.0,
+        cycle_dp_clean: float | None = None,
     ) -> float:
         """
         Berechnet Reststandzeit durch Invertierung der gelernten Referenzkurve.
@@ -169,8 +170,16 @@ class PredictionEngine:
              Damit passt sich die Restzeit automatisch an langsamere/schnellere
              Beladung an: reduzierte Last → dp niedrig → t_pct klein →
              actual_duration groß → Restzeit springt sofort nach oben.
-          3. Fallback auf ref_duration wenn elapsed zu klein für eine
-             zuverlässige Schätzung (erste 5 Sekunden).
+          3. Übergang von der Referenzdauer (unbekanntes Ist-Tempo) zur Ist-Tempo-
+             Schätzung erfolgt graduell über t_pct/elapsed_seconds statt an einem
+             festen Schwellwert umzuschalten – bei kleinem t_pct ist die Division
+             elapsed/t_pct selbst noch instabil, ein harter Umschaltpunkt würde
+             dadurch einen sichtbaren Sprung in der Restzeit erzeugen.
+          4. cycle_dp_clean (Sauberdruck DIESES Zyklus) verschiebt dp_bar vor der
+             Invertierung um die Differenz zum gelernten Referenz-Sauberdruck –
+             sonst bleibt t_pct bei 0 % hängen, solange der reale Δp-Wert noch
+             unter dem aus den Lernzyklen gemittelten Referenzwert liegt (jeder
+             Zyklus würfelt einen eigenen, leicht streuenden Sauberdruckabfall).
         _dp_history wird mitgeführt, damit get_current_slope() aktuelle
         Daten liefert (identisch zu update()).
         """
@@ -178,11 +187,23 @@ class PredictionEngine:
         self._dp_history.append(dp_bar)
         if len(self._dp_history) > self._history_window:
             self._dp_history.pop(0)
-        t_pct = self._invert_curve_dp_to_tpct(dp_bar, ref_curve)
 
-        # Tatsächliche Zyklusdauer aus Laufzeit ableiten (ab 5 s zuverlässig)
-        if elapsed_seconds >= 5.0 and t_pct > 0.5:
-            actual_duration = elapsed_seconds / (t_pct / 100.0)
+        dp_for_inversion = dp_bar
+        if cycle_dp_clean is not None and ref_curve:
+            ref_dp_clean = ref_curve[0].get("dp", dp_bar)
+            dp_for_inversion = dp_bar - (cycle_dp_clean - ref_dp_clean)
+        t_pct = self._invert_curve_dp_to_tpct(dp_for_inversion, ref_curve)
+
+        # Vertrauen in die Ist-Tempo-Schätzung wächst graduell (0→1) statt an
+        # einer festen Schwelle umzuschalten; beide Rampen müssen fortgeschritten
+        # sein (min), sonst dominiert weiterhin die Referenzdauer.
+        t_confidence = self._ramp(t_pct, 0.5, 5.0)
+        time_confidence = self._ramp(elapsed_seconds, 5.0, 30.0)
+        confidence = min(t_confidence, time_confidence)
+
+        if t_pct > 0.01:
+            actual_duration_est = elapsed_seconds / (t_pct / 100.0)
+            actual_duration = ref_duration * (1.0 - confidence) + actual_duration_est * confidence
         else:
             actual_duration = ref_duration
 
@@ -200,6 +221,13 @@ class PredictionEngine:
                 self._last_remaining += 0.4 * (remaining - self._last_remaining)
 
         return self._last_remaining
+
+    @staticmethod
+    def _ramp(value: float, low: float, high: float) -> float:
+        """Lineare Rampe: 0 bei value<=low, 1 bei value>=high, dazwischen linear."""
+        if high <= low:
+            return 1.0 if value >= high else 0.0
+        return max(0.0, min(1.0, (value - low) / (high - low)))
 
     def _invert_curve_dp_to_tpct(self, dp_bar: float, curve: list) -> float:
         """
@@ -299,6 +327,26 @@ class PredictionEngine:
         if initial_seconds > 0:
             self._last_remaining = float(initial_seconds)
             self._seeded_ceiling = float(initial_seconds)  # kein Sprung über diesen Wert
+
+    def seed_histories(
+        self, dp_bar: float, flow: float, temp: float, r_eff: float, p1: float, p2: float, count: int = 10
+    ):
+        """
+        Füllt alle Verlaufspuffer mit `count` Kopien des Startzustands vor.
+
+        Im Hardwaremodus wärmt die Durchflusserkennungs-Wartezeit die Puffer
+        nebenbei schon vor (update_channels läuft dort bereits vor Zyklusstart).
+        Im Simulationsmodus entfällt diese Wartezeit (bewusst, für Schnellstart) –
+        ohne Vorfüllung wäre die Steigungsregression in den ersten Sekunden auf
+        zu wenige/zu ähnliche Samples angewiesen und würde entsprechend rauschen.
+        """
+        n = min(max(count, 0), self._history_window)
+        self._dp_history = [dp_bar] * n
+        self._flow_history = [flow] * n
+        self._temp_history = [temp] * n
+        self._reff_history = [r_eff] * n
+        self._p1_history = [p1] * n
+        self._p2_history = [p2] * n
 
     def update_limits(self, dp_limit: float, dp_clean: float):
         """Aktualisiert die Grenzwerte ohne Neustart."""

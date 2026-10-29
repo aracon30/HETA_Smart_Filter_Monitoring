@@ -46,6 +46,8 @@ _DEFAULTS = {
     "tolerance_flow_pct": 0.25,
     "tolerance_temp_c": 10.0,
     "required_cycles_for_profile": 3,
+    # Profi-Ansicht Diagramm – blendet die Achsenzuordnung im Live-Chart ein
+    "chart_expert_mode": False,
     # Simulation – feste Basiswerte
     "sim_p1_base_bar": 4.0,
     "sim_q_base_l_min": 145.0,

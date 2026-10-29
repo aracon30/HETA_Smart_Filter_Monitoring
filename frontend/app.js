@@ -376,6 +376,9 @@ async function loadSettingsIntoForm() {
       const warnEl = document.getElementById("sim-mode-warning");
       if (warnEl) warnEl.classList.toggle("hidden", !s.simulation_mode);
     }
+    const expertCb = document.getElementById("s-chart-expert-mode");
+    if (expertCb) expertCb.checked = !!s.chart_expert_mode;
+    _updateChartAxisConfigVisibility(s.chart_expert_mode);
     setText("dp-limit-hint", `Limit: ${Number(s.dp_limit_bar).toFixed(2)} bar`);
     updateChartDpLimit(s.dp_limit_bar ?? 2.5);
     // p1-Regler-Maximum synchronisieren
@@ -461,6 +464,7 @@ async function saveSettings() {
     temperature_max_c:         parseFloat(document.getElementById("s-temp-max").value),
     sampling_interval_seconds: parseInt(document.getElementById("s-interval").value, 10),
     simulation_mode:           document.getElementById("s-simulation-mode").checked,
+    chart_expert_mode:         document.getElementById("s-chart-expert-mode")?.checked ?? false,
     operation_mode:            document.getElementById("s-operation-mode")?.value ?? "continuous",
     flow_start_threshold_l_min: document.getElementById("s-flow-threshold")?.value !== ""
       ? parseFloat(document.getElementById("s-flow-threshold").value) : null,
@@ -491,6 +495,7 @@ async function saveSettings() {
     _tolReff  = result.settings.tolerance_reff_pct ?? 0.25;
     _tolFlow  = result.settings.tolerance_flow_pct ?? 0.25;
     _tolTempC = result.settings.tolerance_temp_c   ?? 10.0;
+    _updateChartAxisConfigVisibility(result.settings.chart_expert_mode);
     document.getElementById("settings-reset-warning").classList.add("hidden");
     document.getElementById("s-new-pw").value = "";
     document.getElementById("s-old-pw").value = "";
@@ -1220,9 +1225,12 @@ function updateAnalysisSection(d) {
   const tDev      = d.analysis_temp_deviation_pct ?? 0;
   setText("an-tmp-ref", fmt(tSlopeRef * 60, 4) + " °C/min");
   setText("an-tmp-cur", fmt(tSlopeCur * 60, 4) + " °C/min");
-  setAnalysisDev("an-tmp-dev", tDev, "%", _tolTempC * 10, _tolTempC * 20);
+  // tDev ist bereits im Backend relativ zur ABSOLUTEN Temperaturtoleranz normiert
+  // (100 % = an der Toleranzgrenze) – hier nicht nochmal mit _tolTempC skalieren.
+  setAnalysisDev("an-tmp-dev", tDev, "%", 100, 200);
 
-  setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev, true));
+  setText("analysis-diagnosis", buildDiagnosis(dpDev, flDev, tDev, dpSlopeCur));
+  updateLiveEvents(d.active_cycle_events);
 }
 
 function setAnalysisDev(id, val, unit, warnAt, critAt, isAbsolute = false) {
@@ -1231,39 +1239,51 @@ function setAnalysisDev(id, val, unit, warnAt, critAt, isAbsolute = false) {
   const sign = val > 0 ? "+" : "";
   const disp = isAbsolute ? Math.abs(val).toFixed(1) : Math.abs(Math.round(val));
   const prefix = val >= 0 ? sign : "−";
-  el.textContent = `${prefix}${disp} ${unit}`;
   const absVal = Math.abs(val);
+  const inTol  = absVal < warnAt;
+  const icon   = inTol ? "✓" : "⚠";
+  // Grenze = die tatsächliche Toleranzschwelle (warnAt), ab der der Backend-Check
+  // (measurement.py: abs(dev) > tol) den Status auf WARNUNG eskaliert – critAt ist
+  // nur eine zusätzliche UI-Eskalationsstufe ohne eigene Bedeutung im Backend.
+  el.innerHTML =
+    `<span class="analysis-dev-val">${icon} ${prefix}${disp} ${unit}</span>` +
+    `<span class="analysis-dev-tol">Grenze &plusmn;${Math.round(warnAt)}%</span>`;
   el.className = "analysis-dev " + (
-    absVal < warnAt ? "dev-ok" :
+    inTol ? "dev-ok" :
     absVal < critAt ? "dev-warn" : "dev-crit"
   );
 }
 
-function buildDiagnosis(dpDevPct, flowDevPct, tempDev, isSlopeBase = false) {
-  const dpFast   = dpDevPct   >  40;
-  const dpSlow   = dpDevPct   < -30;
-  const flowLow  = flowDevPct < -20;
-  const flowHigh = flowDevPct >  15;
-  const tempHigh = tempDev    >  15;
-  const tempLow  = tempDev    < -10;
+function buildDiagnosis(dpDevPct, flowDevPct, tempDev, dpSlopeCur = 0) {
+  const dpFast     = dpDevPct   >  40;
+  const dpSlow     = dpDevPct   < -30;
+  // Δp kann durch Beladung physikalisch nur steigen, nie von selbst sinken – ein
+  // tatsächlich negativer Δp-Anstieg ist daher immer ein Hinweis auf einen
+  // strukturellen Defekt (Riss/Bypass), unabhängig von der Abweichungsgröße.
+  const dpFalling  = dpSlopeCur <  0;
+  const flowLow    = flowDevPct < -20;
+  const flowHigh   = flowDevPct >  15;
+  // tempDev ist % der ABSOLUTEN Temperaturtoleranz (100 % = an der Toleranzgrenze,
+  // siehe learning.py::get_curve_analysis) – andere Skala als dp/flow, daher an der
+  // Toleranzgrenze selbst statt an einem willkürlichen Prozentsatz ausgelöst.
+  const tempHigh   = tempDev    >  100;
+  const tempLow    = tempDev    < -100;
 
   const hints = [];
 
-  if (dpFast && flowLow) {
+  if (dpFalling && flowHigh) {
+    hints.push("⚠ Δp fällt tatsächlich UND Durchfluss steigt → Verdacht auf Filterbruch/Bypass (Beladung kann sich nicht von selbst zurückbilden). Sofort prüfen.");
+  } else if (dpFast && flowLow) {
     hints.push("Schnelle Beladung + reduzierter Durchfluss → Verdacht auf Filterverstopfung oder erhöhten Verschmutzungseintrag.");
   } else if (dpFast) {
-    const label = isSlopeBase ? "Δp-Steigung höher als Referenz" : "Δp steigt schneller als gelernt";
-    hints.push(label + " → erhöhte Partikelkonzentration oder beschädigtes Filterelement möglich.");
+    hints.push("Δp-Steigung höher als Referenz → erhöhte Partikelkonzentration oder beschädigtes Filterelement möglich.");
   } else if (dpSlow) {
-    const label = isSlopeBase ? "Δp-Steigung niedriger als Referenz" : "Langsame Beladung";
-    hints.push(label + " → Prozess läuft mit reduzierter Last. Filterwechselintervall verlängert sich.");
+    hints.push("Δp-Steigung niedriger als Referenz → Prozess läuft mit reduzierter Last. Filterwechselintervall verlängert sich.");
   }
 
   if (flowLow && !dpFast) {
     hints.push("Durchfluss unter Referenz → Pumpenproblem, Leckage im Bypass oder Vorverstopfung möglich.");
-  } else if (flowHigh && !dpSlow) {
-    // flowHigh + dpSlow ist konsistent: weniger Beladung → niedrigerer Δp UND höherer
-    // Durchfluss (weniger Filterwiderstand). Kein Widerspruch – dpSlow-Hinweis reicht.
+  } else if (flowHigh && !dpSlow && !dpFalling) {
     hints.push("Erhöhter Durchfluss ohne Δp-Reduktion → mehr Partikelladung pro Zeiteinheit, Filterwechselintervall kann sich verkürzen.");
   }
 

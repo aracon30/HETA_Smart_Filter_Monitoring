@@ -419,6 +419,7 @@ class LearningManager:
         current_flow_slope: float | None = None,
         current_temp_slope: float | None = None,
         current_reff_slope: float | None = None,
+        tolerance_temp_c: float = 10.0,
     ) -> dict | None:
         """
         Vergleicht aktuelle Messwerte mit der gelernten Referenzkurve.
@@ -449,12 +450,23 @@ class LearningManager:
             logger.debug("get_curve_analysis: leere Kurve nach JSON-Parse für %s", heta_code)
             return None
 
+        # Δp relativ zum SAUBERDRUCK DIESES Zyklus normieren, bevor gegen die
+        # Referenzkurve invertiert wird. Jeder Zyklus würfelt einen eigenen,
+        # leicht streuenden Sauberdruckabfall (Exemplarstreuung, siehe
+        # FilterSimulator._roll_dp_clean) – ohne diese Normierung bleibt t_pct bei
+        # 0 % hängen, solange der reale Δp-Wert noch unter dem AUS DEN LERNZYKLEN
+        # GEMITTELTEN Referenz-Sauberdruck liegt, selbst wenn der Zyklus real
+        # schon deutlich fortgeschritten ist.
+        ref_dp_clean = curve[0].get("dp", current_dp) if curve else current_dp
+        cycle = self._active_cycle
+        if cycle is not None and cycle.heta_code == heta_code:
+            dp_for_inversion = current_dp - (cycle.start_dp - ref_dp_clean)
+        else:
+            dp_for_inversion = current_dp
+
         # dp-basierter Zyklusfortschritt
-        t_pct = self._invert_dp_to_tpct(curve, current_dp)
+        t_pct = self._invert_dp_to_tpct(curve, dp_for_inversion)
         cycle_progress_pct = round(t_pct, 1)
-        ref = self._interpolate_curve(curve, t_pct)
-        if not ref:
-            return None
 
         # Tatsächliche Zyklusdauer aus der bisherigen Laufzeit schätzen (wie in
         # PredictionEngine.update_with_reference_curve). Läuft der aktuelle Zyklus
@@ -467,31 +479,55 @@ class LearningManager:
         else:
             actual_duration = ref_dur
 
-        def pct_dev(cur, ref_val):
-            if ref_val and abs(ref_val) > 1e-9:
-                return round((cur / ref_val - 1.0) * 100.0, 1)
-            return 0.0
+        # Durchschnittliche Referenzrate über den GESAMTEN gelernten Zyklus (Start→Ende
+        # der Kurvenanker). Die Abweichungs-% werden gegen diese KONSTANTE Rate normiert,
+        # nicht gegen die stark wachsende LOKALE Referenzrate – sonst würde die effektive
+        # Toleranz zum Zyklusende hin (wo Δp/Q/R_eff am steilsten verlaufen, progressive
+        # Verstopfungskurve) immer großzügiger, obwohl Abweichungen kurz vor dem
+        # Filterwechsel am kritischsten sind.
+        def avg_slope(field):
+            first_v = curve[0].get(field) if curve else None
+            last_v = curve[-1].get(field) if curve else None
+            if first_v is None or last_v is None or ref_dur <= 0:
+                return 0.0
+            return (last_v - first_v) / ref_dur
+
+        avg_dp_slope = avg_slope("dp")
+        avg_flow_slope = avg_slope("flow")
+        avg_reff_slope = avg_slope("r_eff")
+
+        def slope_dev_vs_avg(cur_slope, ref_local, avg_val):
+            if cur_slope is None or abs(avg_val) < 1e-12:
+                return 0.0
+            return round(((cur_slope - ref_local) / avg_val) * 100.0, 1)
 
         # dp-Steigung: Referenz über dasselbe 30-s-Fenster wie die aktuelle Regression.
         # Beide Steigungen nutzen denselben Mittelungshorizont → kein Versatz.
         # Referenzfenster: 30 s um aktuelle t_pct-Position in der Referenzkurve.
         ref_dp_slope = self._slope_windowed(curve, t_pct, actual_duration, field="dp", window_s=30)
-        dp_slope_dev = (
-            pct_dev(current_dp_slope, ref_dp_slope)
-            if current_dp_slope is not None and abs(ref_dp_slope) > 1e-9
-            else 0.0
-        )
+        dp_slope_dev = slope_dev_vs_avg(current_dp_slope, ref_dp_slope, avg_dp_slope)
 
-        # Rückwärts-Steigungen für Q, T, R_eff — identische Methodik wie dp
-        def slope_dev(cur_slope, field):
+        # Rückwärts-Steigungen für Q, R_eff — identische Methodik wie dp
+        def slope_dev(cur_slope, field, avg_val):
             ref_s = self._slope_windowed(curve, t_pct, actual_duration, field=field, window_s=30)
-            if cur_slope is None or abs(ref_s) < 1e-12:
-                return 0.0, ref_s
-            return pct_dev(cur_slope, ref_s), ref_s
+            return slope_dev_vs_avg(cur_slope, ref_s, avg_val), ref_s
 
-        flow_dev_pct, ref_flow_slope = slope_dev(current_flow_slope, "flow")
-        temp_dev_pct, ref_temp_slope = slope_dev(current_temp_slope, "temp")
-        reff_dev_pct, ref_reff_slope = slope_dev(current_reff_slope, "r_eff")
+        flow_dev_pct, ref_flow_slope = slope_dev(current_flow_slope, "flow", avg_flow_slope)
+        reff_dev_pct, ref_reff_slope = slope_dev(current_reff_slope, "r_eff", avg_reff_slope)
+
+        # Temperatur: die Referenzsteigung ist im Normalfall nahe Null (T bleibt
+        # meist konstant) – ein prozentualer Vergleich relativ zu einer Fast-Null-
+        # Referenz ist mathematisch instabil (winzige reale Schwankungen können
+        # beliebig große %-Werte ergeben). Stattdessen wird die Abweichung als
+        # Prozentsatz der konfigurierten ABSOLUTEN Temperaturtoleranz ausgedrückt –
+        # gleiche Umrechnung wie die Toleranzbänder im Live-Chart
+        # (siehe charts.js::_computeRateRefBands, "°C absolut → in Rate umrechnen").
+        ref_temp_slope = self._slope_windowed(curve, t_pct, actual_duration, field="temp", window_s=30)
+        temp_tol_per_min = tolerance_temp_c / max(actual_duration / 60.0, 1e-6)
+        if current_temp_slope is not None and temp_tol_per_min > 1e-9:
+            temp_dev_pct = round(((current_temp_slope - ref_temp_slope) * 60.0 / temp_tol_per_min) * 100.0, 1)
+        else:
+            temp_dev_pct = 0.0
 
         return {
             "cycle_progress_pct": cycle_progress_pct,
@@ -513,27 +549,6 @@ class LearningManager:
             "cur_reff_slope": round(current_reff_slope, 9) if current_reff_slope is not None else None,
             "r_eff_deviation_pct": reff_dev_pct,
         }
-
-    @staticmethod
-    def _interpolate_curve(curve: list, t_pct: float) -> dict | None:
-        """Lineare Interpolation zwischen zwei Stützpunkten der Referenzkurve."""
-        if not curve:
-            return None
-        if t_pct <= curve[0]["t_pct"]:
-            return dict(curve[0])
-        if t_pct >= curve[-1]["t_pct"]:
-            return dict(curve[-1])
-        for i in range(len(curve) - 1):
-            t0, t1 = curve[i]["t_pct"], curve[i + 1]["t_pct"]
-            if t0 <= t_pct <= t1:
-                if t1 - t0 < 0.001:
-                    return dict(curve[i])
-                alpha = (t_pct - t0) / (t1 - t0)
-                return {
-                    k: (curve[i].get(k) or 0.0) + alpha * ((curve[i + 1].get(k) or 0.0) - (curve[i].get(k) or 0.0))
-                    for k in ("dp", "r_eff", "flow", "temp")
-                }
-        return dict(curve[-1])
 
     @staticmethod
     def _invert_dp_to_tpct(curve: list, dp_bar: float) -> float:
@@ -600,26 +615,6 @@ class LearningManager:
         actual_window_s = (t_hi - t_lo) / 100.0 * ref_duration
         return (v_hi - v_lo) / actual_window_s if actual_window_s > 0 else 0.0
 
-    @staticmethod
-    def _slope_at_tpct(curve: list, t_pct: float, ref_duration: float, field: str = "dp") -> float:
-        """
-        Berechnet die Referenzsteigung für ein beliebiges Kurvenfeld (bar/s, l/min/s, …)
-        an der Position t_pct. Ableitung: d(field)/d(t_pct) × (100 / ref_duration).
-        """
-        if not curve or ref_duration <= 0:
-            return 0.0
-        for i in range(len(curve) - 1):
-            t0 = curve[i].get("t_pct", 0)
-            t1 = curve[i + 1].get("t_pct", 0)
-            if t0 <= t_pct <= t1 and (t1 - t0) > 0.001:
-                v0 = curve[i].get(field) or 0.0
-                v1 = curve[i + 1].get(field) or 0.0
-                t_delta_s = (t1 - t0) / 100.0 * ref_duration
-                return (v1 - v0) / t_delta_s if t_delta_s > 0 else 0.0
-        # Fallback: mittlere Gesamtsteigung
-        v_total = (curve[-1].get(field) or 0.0) - (curve[0].get(field) or 0.0)
-        return v_total / ref_duration
-
     def get_profile(self, heta_code: str) -> dict | None:
         """Gibt das Referenzprofil zurück oder None."""
         return self.db.get_profile(heta_code)
@@ -628,10 +623,6 @@ class LearningManager:
         """Prüft ob ein valides Referenzprofil existiert."""
         profile = self.get_profile(heta_code)
         return bool(profile and profile.get("profile_valid"))
-
-    def get_cycles_count(self, heta_code: str) -> int:
-        """Gibt die Anzahl bestätigter Zyklen zurück."""
-        return self.db.count_confirmed_cycles(heta_code)
 
     # ------------------------------------------------------------------
     # Startverhalten-Prüfung

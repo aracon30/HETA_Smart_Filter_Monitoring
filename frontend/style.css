@@ -423,7 +423,7 @@ main {
 
 .analysis-grid {
   display: grid;
-  grid-template-columns: 140px 1fr 1fr 110px;
+  grid-template-columns: 140px 1fr 1fr 128px;
   gap: .3rem .75rem;
   font-size: .84rem;
   margin-bottom: 1rem;
@@ -440,13 +440,24 @@ main {
 .analysis-label { color: var(--text-main); align-self: center; font-weight: 500; }
 .analysis-val   { color: var(--text-main); align-self: center; font-variant-numeric: tabular-nums; }
 .analysis-dev {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .1rem;
   font-weight: 700;
   text-align: right;
   align-self: center;
   border-radius: 5px;
-  padding: .2rem .45rem;
-  white-space: nowrap;
+  padding: .25rem .45rem;
   font-size: .82rem;
+  line-height: 1.2;
+}
+.analysis-dev-val { white-space: nowrap; }
+.analysis-dev-tol {
+  font-weight: 400;
+  font-size: .68rem;
+  opacity: .7;
+  white-space: nowrap;
 }
 .analysis-dev.dev-ok   { background: rgba(34,197,94,0.15);  color: #22c55e; }
 .analysis-dev.dev-warn { background: rgba(245,158,11,0.15); color: #f59e0b; }
@@ -670,6 +681,11 @@ main {
 /* Cycle modal events */
 .cycle-modal-events-list {
   margin: .85rem 1.25rem .5rem;
+  padding: 0;
+}
+
+.cycle-events {
+  margin: .85rem 0 0;
   padding: 0;
 }
 
@@ -905,6 +921,22 @@ main {
   flex-wrap: wrap;
   gap: .35rem;
 }
+.chart-toggle-chips-row {
+  display: flex;
+  flex: 0 0 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem;
+}
+.chart-toggle-row-label {
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  margin-right: .2rem;
+}
 .chart-chip {
   display: inline-flex;
   align-items: center;
@@ -968,10 +1000,11 @@ main {
 }
 .chart-axis-config-toggle:hover { color: var(--heta-blue-mid); }
 .chart-axis-panel {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: .4rem .75rem;
+  display: flex;
+  flex-direction: column;
+  gap: .35rem;
   padding: .65rem .1rem .3rem;
+  max-width: 32rem;
 }
 .chart-axis-row {
   display: flex;
@@ -980,6 +1013,15 @@ main {
   font-size: .82rem;
   color: var(--text-main);
 }
+.chart-axis-section-header {
+  font-size: .7rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: .3rem;
+}
+.chart-axis-section-header:first-child { margin-top: 0; }
 .chart-axis-dot {
   width: 10px;
   height: 10px;
@@ -988,6 +1030,7 @@ main {
 }
 .chart-axis-select {
   flex: 1;
+  min-width: 0;
   background: rgba(255,255,255,0.05);
   color: var(--text-main);
   border: 1px solid var(--border);
@@ -996,6 +1039,9 @@ main {
   font-size: .8rem;
   cursor: pointer;
   outline: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .chart-axis-select:focus { border-color: var(--heta-accent); }
 

@@ -319,6 +319,13 @@ class MeasurementLoop:
                     self.mstate.flow_stable_since = None
                     self._learning.start_cycle(learning_code, fs.r_eff, fs.dp_bar)
                     self._seed_predictor(learning_code)
+                    # Puffer-Vorfüllung: im Hardwaremodus wärmt die Durchflusserkennungs-
+                    # Wartezeit die Steigungs-Regressionspuffer nebenbei vor; die Simulation
+                    # startet ohne diese Wartezeit sofort – daher hier explizit vorfüllen,
+                    # damit die Ratenkurven nicht in den ersten Sekunden verrauscht wirken.
+                    self._predictor.seed_histories(
+                        fs.dp_bar, fs.flow_l_min, fs.temperature_c, fs.r_eff, fs.p1_bar, fs.p2_bar
+                    )
                     with self._state_lock:
                         self._state["waiting_for_flow"] = False
                         self._state["cycle_active"] = True
@@ -549,7 +556,14 @@ class MeasurementLoop:
                 if _rc_json and _rc_dur > 0:
                     try:
                         _rc = json.loads(_rc_json) if isinstance(_rc_json, str) else _rc_json
-                        remaining_s = self._predictor.update_with_reference_curve(fs.dp_bar, _rc_dur, _rc, elapsed)
+                        _active = self._learning.active_cycle
+                        remaining_s = self._predictor.update_with_reference_curve(
+                            fs.dp_bar,
+                            _rc_dur,
+                            _rc,
+                            elapsed,
+                            cycle_dp_clean=_active.start_dp if _active else None,
+                        )
                     except Exception as _e:
                         logger.warning("update_with_reference_curve Fehler: %s", _e)
                         remaining_s = self._predictor.update(fs.dp_bar)
@@ -575,6 +589,7 @@ class MeasurementLoop:
                         current_flow_slope=ch_slopes["flow"],
                         current_temp_slope=ch_slopes["temp"],
                         current_reff_slope=ch_slopes["r_eff"],
+                        tolerance_temp_c=self._settings.get("tolerance_temp_c", 10.0),
                     )
                 except Exception as _e:
                     logger.warning("Kurvenanalyse-Fehler: %s", _e, exc_info=True)
@@ -672,6 +687,18 @@ class MeasurementLoop:
                             self._learning.close_event(category=f"dev_{ch}")
                             dev_active[ch] = False
                     self._state["_dev_active"] = dev_active
+
+                    # Laufende Abweichung eskaliert filter_status auch AUSSERHALB der
+                    # 10s-Startprüfung (z.B. Filterbruch mitten im Zyklus). Sicher ohne
+                    # eigenes Reset-Handling: der Startprüfungs-Block oben löscht
+                    # anomaly_active auf jedem Tick nach Ablauf seines 10s-Fensters,
+                    # bevor dieser Block hier ggf. neu setzt – daher hier bewusst nur
+                    # setzen, nie auf False zurücksetzen (das würde eine noch laufende
+                    # Start-Anomalie überschreiben).
+                    if any(dev_active.values()):
+                        worst_pct = max(abs(dev) for ch, dev, _, _ in checks if dev_active.get(ch))
+                        self._state["anomaly_active"] = True
+                        self._state["anomaly_percent"] = round(max(self._state["anomaly_percent"], worst_pct), 1)
 
             # ── Prognosestatus ────────────────────────────────────────────────
             req_cycles = self._settings.get("required_cycles_for_profile", 3)
