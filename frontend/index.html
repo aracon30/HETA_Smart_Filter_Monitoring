@@ -1066,7 +1066,6 @@
           </div>
           <input type="text" id="input-pin" placeholder="PIN (6-stellig)" maxlength="6" />
           <button class="btn btn-primary btn-lg" onclick="activateHetaCode()">Aktivieren</button>
-          <button class="btn btn-ghost" onclick="showDemo()">Demo-PIN anzeigen</button>
         </div>
         <div id="heta-msg" class="msg"></div>
       </section>
@@ -1165,10 +1164,38 @@
     </div>
   </footer>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <!-- ================================================================
+       ANMELDE-DIALOG (für geschützte Aktionen außerhalb der Einstellungen)
+       ================================================================ -->
+  <div id="auth-overlay" class="overlay overlay--auth hidden">
+    <div class="modal modal--auth">
+      <div class="modal-header">
+        <h2>Anmeldung erforderlich</h2>
+        <button class="btn-close" onclick="cancelAuthLogin()">&#10005;</button>
+      </div>
+      <div class="auth-body">
+        <p>Diese Aktion ist passwortgeschützt. Bitte das Zugriffspasswort eingeben.</p>
+        <div class="form-grid">
+          <label>
+            Passwort
+            <input type="password" id="auth-pw-input" placeholder="Passwort" autocomplete="current-password"
+                   onkeydown="if(event.key==='Enter') submitAuthLogin(); else if(event.key==='Escape') cancelAuthLogin()" />
+          </label>
+        </div>
+        <div class="auth-actions">
+          <button class="btn btn-primary" onclick="submitAuthLogin()">Anmelden</button>
+          <button class="btn btn-ghost" onclick="cancelAuthLogin()">Abbrechen</button>
+        </div>
+        <div id="auth-msg" class="msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lokal eingebunden (frontend/vendor/), damit die Oberfläche ohne Internet läuft -->
+  <script src="vendor/chart.umd.js"></script>
+  <script src="vendor/hammer.min.js"></script>
+  <script src="vendor/chartjs-plugin-zoom.min.js"></script>
+  <script src="vendor/chartjs-plugin-annotation.min.js"></script>
   <script src="utils.js"></script>
   <script src="api.js"></script>
   <script src="charts.js"></script>

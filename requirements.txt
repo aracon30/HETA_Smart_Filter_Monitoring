@@ -1,27 +1,28 @@
 # Web-Backend (läuft auf allen Plattformen)
-flask>=2.3.0
-flask-cors>=4.0.0
+flask>=2.3.0,<4
 
 # Benutzerhandbuch-Rendering (Markdown → HTML via /help)
-markdown>=3.5
+markdown>=3.5,<4
 
 # OLED-Display (Waveshare 2.42" SSD1309, SPI)
 # Wird bei fehlendem Display sicher übersprungen (Warnung im Log).
-luma.oled>=3.12.0
-Pillow>=10.0.0
+luma.oled>=3.12.0,<4
+Pillow>=10.0.0,<14
 
 # ANO-Rotary-Encoder (direktes GPIO, nur Raspberry Pi)
 # gpiozero ist auf Raspberry Pi OS vorinstalliert.
 # lgpio wird als GPIO-Backend für Pi 5 benötigt – Installation via apt:
 #   sudo apt-get install -y python3-lgpio
 # (lgpio hier absichtlich nicht in pip-Abhängigkeiten, da Build aus Quellcode fehlschlägt)
-gpiozero>=2.0
+gpiozero>=2.0,<3
 
 # MQTT-Client (optional – nur aktiv wenn mqtt_enabled=true in settings.json)
-paho-mqtt>=1.6.1
+# paho-mqtt 2.x: Callback-API Version 2 (siehe mqtt_client.py)
+paho-mqtt>=2.0,<3
 
 # Modbus-TCP-Server (optional – nur aktiv wenn modbus_enabled=true in settings.json)
-pymodbus>=3.6.0
+# Obergrenze: ab 3.13 entfällt das synchrone setValues() (Umbau auf die v4-SimData-API).
+pymodbus>=3.6.0,<3.13
 
 # AnoPi Shield – I2C-Stromeingang via INA219 (nur auf Raspberry Pi verfügbar)
 # Auf anderen Systemen schlägt der Import fehl; sensors.py behandelt das

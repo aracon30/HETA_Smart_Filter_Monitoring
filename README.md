@@ -72,13 +72,13 @@ journalctl -u heta-monitor -f         # Live-Log
 
 | Paket | Zweck | Installation |
 |-------|-------|-------------|
-| flask, flask-cors | Web-Backend | pip |
+| flask | Web-Backend | pip |
 | luma.oled, Pillow | OLED-Display | pip |
 | gpiozero ≥ 2.0 | Encoder-GPIO | pip |
 | lgpio | GPIO-Backend Pi 5 | `sudo apt-get install python3-lgpio` |
 | python-anopi | AnoPi Shield I2C/INA219 | pip |
-| paho-mqtt | MQTT (optional) | pip |
-| pymodbus ≥ 3.6 | Modbus TCP (optional) | pip |
+| paho-mqtt 2.x | MQTT (optional) | pip |
+| pymodbus 3.6 – 3.12 | Modbus TCP (optional) | pip |
 
 ---
 
@@ -120,7 +120,7 @@ ist technisch blockiert.
 
 1. Weboberfläche öffnen: `http://<IP>:8080`
 2. HETA-Code eingeben, z. B. `HETA-12345`
-3. Zugehörigen PIN eingeben (oder im Entwicklungsmodus: „Demo-PIN anzeigen")
+3. Zugehörigen PIN eingeben (erhältlich bei HETA bzw. über den HETA-PIN-Generator)
 4. „Aktivieren" klicken
 
 Beispiel: `HETA-12345` → PIN `486082`
@@ -145,7 +145,7 @@ automatisch – ohne manuelle Eingriffe.
 ### Lernphasen-Reset
 
 Folgende Einstellungsänderungen löschen alle Lerndaten (3 neue Zyklen erforderlich):
-`dp_limit_bar`, `dp_clean_bar`, `flow_max_l_min`, `pressure_range_bar`
+`dp_limit_bar`, `flow_max_l_min`, `pressure_range_bar`, `temperature_min_c`, `temperature_max_c`
 
 ---
 
@@ -167,11 +167,11 @@ gespeichert. `git pull` überschreibt diese Datei nie.
 | Parameter | Standard | Lernrelevant ⚠ | Beschreibung |
 |-----------|---------|:--------------:|-------------|
 | `dp_limit_bar` | `2.5` | ✓ | Differenzdruck-Grenzwert für Filterwechsel |
-| `dp_clean_bar` | `0.2` | ✓ | dp-Wert eines fabrikneuen Filters |
+| `dp_clean_bar` | `0.2` | | dp-Wert eines fabrikneuen Filters |
 | `flow_max_l_min` | `150` | ✓ | Sensor-Endwert Durchfluss (= 20 mA) |
 | `pressure_range_bar` | `10` | ✓ | Sensor-Endwert Drucksensoren (= 20 mA) |
-| `temperature_min_c` | `-50` | | Sensor-Anfangswert Temperatur (= 4 mA) |
-| `temperature_max_c` | `150` | | Sensor-Endwert Temperatur (= 20 mA) |
+| `temperature_min_c` | `-50` | ✓ | Sensor-Anfangswert Temperatur (= 4 mA) |
+| `temperature_max_c` | `150` | ✓ | Sensor-Endwert Temperatur (= 20 mA) |
 | `operation_mode` | `"continuous"` | | Betriebsweise: `continuous` oder `batch` |
 | `flow_start_threshold_l_min` | `null` | | Manueller Durchflussschwellwert (null = automatisch) |
 | `flow_stability_seconds` | `null` | | Stabilitätsfenster in Sekunden (null = auto = 10 s) |
@@ -260,8 +260,13 @@ HETA_Smart_Filter_Monitoring/
 
 ## REST-API
 
-Alle Endpunkte antworten mit JSON. Schreibende Endpunkte erfordern den Header
-`X-Auth-Token` (wird nach Login via `POST /api/settings/login` zurückgegeben).
+Alle Endpunkte antworten mit JSON. Geschützte Endpunkte erfordern den Header
+`X-Auth-Token` (wird nach Login via `POST /api/settings/login` zurückgegeben; Token in
+der URL wird nicht akzeptiert). In der Weboberfläche erscheint bei geschützten Aktionen
+automatisch ein Anmeldedialog.
+
+Schreibende Anfragen von fremden Webseiten (abweichender `Origin`-Header) werden mit
+HTTP 403 abgewiesen (CSRF-Schutz).
 
 ### Öffentliche Endpunkte
 
@@ -272,10 +277,7 @@ Alle Endpunkte antworten mit JSON. Schreibende Endpunkte erfordern den Header
 | GET | `/api/measurements/history` | Messwerte seit Zeitstempel (`?since=<unix>`) |
 | GET | `/api/cycles` | Filterzyklen für aktiven HETA-Code |
 | GET | `/api/profile` | Lernprofil + Referenzkurve (`?heta_code=`) |
-| POST | `/api/heta/activate` | HETA-Code + PIN aktivieren |
-| POST | `/api/filter/confirm-change` | Filterwechsel bestätigen |
-| POST | `/api/simulation/start` | Messung starten (auch: sensor_fault löschen) |
-| POST | `/api/simulation/stop` | Messung stoppen |
+| POST | `/api/heta/activate` | HETA-Code + PIN aktivieren (nur während des Onboardings ohne Login) |
 | POST | `/api/sensor/recheck` | Sensoren nach Fehler erneut prüfen |
 | GET | `/api/export/csv/download` | Messdaten als CSV herunterladen |
 | GET | `/api/diagnostics` | Hardware-Selbstcheck |
@@ -287,8 +289,16 @@ Alle Endpunkte antworten mit JSON. Schreibende Endpunkte erfordern den Header
 |---------|----------|-------------|
 | POST | `/api/settings/login` | Anmelden, Token erhalten |
 | POST | `/api/settings/logout` | Abmelden |
-| GET | `/api/settings` | Konfiguration lesen |
 | POST | `/api/settings` | Konfiguration speichern |
+| POST | `/api/heta/activate` | HETA-Code + PIN aktivieren (nach dem Onboarding) |
+| POST | `/api/heta/deactivate` | HETA-Code deaktivieren |
+| POST | `/api/filter/confirm-change` | Filterwechsel bestätigen |
+| POST | `/api/simulation/start` | Messung starten (auch: sensor_fault löschen) |
+| POST | `/api/simulation/stop` | Messung stoppen |
+| POST | `/api/simulation/reset` | System zurücksetzen |
+| POST | `/api/simulation/quick-learn` | Lernzyklen simulieren |
+| POST | `/api/simulation/set-rates` | Simulations-Szenario setzen |
+| POST | `/api/navigation/event` | Encoder-Ereignis simulieren |
 | POST | `/api/update/pull` | git pull + Neustart |
 
 Vollständige API-Dokumentation mit Feldbeschreibungen:
@@ -357,7 +367,7 @@ sudo systemctl restart heta-monitor
 ### Lerndaten ungewollt zurückgesetzt
 
 Erwartetes Verhalten: Änderung eines lernrelevanten Parameters (`dp_limit_bar`,
-`dp_clean_bar`, `flow_max_l_min`, `pressure_range_bar`) löscht automatisch alle
+`flow_max_l_min`, `pressure_range_bar`, `temperature_min_c`, `temperature_max_c`) löscht automatisch alle
 Zyklen und Profile. Das System muss erneut 3 Filterzyklen durchlaufen.
 
 ### Onboarding erscheint nach jedem Start
