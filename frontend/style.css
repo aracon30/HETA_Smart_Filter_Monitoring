@@ -1269,6 +1269,12 @@ footer {
   padding: 1rem;
 }
 
+/* Anmelde-Dialog liegt über allen anderen Overlays (Einstellungen, Sensorfehler) */
+.overlay--auth { z-index: 1002; }
+.modal--auth   { max-width: 420px; }
+.auth-body     { padding: 1.5rem; }
+.auth-actions  { display: flex; gap: .6rem; margin-top: 1rem; }
+
 /* ================================================================
    STATUS OVERLAYS (Warte auf Durchfluss / Zyklus pausiert)
    ================================================================ */

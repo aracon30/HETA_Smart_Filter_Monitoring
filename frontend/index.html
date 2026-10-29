@@ -1066,7 +1066,6 @@
           </div>
           <input type="text" id="input-pin" placeholder="PIN (6-stellig)" maxlength="6" />
           <button class="btn btn-primary btn-lg" onclick="activateHetaCode()">Aktivieren</button>
-          <button class="btn btn-ghost" onclick="showDemo()">Demo-PIN anzeigen</button>
         </div>
         <div id="heta-msg" class="msg"></div>
       </section>
@@ -1164,6 +1163,33 @@
       <span>Smart Filter Monitoring &copy; 2026 &ndash; Raspberry Pi 5 Prototyp &nbsp;&middot;&nbsp; <span style="color:var(--text-muted);font-size:.8em">v0.1.2-alpha</span> &nbsp;&middot;&nbsp; <a href="mailto:service@heta.de" style="color:var(--text-muted);font-size:.8em;text-decoration:none;">service@heta.de</a></span>
     </div>
   </footer>
+
+  <!-- ================================================================
+       ANMELDE-DIALOG (für geschützte Aktionen außerhalb der Einstellungen)
+       ================================================================ -->
+  <div id="auth-overlay" class="overlay overlay--auth hidden">
+    <div class="modal modal--auth">
+      <div class="modal-header">
+        <h2>Anmeldung erforderlich</h2>
+        <button class="btn-close" onclick="cancelAuthLogin()">&#10005;</button>
+      </div>
+      <div class="auth-body">
+        <p>Diese Aktion ist passwortgeschützt. Bitte das Zugriffspasswort eingeben.</p>
+        <div class="form-grid">
+          <label>
+            Passwort
+            <input type="password" id="auth-pw-input" placeholder="Passwort" autocomplete="current-password"
+                   onkeydown="if(event.key==='Enter') submitAuthLogin(); else if(event.key==='Escape') cancelAuthLogin()" />
+          </label>
+        </div>
+        <div class="auth-actions">
+          <button class="btn btn-primary" onclick="submitAuthLogin()">Anmelden</button>
+          <button class="btn btn-ghost" onclick="cancelAuthLogin()">Abbrechen</button>
+        </div>
+        <div id="auth-msg" class="msg"></div>
+      </div>
+    </div>
+  </div>
 
   <!-- Lokal eingebunden (frontend/vendor/), damit die Oberfläche ohne Internet läuft -->
   <script src="vendor/chart.umd.js"></script>

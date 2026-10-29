@@ -16,13 +16,13 @@ import sys
 import threading
 import time
 from collections import deque
+from urllib.parse import urlsplit
 
 # Projektverzeichnis in sys.path eintragen damit relative Imports funktionieren
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(_BASE_DIR, "backend"))
 
 from flask import Flask, jsonify, request, send_from_directory
-from flask_cors import CORS
 
 from calculations import (
     FilterState,
@@ -30,7 +30,7 @@ from calculations import (
 from config import get_abs_path, hash_password, save_settings, settings, verify_password
 from database import Database
 from diagnostics import run_diagnostics as _run_diagnostics
-from heta_code import get_demo_info, verify_activation
+from heta_code import verify_activation
 from learning import LearningManager
 from measurement import MeasurementLoop
 from prediction import PredictionEngine
@@ -79,7 +79,27 @@ app = Flask(
     static_folder=os.path.join(_BASE_DIR, "frontend"),
     static_url_path="",
 )
-CORS(app)
+
+
+@app.before_request
+def _reject_cross_origin_writes():
+    """
+    CSRF-Schutz: schreibende Anfragen von fremden Webseiten abweisen.
+
+    Die Weboberfläche wird vom selben Server ausgeliefert, braucht also keine
+    Cross-Origin-Freigabe. Browser senden bei POST den Origin-Header mit –
+    stimmt er nicht mit dem eigenen Host überein, kam die Anfrage von einer
+    anderen Seite (z. B. einer präparierten Webseite im Anlagennetz).
+    Anfragen ohne Origin (curl, Skripte, SPS-Gateways) bleiben erlaubt.
+    """
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return None
+    origin = request.headers.get("Origin")
+    if origin and urlsplit(origin).netloc != request.host:
+        logger.warning("Cross-Origin-Anfrage abgewiesen: %s %s (Origin %s)", request.method, request.path, origin)
+        return jsonify({"success": False, "message": "Cross-Origin-Anfrage nicht erlaubt."}), 403
+    return None
+
 
 # ---------------------------------------------------------------------------
 # Session-Token-Verwaltung (passwortgeschützter Einstellungsbereich)
@@ -134,7 +154,7 @@ def _require_auth():
     Hilfsfunktion für geschützte Endpunkte.
     Gibt (True, None) zurück wenn authentifiziert, sonst (False, Response).
     """
-    token = request.headers.get("X-Auth-Token", "") or request.args.get("token", "")
+    token = request.headers.get("X-Auth-Token", "")
     if _validate_session(token):
         return True, None
     return False, (jsonify({"success": False, "message": "Nicht authentifiziert. Bitte anmelden."}), 401)
@@ -941,7 +961,14 @@ def api_measurements_history():
 
 @app.route("/api/heta/activate", methods=["POST"])
 def api_heta_activate():
-    """Aktiviert einen HETA-Code mit dem zugehörigen PIN."""
+    """Aktiviert einen HETA-Code mit dem zugehörigen PIN.
+
+    Während des Onboardings (noch kein Passwort vergeben) ohne Anmeldung erlaubt.
+    """
+    if settings.get("onboarding_complete", False):
+        ok, err = _require_auth()
+        if not ok:
+            return err
     data = request.get_json(force=True, silent=True) or {}
     heta_code = data.get("heta_code", "").strip()
     pin = data.get("pin", "").strip()
@@ -960,6 +987,9 @@ def api_heta_activate():
 @app.route("/api/heta/deactivate", methods=["POST"])
 def api_heta_deactivate():
     """Deaktiviert den aktiven HETA-Code (ohne Lernzyklen zu löschen)."""
+    ok, err = _require_auth()
+    if not ok:
+        return err
     with _state_lock:
         heta_code = _state.get("heta_code", "")
         _state["heta_code"] = ""
@@ -971,13 +1001,6 @@ def api_heta_deactivate():
         db.insert_service_event("HETA_DEAKTIVIERT", heta_code, json.dumps({"timestamp": time.time()}))
         logger.info("HETA-Code %s deaktiviert.", heta_code)
     return jsonify({"success": True, "message": f"HETA-Code {heta_code} deaktiviert."})
-
-
-@app.route("/api/heta/demo", methods=["GET"])
-def api_heta_demo():
-    """Demo: gibt Aktivierungscode für einen HETA-Code zurück (nur für Tests!)."""
-    heta_code = request.args.get("heta_code", "")
-    return jsonify(get_demo_info(heta_code))
 
 
 @app.route("/api/heta/reset-cycles", methods=["POST"])
@@ -1051,6 +1074,9 @@ def api_diagnostics():
 @app.route("/api/filter/confirm-change", methods=["POST"])
 def api_confirm_filter_change():
     """Bestätigt den Filterwechsel und startet einen neuen Zyklus."""
+    ok, err = _require_auth()
+    if not ok:
+        return err
     if _loop:
         _loop.confirm_filter_change()
     return jsonify({"success": True, "message": "Filterwechsel bestätigt. Neuer Zyklus startet."})
@@ -1360,9 +1386,7 @@ def api_settings_login():
 @app.route("/api/settings/logout", methods=["POST"])
 def api_settings_logout():
     """Beendet die Sitzung."""
-    token = request.headers.get("X-Auth-Token", "") or (request.get_json(force=True, silent=True) or {}).get(
-        "token", ""
-    )
+    token = request.headers.get("X-Auth-Token", "")
     _invalidate_session(token)
     return jsonify({"success": True, "message": "Abgemeldet."})
 
@@ -1370,7 +1394,7 @@ def api_settings_logout():
 @app.route("/api/settings/auth-check", methods=["GET"])
 def api_settings_auth_check():
     """Prüft ob der aktuelle Token noch gültig ist."""
-    token = request.headers.get("X-Auth-Token", "") or request.args.get("token", "")
+    token = request.headers.get("X-Auth-Token", "")
     return jsonify({"authenticated": _validate_session(token)})
 
 
@@ -1525,6 +1549,9 @@ def api_simulation_start():
     """Startet die Messung (Play) bzw. setzt einen pausierten Zyklus fort – ohne ihn zu verwerfen."""
     if not settings.get("onboarding_complete", False):
         return jsonify({"success": False, "message": "Onboarding nicht abgeschlossen."}), 403
+    ok, err = _require_auth()
+    if not ok:
+        return err
     with _state_lock:
         # running=True muss VOR _start_measurement_thread gesetzt werden: läuft der alte
         # Thread nach einem Stop noch im sleep(), sieht er running=True und macht weiter
@@ -1543,6 +1570,9 @@ def api_simulation_start():
 @app.route("/api/simulation/stop", methods=["POST"])
 def api_simulation_stop():
     """Pausiert die Messung (Pause) – der laufende Zyklus und die Szenario-Einstellungen bleiben erhalten."""
+    ok, err = _require_auth()
+    if not ok:
+        return err
     pause_simulation()
     with _state_lock:
         _state["running"] = False
@@ -1552,6 +1582,9 @@ def api_simulation_stop():
 @app.route("/api/simulation/reset", methods=["POST"])
 def api_simulation_reset():
     """Setzt Simulation, Zyklus und Prognose vollständig zurück. Startet NICHT automatisch neu (Play erforderlich)."""
+    ok, err = _require_auth()
+    if not ok:
+        return err
     learning.abort_cycle()
     clear_simulation_rates()
     full_reset_simulation()
@@ -1592,6 +1625,9 @@ def api_simulation_reset():
 @app.route("/api/simulation/quick-learn", methods=["POST"])
 def api_simulation_quick_learn():
     """Simuliert die erforderlichen Lernzyklen für den aktuellen HETA-Code."""
+    ok, err = _require_auth()
+    if not ok:
+        return err
     with _state_lock:
         sim_mode = _state["simulation_mode"]
         heta_code = _state["heta_code"]
@@ -1734,6 +1770,9 @@ def api_simulation_quick_learn():
 @app.route("/api/simulation/set-rates", methods=["POST"])
 def api_simulation_set_rates():
     """Setzt Simulations-Szenario-Parameter."""
+    ok, err = _require_auth()
+    if not ok:
+        return err
     with _state_lock:
         sim_mode = _state["simulation_mode"]
     if not sim_mode:
@@ -1987,6 +2026,9 @@ def api_active_cycle():
 @app.route("/api/navigation/event", methods=["POST"])
 def api_navigation_event():
     """Simuliert ein Navigationsereignis (für Tests ohne Hardware)."""
+    ok, err = _require_auth()
+    if not ok:
+        return err
     data = request.get_json(force=True, silent=True) or {}
     event = data.get("event", "")
     if not event:

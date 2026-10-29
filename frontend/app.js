@@ -241,7 +241,7 @@ function openSettings() {
   document.getElementById("settings-overlay").classList.remove("hidden");
   if (token) {
     // Prüfen ob Token noch gültig
-    apiFetch(`/api/settings/auth-check?token=${token}`).then(r => {
+    apiFetchAuth("/api/settings/auth-check", "GET", null, token).then(r => {
       if (r?.authenticated) showSettingsForm();
       else                   showSettingsLogin();
     });
@@ -346,7 +346,7 @@ async function settingsLogin() {
 
 async function settingsLogout() {
   const token = sessionStorage.getItem(TOKEN_KEY);
-  if (token) await apiFetch("/api/settings/logout", "POST", { token });
+  if (token) await apiFetchAuth("/api/settings/logout", "POST", null, token);
   sessionStorage.removeItem(TOKEN_KEY);
   showSettingsLogin();
 }
@@ -744,20 +744,23 @@ function updateFlowOverlays(d) {
 // ============================================================
 
 async function startSimulation() {
-  await apiFetch("/api/simulation/start", "POST");
+  const result = await apiFetch("/api/simulation/start", "POST");
+  if (!result?.success) { showMsg("heta-msg", result?.message ?? "Fehler.", true); return; }
   clearCharts();
   _prevAwaiting = false;
   showMsg("heta-msg", "Messung gestartet.", false);
 }
 
 async function stopSimulation() {
-  await apiFetch("/api/simulation/stop", "POST");
+  const result = await apiFetch("/api/simulation/stop", "POST");
+  if (!result?.success) { showMsg("heta-msg", result?.message ?? "Fehler.", true); return; }
   showMsg("heta-msg", "Messung gestoppt.", false);
 }
 
 async function resetSystem() {
   if (!confirm("System wirklich zurücksetzen?")) return;
-  await apiFetch("/api/simulation/reset", "POST");
+  const result = await apiFetch("/api/simulation/reset", "POST");
+  if (!result?.success) { showMsg("heta-msg", result?.message ?? "Fehler.", true); return; }
   clearCharts();
   showMsg("heta-msg", "System zurückgesetzt.", false);
 }
@@ -813,18 +816,6 @@ async function deactivateHetaCode() {
     clearCharts();
   } else {
     showMsg("heta-msg", result?.message ?? "Fehler.", true);
-  }
-}
-
-async function showDemo() {
-  const code = _getHetaCode();
-  if (!code) { showMsg("heta-msg", "Zuerst HETA-Code eingeben.", true); return; }
-  const result = await apiFetch(`/api/heta/demo?heta_code=${encodeURIComponent(code)}`, "GET");
-  if (result?.valid) {
-    showMsg("heta-msg", `Demo-PIN für ${result.heta_code}: ${result.activation_code}`, false);
-    document.getElementById("input-pin").value = result.activation_code;
-  } else {
-    showMsg("heta-msg", result?.message ?? "Ungültiges Format.", true);
   }
 }
 

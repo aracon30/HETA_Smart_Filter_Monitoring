@@ -383,7 +383,7 @@ Sie können einen HETA-Code auf zwei Wegen eingeben:
 4. Klicken Sie auf **„Aktivieren"**
 
 > Den PIN erhalten Sie von HETA oder über den HETA-PIN-Generator.
-> Im Entwicklungsmodus / auf der Messe können Sie auf „Demo-PIN anzeigen" klicken.
+> Im laufenden Betrieb fragt das System beim Aktivieren nach dem Zugriffspasswort.
 
 ### Prognosemodi – was die Anzeige bedeutet
 
@@ -409,7 +409,8 @@ Wenn der Filter sein Limit erreicht hat, zeigt das System den Status **„Wechse
 
 1. **Rotes Banner erscheint** im Dashboard: „Filterwechsel erforderlich"
 2. Wechseln Sie den Filter physisch
-3. Klicken Sie auf **„Filterwechsel bestätigen"**
+3. Klicken Sie auf **„Filterwechsel bestätigen"** (in der Weboberfläche wird nach dem
+   Zugriffspasswort gefragt, falls Sie nicht angemeldet sind; am OLED-Display/Encoder nicht)
 4. Das System startet automatisch einen neuen Zyklus
 
 > **Wichtig:** Bestätigen Sie den Wechsel erst **nach** dem tatsächlichen Einbau des
@@ -430,6 +431,11 @@ Klicken Sie auf das **Zahnrad-Symbol (⚙)** oben rechts im Dashboard.
 
 Geben Sie das Passwort ein, das Sie bei der Ersteinrichtung festgelegt haben.
 Die Sitzung bleibt 30 Minuten aktiv.
+
+Dasselbe Passwort schützt auch die Bedienaktionen im Dashboard: Messung starten/stoppen,
+System zurücksetzen, Filterwechsel bestätigen, HETA-Code aktivieren/deaktivieren und die
+Simulationsregler. Sind Sie nicht angemeldet, erscheint dafür automatisch ein
+Anmeldedialog; danach gilt die Anmeldung für 30 Minuten.
 
 ### Einstellungsbereiche
 

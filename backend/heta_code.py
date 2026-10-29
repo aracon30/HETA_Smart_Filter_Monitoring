@@ -89,21 +89,3 @@ def verify_activation(heta_code: str, entered_pin: str) -> dict:
             "expected_pin": "",  # Aus Sicherheitsgründen nicht zurückgeben
             "message": "Ungültiger Aktivierungscode.",
         }
-
-
-def get_demo_info(heta_code: str) -> dict:
-    """
-    Gibt Demo-Informationen inkl. Aktivierungscode zurück (nur für Testzwecke).
-    Im Produktionsbetrieb sollte dieser Endpunkt deaktiviert sein.
-    """
-    valid_format, heta_number = validate_heta_format(heta_code)
-    if not valid_format:
-        return {"valid": False, "message": "Ungültiges Format"}
-    code = calculate_activation_code(heta_number)
-    return {
-        "valid": True,
-        "heta_code": heta_code.strip().upper(),
-        "heta_number": heta_number,
-        "activation_code": code,
-        "message": "Demo-Modus: Aktivierungscode wird angezeigt.",
-    }

@@ -74,7 +74,12 @@ geändert werden.
 - Passwort als SHA-256-Hash in `settings.json` (`settings_password_hash`)
 - Nach korrekter Eingabe: zufälliger Session-Token (`secrets.token_hex(32)`)
 - Timeout: 30 Minuten Inaktivität (konfigurierbar: `session_timeout_minutes`)
-- Token im Browser-`sessionStorage`, Header `X-Auth-Token` bei Schreibzugriffen
+- Token im Browser-`sessionStorage`, Header `X-Auth-Token` bei geschützten Aufrufen
+  (nur als Header – Token in der URL wird abgewiesen)
+- `apiFetch()` sendet ein vorhandenes Token automatisch mit; bei HTTP 401 öffnet das
+  Frontend einen Anmeldedialog (`requestLogin()` in `api.js`) und wiederholt die Anfrage
+- CSRF-Schutz: `_reject_cross_origin_writes()` weist schreibende Anfragen mit fremdem
+  `Origin`-Header ab (HTTP 403). Kein CORS – die Oberfläche kommt vom selben Server.
 
 ### Lernphasen-Reset bei Konfigurationsänderung
 
@@ -84,9 +89,10 @@ alle Zyklen und Profile – das System muss 3 neue Filterzyklen durchlaufen:
 | Parameter | Beschreibung |
 |-----------|-------------|
 | `dp_limit_bar` | Differenzdruck-Grenzwert |
-| `dp_clean_bar` | Sauberwiderstand neuer Filter |
 | `flow_max_l_min` | Maximaler Durchfluss (Sensorendwert) |
 | `pressure_range_bar` | Messbereich der Drucksensoren |
+| `temperature_min_c` | Temperatursensor-Anfangswert (4 mA) |
+| `temperature_max_c` | Temperatursensor-Endwert (20 mA) |
 
 Das Ereignis wird als `LERNDATEN_RESET` in der Datenbank protokolliert.
 
@@ -688,23 +694,31 @@ Zentrale Funktion, die sowohl vom REST-API-Endpunkt als auch vom
 | GET | `/api/measurements/history` | Messwerte seit Zeitstempel (`?since=`) |
 | GET | `/api/cycles` | Filterzyklen für HETA-Code |
 | GET | `/api/profile` | Lernprofil für HETA-Code |
-| POST | `/api/heta/activate` | HETA-Code + PIN aktivieren |
-| GET | `/api/heta/demo` | Demo-PIN anzeigen (Entwicklung) |
-| POST | `/api/filter/confirm-change` | Filterwechsel bestätigen |
-| POST | `/api/simulation/start` | Simulation starten (löscht auch `sensor_fault`-State) |
-| POST | `/api/simulation/stop` | Messzyklus stoppen |
+| POST | `/api/heta/activate` | HETA-Code + PIN aktivieren (ohne Login nur während des Onboardings) |
 | POST | `/api/sensor/recheck` | Alle 4 SPI-Kanäle nach Bediener-Bestätigung prüfen – Messung neu starten wenn alle OK |
-| POST | `/api/simulation/reset` | System zurücksetzen |
 | GET | `/api/export/csv` | CSV-Export-Info |
 | GET | `/api/export/csv/download` | CSV-Download |
 | POST | `/api/service/request` | Servicebericht erzeugen |
 | GET | `/help` | Benutzerhandbuch als HTML (in-app Dokumentation, kein Auth erforderlich) |
 
+### Bedienung (erfordert `X-Auth-Token` Header)
+
+| Methode | Endpunkt | Beschreibung |
+|---------|----------|-------------|
+| POST | `/api/heta/activate` | HETA-Code + PIN aktivieren (nach dem Onboarding) |
+| POST | `/api/heta/deactivate` | HETA-Code deaktivieren |
+| POST | `/api/filter/confirm-change` | Filterwechsel bestätigen |
+| POST | `/api/simulation/start` | Messung starten (löscht auch `sensor_fault`-State) |
+| POST | `/api/simulation/stop` | Messzyklus stoppen |
+| POST | `/api/simulation/reset` | System zurücksetzen |
+| POST | `/api/simulation/quick-learn` | Lernzyklen simulieren |
+| POST | `/api/simulation/set-rates` | Simulations-Szenario setzen |
+
 ### Display & Navigation
 
 | Methode | Endpunkt | Beschreibung |
 |---------|----------|-------------|
-| POST | `/api/navigation/event` | Encoder-Ereignis simulieren |
+| POST | `/api/navigation/event` | Encoder-Ereignis simulieren (erfordert `X-Auth-Token`) |
 | GET | `/api/display/screen` | Aktiven Bildschirm und Zustand abfragen |
 
 `POST /api/navigation/event` Body:
@@ -940,7 +954,8 @@ Registermap (Holding Registers, Function Code 3, Slave-ID 1):
 | 10 | status_code | – | 0=INIT / 1=LAUFEND / 2=WECHSEL / 3=FEHLER |
 
 Der Server wird als Daemon-Thread gestartet und aktualisiert die Register nach jedem Messzyklus.
-Implementierung: `backend/modbus_server.py`, Bibliothek: `pymodbus >= 3.6`.
+Implementierung: `backend/modbus_server.py`, Bibliothek: `pymodbus` 3.6 – 3.12
+(ab 3.13 entfällt das synchrone `setValues()`; ab 3.10 heißt `ModbusSlaveContext` `ModbusDeviceContext` – beides wird abgefangen).
 
 **OLED-Display** (Waveshare 2.42" SSD1309)
 
