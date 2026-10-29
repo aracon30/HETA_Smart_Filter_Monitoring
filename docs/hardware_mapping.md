@@ -2,6 +2,10 @@
 
 ## Überblick
 
+> Für eine eigene Aufsteckplatine, die AnoPi-Shield, DC/DC-Wandler und Verdrahtung ersetzt,
+> gibt es einen KiCad-Entwurf unter [`hardware/heta-hat/`](../hardware/heta-hat/README.md).
+> OLED- und Encoder-Pins sind dort identisch zur Tabelle unten.
+
 | Komponente              | Funktion                                        |
 |-------------------------|-------------------------------------------------|
 | Raspberry Pi 5          | Zentrale Recheneinheit                          |

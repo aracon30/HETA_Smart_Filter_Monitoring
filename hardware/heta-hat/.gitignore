@@ -1,0 +1,13 @@
+# Fertigungsdaten werden mit scripts/export.sh erzeugt; Gerber/Bestückdaten erst
+# nach dem Routing sinnvoll und daher nicht versioniert.
+fertigung/gerber/
+fertigung/*.net
+fertigung/*.rpt
+fertigung/heta-hat-bestueckung.csv
+
+# KiCad-Arbeitsdateien
+*-backups/
+*.kicad_prl
+*.lck
+_autosave-*
+fp-info-cache
