@@ -222,7 +222,8 @@ Erfordert Einstellungspasswort. Das System lädt die Seite nach dem Update autom
 HETA_Smart_Filter_Monitoring/
 ├── backend/
 │   ├── app.py              Flask-Server, REST-API, Messzyklus-Thread, Auth
-│   ├── config.py           Konfigurationsmanagement (3-Schicht), Passwort-Hashing
+│   ├── config.py           Konfigurationsmanagement (3-Schicht), Passwort-Hashing (scrypt)
+│   ├── login_guard.py      Login-Bremse gegen Passwort-Raten
 │   ├── sensors.py          Sensorlesemodul (SPI-ADC) + FilterSimulator
 │   ├── calculations.py     dp, r_eff, Beladungsgrad, Statuslogik
 │   ├── heta_code.py        HETA-Code-Validierung + PIN-Algorithmus
@@ -249,6 +250,7 @@ HETA_Smart_Filter_Monitoring/
 │   │                       (auch erreichbar über den ?-Button im Header der Weboberfläche)
 │   ├── software_architecture.md  API, Datenbankschema, Algorithmen
 │   └── hardware_mapping.md       Pinbelegungen, Skalierungsformeln
+├── tests/                  pytest-Tests (Passwort-Hashing, Login-Bremse) – Aufruf: pytest -q
 └── scripts/
     ├── install.sh          Erstinstallation (einmalig ausführen)
     ├── start.sh            Manueller Start ohne systemd
@@ -354,6 +356,12 @@ ss -tlnp | grep 8080                  # Port belegt durch anderen Prozess?
 Das System wartet auf stabilen Durchfluss, bevor der erste Messzyklus startet. Falls das Overlay
 dauerhaft bleibt: Pumpe prüfen, Durchfluss sicherstellen oder den manuellen Durchflussschwellwert
 in den Einstellungen (Betriebsweise & Durchflusserkennung) senken.
+
+### „Zu viele Fehlversuche“ beim Anmelden
+
+Nach 5 falschen Passwörtern sperrt das System die Anmeldung von dieser Adresse für 30 s;
+jeder weitere Fehlversuch verdoppelt die Sperre (max. 15 min). Abwarten oder den Dienst
+neu starten (`sudo systemctl restart heta-monitor`) hebt die Sperre auf.
 
 ### Passwort vergessen
 

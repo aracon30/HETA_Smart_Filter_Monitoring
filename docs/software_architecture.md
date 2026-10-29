@@ -7,7 +7,8 @@ HETA_Smart_Filter_Monitoring/
 ├── backend/
 │   ├── app.py              Flask-Webserver, REST-API, Messzyklus-Thread,
 │   │                       Auth, _DisplayController
-│   ├── config.py           Konfigurationsmanagement, Passwort-Hashing (SHA-256)
+│   ├── config.py           Konfigurationsmanagement, Passwort-Hashing (scrypt)
+│   ├── login_guard.py      Login-Bremse gegen Passwort-Raten
 │   ├── sensors.py          Sensorlesemodul + FilterSimulator (S-Kurve)
 │   ├── calculations.py     Berechnungsalgorithmen + Statuslogik
 │   ├── heta_code.py        HETA-Code-Validierung + PIN-Algorithmus
@@ -71,7 +72,13 @@ geändert werden.
 
 ### Authentifizierung
 
-- Passwort als SHA-256-Hash in `settings.json` (`settings_password_hash`)
+- Passwort als gesalzener scrypt-Hash in `settings.local.json` (`settings_password_hash`,
+  Format `scrypt$n$r$p$salt$hash`, n=2^14, r=8, p=1), Vergleich zeitkonstant (`hmac.compare_digest`)
+- Alte ungesalzene SHA-256-Hashes werden weiter akzeptiert und bei der nächsten erfolgreichen
+  Anmeldung automatisch auf scrypt umgestellt
+- Login-Bremse je Client-Adresse (`login_guard.py`): 5 Fehlversuche frei, danach Sperre ab 30 s,
+  Verdopplung je weiterem Fehlversuch bis max. 15 min; Antwort HTTP 429 mit `Retry-After`.
+  Gilt für Login, Passwortänderung (altes Passwort) und Werksreset
 - Nach korrekter Eingabe: zufälliger Session-Token (`secrets.token_hex(32)`)
 - Timeout: 30 Minuten Inaktivität (konfigurierbar: `session_timeout_minutes`)
 - Token im Browser-`sessionStorage`, Header `X-Auth-Token` bei geschützten Aufrufen
@@ -873,7 +880,7 @@ read_sensors() → Kanal nicht lesbar
 | Parameter | Standard | Beschreibung |
 |-----------|---------|-------------|
 | `onboarding_complete` | `false` | Ersteinrichtung abgeschlossen |
-| `settings_password_hash` | `""` | SHA-256-Hash des Einstellungspassworts |
+| `settings_password_hash` | `""` | scrypt-Hash des Einstellungspassworts (alte SHA-256-Hashes werden beim Login migriert) |
 | `session_timeout_minutes` | `30` | Timeout der Einstellungs-Session |
 | `simulation_mode` | `true` | Simulationsmodus aktiv |
 | `sampling_interval_seconds` | `1` | Messintervall in Sekunden |

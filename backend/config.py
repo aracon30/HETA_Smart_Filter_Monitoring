@@ -11,6 +11,7 @@ settings.local.json gespeichert – git pull überschreibt sie nie.
 """
 
 import hashlib
+import hmac
 import json
 import logging
 import os
@@ -167,16 +168,51 @@ def get_abs_path(relative_path: str) -> str:
     return os.path.join(_BASE_DIR, relative_path)
 
 
+# scrypt-Parameter (Speicherbedarf 128·n·r = 16 MiB, ca. 50 ms auf x86 / einige 100 ms auf dem Pi)
+_SCRYPT_N = 2**14
+_SCRYPT_R = 8
+_SCRYPT_P = 1
+_SCRYPT_PREFIX = "scrypt"
+
+
+def _scrypt(password: str, salt: bytes, n: int, r: int, p: int) -> bytes:
+    return hashlib.scrypt(password.encode("utf-8"), salt=salt, n=n, r=r, p=p, maxmem=64 * 1024 * 1024, dklen=32)
+
+
 def hash_password(password: str) -> str:
-    """Gibt den SHA-256-Hash eines Passworts als Hex-String zurück."""
-    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+    """
+    Erzeugt einen gesalzenen scrypt-Hash im Format
+    ``scrypt$<n>$<r>$<p>$<salt_hex>$<hash_hex>``.
+    """
+    salt = os.urandom(16)
+    digest = _scrypt(password, salt, _SCRYPT_N, _SCRYPT_R, _SCRYPT_P)
+    return f"{_SCRYPT_PREFIX}${_SCRYPT_N}${_SCRYPT_R}${_SCRYPT_P}${salt.hex()}${digest.hex()}"
 
 
 def verify_password(password: str, stored_hash: str) -> bool:
-    """Prüft ob ein Passwort mit dem gespeicherten Hash übereinstimmt."""
+    """
+    Prüft ein Passwort zeitkonstant gegen den gespeicherten Hash.
+    Unterstützt scrypt-Hashes und – zur Migration – alte ungesalzene SHA-256-Hashes.
+    """
     if not stored_hash:
         return False
-    return hashlib.sha256(password.encode("utf-8")).hexdigest() == stored_hash
+    if stored_hash.startswith(_SCRYPT_PREFIX + "$"):
+        try:
+            _, n, r, p, salt_hex, hash_hex = stored_hash.split("$")
+            digest = _scrypt(password, bytes.fromhex(salt_hex), int(n), int(r), int(p))
+        except (ValueError, MemoryError) as e:
+            logger.error("Passwort-Hash ungültig: %s", e)
+            return False
+        return hmac.compare_digest(digest.hex(), hash_hex)
+    legacy = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(legacy, stored_hash)
+
+
+def password_needs_rehash(stored_hash: str) -> bool:
+    """True für alte SHA-256-Hashes oder scrypt-Hashes mit veralteten Parametern."""
+    if not stored_hash:
+        return False
+    return not stored_hash.startswith(f"{_SCRYPT_PREFIX}${_SCRYPT_N}${_SCRYPT_R}${_SCRYPT_P}$")
 
 
 # Modul-globale Instanz – einmalig beim Import laden
