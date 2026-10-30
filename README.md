@@ -38,6 +38,10 @@ fordert den Bediener zur Prüfung auf.
 Vollständige Pinbelegungen, Skalierungsformeln und Anschlussdiagramme:
 [`docs/hardware_mapping.md`](docs/hardware_mapping.md)
 
+**Eigene Aufsteckplatine (Entwurf):** Ein KiCad-Projekt für eine Raspberry-Pi-HAT-Platine, die
+AnoPi-Shield, DC/DC-Wandler und Verdrahtung ersetzt, liegt unter
+[`hardware/heta-hat/`](hardware/heta-hat/README.md) (Schaltplan fertig, Routing offen).
+
 ---
 
 ## Installation
@@ -245,6 +249,8 @@ HETA_Smart_Filter_Monitoring/
 ├── data/                   SQLite-Datenbank (gitignored, auto-erstellt)
 ├── logs/                   Log-Dateien (gitignored, auto-erstellt)
 ├── exports/                CSV-Exporte (gitignored, auto-erstellt)
+├── hardware/
+│   └── heta-hat/           KiCad-Projekt eigene HAT-Platine (Entwurf, siehe README dort)
 ├── docs/
 │   ├── benutzerhandbuch.md Bedienungsanleitung für Endbenutzer
 │   │                       (auch erreichbar über den ?-Button im Header der Weboberfläche)

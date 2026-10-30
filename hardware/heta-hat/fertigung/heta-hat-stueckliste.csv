@@ -1,0 +1,33 @@
+Pos;Menge;Referenzen;Wert;Footprint;MPN / Vorschlag;Funktion / Spezifikation
+1;1;C1;47µF/50V;CP_Elec_6.3x7.7;;Dämpfung Kabelinduktivität
+2;2;C2, C3;10µF/50V;C_1210_3225Metric;;
+3;1;C4;100nF/50V;C_0603_1608Metric;;
+4;1;C5;1µF;C_0603_1608Metric;;
+5;7;C6, C11, C12, C13, C14, C15, C16;100nF;C_0603_1608Metric;;C13: Tiefpass fg ~1,6 kHz | C14: Tiefpass fg ~1,6 kHz | C15: Tiefpass fg ~1,6 kHz | C16: Tiefpass fg ~1,6 kHz
+6;4;C7, C8, C9, C10;22µF/10V;C_1206_3216Metric;;
+7;1;D1;SS34;D_SMA;;Verpolschutz
+8;1;D2;SMBJ28A;D_SMB;;Überspannung, unidirektional, Kathode = Pin 1
+9;1;D3;LED grün;LED_0603_1608Metric;;Betriebsanzeige 5 V
+10;4;D4, D6, D8, D10;SMAJ12A;D_SMA;;Surge/ESD, Kathode = Pin 1
+11;4;D5, D7, D9, D11;BAT54S;SOT-23;;Klemmung auf 0..3,3 V
+12;1;F1;PTC 1,5A/33V*;Fuse_1812_4532Metric;Bourns MF-MSMF150/33X (o. glw.);
+13;4;F2, F4, F6, F8;PTC 100mA*;Fuse_1206_3216Metric;;Sensorversorgung absichern
+14;4;F3, F5, F7, F9;PTC 50mA*;Fuse_1206_3216Metric;;Schutz der Bürde bei Fehlanschluss
+15;1;J1;24V DC IN;PhoenixContact_MC_1,5_2-G-3.5_1x02_P3.50mm_Horizontal;Phoenix MC 1,5/2-G-3,5 + Stecker MC 1,5/2-ST-3,5;
+16;1;J2;Sensoren CH1-CH4;PhoenixContact_MC_1,5_12-G-3.5_1x12_P3.50mm_Horizontal;Phoenix MC 1,5/12-G-3,5 + 4 x Stecker MC 1,5/3-ST-3,5 (anreihbar);je Kanal: +24V (abgesichert), Signal, GND – CH1 = Pin 1-3 ... CH4 = Pin 10-12
+17;1;J6;OLED;JST_PH_B7B-PH-K_1x07_P2.00mm_Vertical;;VCC GND DIN CLK CS DC RES (wie Waveshare-Modul)
+18;1;J7;ANO-Encoder;JST_PH_B9B-PH-K_1x09_P2.00mm_Vertical;;COMA ENCA ENCB SW1 COMB SW2 SW3 SW4 SW5
+19;1;J8;Raspberry Pi GPIO;PinSocket_2x20_P2.54mm_Vertical;2x20 Buchsenleiste 2,54 mm (Stacking oder Standard);
+20;1;JP1;WP lösen;SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm;;Brücke schließen zum Programmieren
+21;1;L1;10µH/≥4A*;L_Bourns_SRP7028A_7.3x6.6mm;Bourns SRP7028A-100M;
+22;2;R1, R3;100k;R_0603_1608Metric;;R3: Vout = 1 V x (1 + 100k/24,9k) = 5,02 V
+23;1;R2;18k;R_0603_1608Metric;;EN-Schwelle ~8 V
+24;1;R4;24.9k;R_0603_1608Metric;;
+25;1;R5;2.2k;R_0603_1608Metric;;
+26;2;R6, R7;3.9k;R_0603_1608Metric;;
+27;2;R8, R9;10k;R_0603_1608Metric;;R8: Schreibschutz aktiv
+28;4;R10, R12, R14, R16;120R 0,1%;R_1206_3216Metric;;"Bürde 4-20 mA; 0,1 %, ≤25 ppm/K, ≥0,25 W"
+29;4;R11, R13, R15, R17;1k;R_0603_1608Metric;;
+30;1;U1;LMR33630ADDA;Texas_HSOP-8-1EP_3.9x4.9mm_P1.27mm_ThermalVias;;
+31;1;U2;ADS1115IDGS;TSSOP-10_3x3mm_P0.5mm;;
+32;1;U3;24LC32 (o. CAT24C32);SOIC-8_3.9x4.9mm_P1.27mm;;
